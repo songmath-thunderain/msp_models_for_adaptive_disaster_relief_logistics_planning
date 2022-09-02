@@ -2,7 +2,6 @@
 
 #Define first-stage master problem
 function RH_2SSP_first_stage(t_roll,nbstages1,x_init,ξ)
-    
     #######################
     #Define the model.
     m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GRB_ENV), "OutputFlag" => 0));
@@ -196,17 +195,14 @@ end
 function initialize(nbstages1,nbstages2,s,t_roll)
     LB = -1e10; UB = 1e10; iter = 0; θval = 0;
     xval = zeros(Ni,nbstages1);fval = zeros(N0,Ni,nbstages1);
-    start=time();
-    Elapsed = time()-start;
     allscen = Matrix(CSV.read("./data/OOS.csv",DataFrame));
-    allscenM = Matrix(CSV.read("./data/inOOS.csv",DataFrame))
+	#allscenM = Matrix(CSV.read("./data/inOOS.csv",DataFrame)) [REVISION: no need anymore]
     scen = allscen[collect(1:convert(Int,10000/nbscen):10000),1:T]
-    scenM = allscenM[collect(1:convert(Int,10000/nbscen):10000),1]
+	#scenM = allscenM[collect(1:convert(Int,10000/nbscen):10000),1] [REVISION: no need anymore]
 
     if t_roll > 1
         for n=1:nbscen
-            scenM[n] = rand(1:M)
-            
+			#scenM[n] = rand(1:M) [REVISION]
             for t=2:t_roll
                 scen[n,t] = allscen[s,t]
             end
@@ -217,7 +213,8 @@ function initialize(nbstages1,nbstages2,s,t_roll)
         end
     end
     qprob = fill(1/nbscen,nbscen)
-    return LB, UB, iter, xval, fval, θval, start, Elapsed, nbscen, scen, scenM, qprob
+	#return LB, UB, iter, xval, fval, θval, start, Elapsed, nbscen, scen, scenM, qprob [REVISION]
+	return LB, UB, iter, xval, fval, θval, nbscen, scen, qprob
 end
 
 ###############################################################
@@ -226,26 +223,24 @@ end
 #solves the two-stage SP model
 function RH_2SSP_solve_roll(s,t_roll,nbstages1,nbstages2,master,subproblem,x,f,θ,y,z,v,ConsFB,dCons,rCons,feas_m,feas_y,feas_z,feas_v,feas_ConsFB,feas_dCons,feas_rCons)
     
-    LB, UB, iter, xval, fval, θval, start, Elapsed, nbscen, scen, scenM, qprob = initialize(nbstages1,nbstages2,s,t_roll)
-    
-    while (UB-LB)*1.0/max(1e-10,abs(LB)) > ϵ && Elapsed < time_limit 
+    LB, UB, iter, xval, fval, θval, nbscen, scen, qprob = initialize(nbstages1,nbstages2,s,t_roll)
+    while (UB-LB)*1.0/max(1e-10,abs(LB)) > ϵ 
         iter+=1;
         # solve first stage
         LB, xval, fval, θval = solve_first_stage(LB,xval,fval,θval,master,subproblem,x,f,θ);
         if nbstages2 > 0
             # solve second stage 
-            flag, Qbar = solve_second_stage(t_roll,nbstages1,nbstages2,xval,fval,θval,scen,scenM,nbscen,qprob,master,subproblem,x,f,θ,y,z,v,ConsFB,dCons,rCons,feas_m,feas_y,feas_z,feas_v,feas_ConsFB,feas_dCons,feas_rCons)
+            flag, Qbar = solve_second_stage(t_roll,nbstages1,nbstages2,xval,fval,θval,scen,nbscen,qprob,master,subproblem,x,f,θ,y,z,v,ConsFB,dCons,rCons,feas_m,feas_y,feas_z,feas_v,feas_ConsFB,feas_dCons,feas_rCons)
             if flag != -1
                 UB = min(LB-θval+Qbar,UB);
             end
-            Elapsed = time()-start;
         else
             println("exiting here")
             break
         end
     end
 
-    return LB, UB, iter, xval, fval, θval, Elapsed
+    return LB, UB, iter, xval, fval, θval
 end
 
 ###############################################################
@@ -274,7 +269,7 @@ end
 ###############################################################
 
 #solves the second-stage problem
-function solve_second_stage(t_roll,nbstages1,nbstages2,xval,fval,θval,scen,scenM,nbscen,qprob,master,subproblem,x,f,θ,y,z,v,ConsFB,dCons,rCons,feas_m,feas_y,feas_z,feas_v,feas_ConsFB,feas_dCons,feas_rCons)
+function solve_second_stage(t_roll,nbstages1,nbstages2,xval,fval,θval,scen,nbscen,qprob,master,subproblem,x,f,θ,y,z,v,ConsFB,dCons,rCons,feas_m,feas_y,feas_z,feas_v,feas_ConsFB,feas_dCons,feas_rCons)
     flag = 0;
     Q = zeros(nbscen); #list for all the optimal values
     pi1 = Array{Any,1}(undef,nbscen); #list for all the dual multiplies of the first set of constraints
@@ -288,16 +283,16 @@ function solve_second_stage(t_roll,nbstages1,nbstages2,xval,fval,θval,scen,scen
         
         #update the RHS
         if τ === nothing     
-            RH_2SSP_update_RHS(τ,scen[n,end],scenM[n],nbstages1,ConsFB,dCons,rCons,xval,fval,t_roll)
+            RH_2SSP_update_RHS(τ,scen[n,end],nbstages1,ConsFB,dCons,rCons,xval,fval,t_roll)
         else
-            RH_2SSP_update_RHS(τ,scen[n,τ],scenM[n],nbstages1,ConsFB,dCons,rCons,xval,fval,t_roll)
+            RH_2SSP_update_RHS(τ,scen[n,τ],nbstages1,ConsFB,dCons,rCons,xval,fval,t_roll)
         end
         
         #solve the subproblem and store the dual information
         Q, pi1, pi2, flag = solve_scen_subproblem(Q,pi1,pi2,n,subproblem,ConsFB,dCons,rCons,nbstages2)
         if flag == -1
             #generate feasability cut
-generate_feasability_cut(feas_m,feas_y,feas_z,feas_v,feas_ConsFB,feas_dCons,feas_rCons,n,scen,scenM,nbstages1,xval,fval,t_roll,nbstages2,master,x,f)
+			generate_feasability_cut(feas_m,feas_y,feas_z,feas_v,feas_ConsFB,feas_dCons,feas_rCons,n,scen,nbstages1,xval,fval,t_roll,nbstages2,master,x,f)
             break
         end
     end
@@ -367,7 +362,8 @@ end
 ###############################################################
 
 #updates the RHS of the flow-balance and demand constraints 
-function RH_2SSP_update_RHS(τ,k_t,m,nbstages1,ConsFB,dCons,rCons,xval,fval,t_roll)
+#function RH_2SSP_update_RHS(τ,k_t,m,nbstages1,ConsFB,dCons,rCons,xval,fval,t_roll) [REVISION]
+function RH_2SSP_update_RHS(τ,k_t,nbstages1,ConsFB,dCons,rCons,xval,fval,t_roll)
     for t=2:nbstages1
         for i=1:Ni
             set_normalized_rhs(ConsFB[t-1,i],xval[i,t-1]
@@ -379,7 +375,7 @@ function RH_2SSP_update_RHS(τ,k_t,m,nbstages1,ConsFB,dCons,rCons,xval,fval,t_ro
         
         for j=1:Nj
             if t_roll+t-1 == τ && k_t ∉ absorbing_states           
-                set_normalized_rhs(dCons[t-1,j], SCEN[k_t][j,m]);
+                set_normalized_rhs(dCons[t-1,j], SCEN[k_t][j]);
             else
                 set_normalized_rhs(dCons[t-1,j], 0);
             end
@@ -401,15 +397,16 @@ end
 ###############################################################
 
 #generate a feasability cut
-function generate_feasability_cut(feas_m,feas_y,feas_z,feas_v,feas_ConsFB,feas_dCons,feas_rCons,n,scen,scenM,nbstages1,xval,fval,t_roll,nbstages2,master,x,f)
+#function generate_feasability_cut(feas_m,feas_y,feas_z,feas_v,feas_ConsFB,feas_dCons,feas_rCons,n,scen,scenM,nbstages1,xval,fval,t_roll,nbstages2,master,x,f) [REVISION]
+function generate_feasability_cut(feas_m,feas_y,feas_z,feas_v,feas_ConsFB,feas_dCons,feas_rCons,n,scen,nbstages1,xval,fval,t_roll,nbstages2,master,x,f)
     #identify the period where the hurricane makes landfall 
     τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, scen[n,:]);
 
     #update the RHS
     if τ === nothing
-        RH_2SSP_update_RHS(τ,scen[n,end],scenM[n],nbstages1,feas_ConsFB,feas_dCons,feas_rCons,xval,fval,t_roll)
+        RH_2SSP_update_RHS(τ,scen[n,end],nbstages1,feas_ConsFB,feas_dCons,feas_rCons,xval,fval,t_roll)
     else
-        RH_2SSP_update_RHS(τ,scen[n,τ],scenM[n],nbstages1,feas_ConsFB,feas_dCons,feas_rCons,xval,fval,t_roll)
+        RH_2SSP_update_RHS(τ,scen[n,τ],nbstages1,feas_ConsFB,feas_dCons,feas_rCons,xval,fval,t_roll)
     end
 
     optimize!(feas_m) #solve the model

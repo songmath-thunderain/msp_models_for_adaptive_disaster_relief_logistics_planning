@@ -24,6 +24,9 @@ function hurricane_static_twostage()
     reSults[inst,6] = iter_twoSP
     updf = DataFrame(reSults, :auto);
     CSV.write(fname,updf)
+
+	println("UB_twoSP_bar = ", UB_twoSP_bar);
+	
 end
 
 @time hurricane_static_twostage();

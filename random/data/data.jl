@@ -1,14 +1,18 @@
-Random.seed!(2021);
-nodes = CSV.read("./data/nodes.csv",DataFrame); # read the nodes locations
-x_cap = Matrix(nodes)[1:Ni,5]*(Nj/Ni); #capacity of each SP
-x_0 = zeros(Ni); #initial items at different SPs
-f_cap = fill(Inf,N0,Ni);
+Random.seed!(2022);
 
-#locations of the different facilities:
-MDC = [350,450];
-x_low = 0; x_up = 700; x_int = 100;
-y_low = 0; y_up = 100;
-L = [(r,r+x_int) for r in collect(x_low:x_int:x_up)];
+max_iter = 100000;
+stall = 200;
+cutviol_maxiter = 100000;
+nbhrs = 3;
+time_limit = nbhrs*60^2;
+ϵ = 1e-4;
+
+########################################################################################
+
+N0=Ni+1; #number of supply points + the MDC
+
+#the set of possible locations
+L = [(0,100),(100,200),(200,300),(300,400),(400,500),(500,600),(600,700)]; #discussion on the last state
 
 # probability distributions:
 P_intesity = Matrix(CSV.read("./data/intensity.csv",DataFrame)) #intensity MC
@@ -38,12 +42,6 @@ for k=1:Na, l=1:Nb, f=1:Nc
         push!(absorbing_states,k1)
     end
 end
-
-#normalize the probabilities
-P_temp = deepcopy(P_joint);
-for k=1:K, kk=1:K
-    P_joint[k,kk] = P_temp[k,kk]/sum(P_temp[k,:])
-end
     
 # Create the transition probability from stage 1 to stage T (applying the C-K equation)
 P_terminals = Matrix{Float64}[]
@@ -56,6 +54,24 @@ for t = 1:T
     end
     push!(P_terminals, P_terminal);
 end    
+
+#normalize the probabilities
+P_temp = deepcopy(P_joint);
+for k=1:K, kk=1:K
+    P_joint[k,kk] = P_temp[k,kk]/sum(P_temp[k,:])
+end
+
+########################################################################################
+
+#locations of the different facilities:
+MDC = [350,450];
+x_low = 0; 
+x_up = 700; 
+y_low = 0; 
+y_up = 100;
+
+nodes = CSV.read("./data/nodes.csv",DataFrame); # read the nodes locations
+
 
 #list for the coordinates of the different supply points
 SP = []; 
@@ -97,13 +113,26 @@ h = Array{Float64,1}(undef,T); #unit cost for purchasing a relief item
 ch = Array{Float64,2}(undef,Ni,T); #unit cost for holding an item at SP i
 for t=1:T
     h[t] = base*(1+factor*(t-1));
-    ch[:,t] = fill(0.2*base,Ni);
+	#ch[:,t] = fill(0.2*base,Ni);
+	ch[:,t] = fill(0.05*base,Ni);
 end
-p = 80*base; #penalty cost for failing to serve the demand
-q = -0.05*base; #salvage cost for each unit of overstock.
+
+#p = 80*base; #penalty cost for failing to serve the demand
+p = 50*base;
+#q = -0.05*base; #salvage cost for each unit of overstock.
+q = -0.2*base;
 D_max = 400; #the maximum demand that can happen
 
+x_cap = Matrix(nodes)[1:Ni,5]*(Nj/Ni); #capacity of each SP
+x_0 = zeros(Ni); #initial items at different SPs
+f_cap = fill(Inf,N0,Ni);
 
+
+########################################################################################
+#Demand data 
+
+#Note: we get rid of layer2 in the revised code! [REVISION]
+#=
 #split the sample evenly towards the left and the right of the range
 M = 10;
 layer2 = []; 
@@ -125,11 +154,13 @@ for l in L
     end
     push!(layer2,list);
 end
+=#
 
 SCEN = Array{Any,1}(undef,K); #SCEN is the list for each state k 
 c_max = 300; #the largest possible radius of a hurricane
 
-# mapping state to demand
+#=
+# Note: we get rid of layer2 in the revised code! [REVISION]
 for k=1:K
     #initialize a scenario matrix (scen) for each DP j and each possible point m in layer2;
     scen = zeros(Nj,M); #we will create a scenario list for each state k
@@ -156,11 +187,31 @@ for k=1:K
     end
     SCEN[k] = scen;
 end
+=#
 
-##############################
-max_iter = 100000;
-stall = 500;
-cutviol_maxiter = 100000;
-nbhrs = 3;
-time_limit = nbhrs*60^2;
-ϵ = 1e-5;
+for k=1:K
+    #initialize a scenario matrix (scen) for each DP j and each possible point m in layer2;
+    scen = zeros(Nj); #we will create a scenario list for each state k
+    a = S[k][1]; #what is the observed intensity state
+    l = S[k][2]; #what is the observed location state
+    
+    #what are the coordinates of where the hurricane made landfall [xx,yy]
+    #note that yy=0 since the huricane makes landfall in the cost by assumption
+	predicted = 0.5*(L[l][1]+L[l][2]); #this is the predicted x_coordinates for the landfall location: for simplicity, just use the center of the interval	
+	xx_coord = max(x_low,min(predicted,x_up)); #we already now x in can't be smaller than x_low and bigger than x_up; 
+	landfall = [xx_coord,0]
+	#now lets calculate the demand from each DP to the m location 
+	for j=1:Nj
+		#how far did destination to DPj j
+		c_j = norm(landfall-DP[j],2);
+		if c_j <= c_max
+			scen[j] = D_max*(1-(c_j/c_max))*(a-1)^2/((Na-1)^2)
+		else
+			scen[j] = 0;
+		end
+	end
+    SCEN[k] = scen;
+end
+
+########################################################################################
+########################################################################################

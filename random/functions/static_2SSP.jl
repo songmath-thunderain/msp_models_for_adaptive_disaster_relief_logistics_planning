@@ -1,9 +1,8 @@
 #evaluate the two-stage SP in a static fashion
 
 function static_2SSP_evaluation()
-    start=time();
     OS_paths = Matrix(CSV.read("./data/OOS.csv",DataFrame)); #read the out-of-sample file
-    OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS
+	#OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS [REVISION: no need any more]
     
     optimize!(master) #solve the model
     #update the values
@@ -26,9 +25,11 @@ function static_2SSP_evaluation()
         
         #update the RHS
         if τ === nothing
-            RH_2SSP_update_RHS(τ,OS_paths[s,end],OS_M[s],nbstages1,ConsFB,dCons,rCons,xval,fval,t_roll)
+			#RH_2SSP_update_RHS(τ,OS_paths[s,end],OS_M[s],nbstages1,ConsFB,dCons,rCons,xval,fval,t_roll) [REVISION]
+			RH_2SSP_update_RHS(τ,OS_paths[s,end],nbstages1,ConsFB,dCons,rCons,xval,fval,t_roll)
         else
-            RH_2SSP_update_RHS(τ,OS_paths[s,τ],OS_M[s],nbstages1,ConsFB,dCons,rCons,xval,fval,t_roll)
+			#RH_2SSP_update_RHS(τ,OS_paths[s,τ],OS_M[s],nbstages1,ConsFB,dCons,rCons,xval,fval,t_roll) [REVISION]
+			RH_2SSP_update_RHS(τ,OS_paths[s,τ],nbstages1,ConsFB,dCons,rCons,xval,fval,t_roll)
         end
         
         Q = zeros(nbOS); #list for all the optimal values
@@ -42,9 +43,6 @@ function static_2SSP_evaluation()
         zval = value.(z2);
         vval = value.(v2);
         rval = value.(r2);
-       
-        
-
         
         for t=1:nbstages2
             objs_st2SSP[s,t_roll+t] = (sum(sum(cb[i,ii,t_roll+t]*fval[i,ii,t_roll+t] for ii=1:Ni) for i=1:N0) 
@@ -63,8 +61,7 @@ function static_2SSP_evaluation()
     st2SSP_low = st2SSP_bar-1.96*st2SSP_std/sqrt(nbOS);
     st2SSP_high = st2SSP_bar+1.96*st2SSP_std/sqrt(nbOS);
     println("μ ± 1.96*σ/√NS = ", st2SSP_bar, " ± ", [st2SSP_low,st2SSP_high]);
-    elapsed = time() - start;
     
-    return objs_st2SSP, st2SSP_bar, st2SSP_low, st2SSP_high, elapsed#, vals
+    return objs_st2SSP, st2SSP_bar, st2SSP_low, st2SSP_high#, vals
     
 end

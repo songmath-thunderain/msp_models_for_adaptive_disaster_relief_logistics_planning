@@ -75,7 +75,8 @@ function clairvoyant_eval()
     start=time();
     
     OS_paths = Matrix(CSV.read("./data/OOS.csv",DataFrame)); #read the out-of-sample file
-    OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS
+	# we do not have this second layer now [REVISION]
+	# OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS
     objs_cv = zeros(nbOS);
     
     xval_cv = Array{Any,1}(undef,nbOS); fval_cv = Array{Any,1}(undef,nbOS);
@@ -88,10 +89,11 @@ function clairvoyant_eval()
             continue 
         else
             k_t = OS_paths[s,τ] # state corresponding to the landfall
-            m = OS_M[s]; # realization from OS path corresponding to layer 2
+			# m = OS_M[s]; [REVISION]
             for j=1:Nj, t=1:T
                 if t == τ
-                    set_normalized_rhs(dCons_cv[τ,j], SCEN[k_t][j,m]); #set the RHS of demand constraint
+					#set_normalized_rhs(dCons_cv[τ,j], SCEN[k_t][j,m]); #set the RHS of demand constraint [REVISION]
+					set_normalized_rhs(dCons_cv[τ,j], SCEN[k_t][j]); #set the RHS of demand constraint
                 else
                     set_normalized_rhs(dCons_cv[t,j], 0); #set the RHS of demand constraint
                 end

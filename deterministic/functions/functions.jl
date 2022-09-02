@@ -263,8 +263,8 @@ function termination_check(iter,relative_gap,LB,start,cutviol_iter)
     return flag, Elapsed, relative_gap
 end
 
-
-#This is a function which generates a cut from T to T-1 in the Backward pass
+#=
+#This is a function which generates a cut from T to T-1 in the Backward pass: old version, with two-layer uncertainty [REVISION]
 function terminal_stage_cut(model,x,f,theta,y,d,z,FB1,FB2,T,xval,thetaval,in_sample,t)
     #initialize
     returnval = 0;
@@ -294,8 +294,8 @@ function terminal_stage_cut(model,x,f,theta,y,d,z,FB1,FB2,T,xval,thetaval,in_sam
             else
                 #collect values
                 Q[k,m] = objective_value(model[t,k]);
-                pi1[k,m] = dual.(FB1[t,k]);
-                pi2[k,m] = dual.(FB2[t,k]);
+                pi1[k,m] = shadow_price.(FB1[t,k]);
+                pi2[k,m] = shadow_price.(FB2[t,k]);
             end                    
         end
     end
@@ -319,6 +319,62 @@ function terminal_stage_cut(model,x,f,theta,y,d,z,FB1,FB2,T,xval,thetaval,in_sam
     end 
     return returnval;
 end
+=#
+
+#This is a function which generates a cut from T to T-1 in the Backward pass: new version, without two-layer uncertainty
+function terminal_stage_cut(model,x,f,theta,y,d,z,FB1,FB2,T,xval,thetaval,in_sample,t)
+    #initialize
+    returnval = 0;
+    Q = Array{Any}(undef,K); #list for all the optimal values
+    Q_prob = Array{Any}(undef,K); #list for all the probabilities
+    pi1 = Array{Any}(undef,K); #list for all the dual multiplies of the first set of constraints
+    pi2 = Array{Any}(undef,K); #list for all the dual multiplies of the second set of constraints
+
+    sample_n = in_sample[t-1]; #the states observed at time t-1
+    for k=1:K
+        update_RHS(k,t,FB1,FB2,xval)
+		#calculate the conditional probability
+		for j=1:Nj
+			fix(d[k][j], SCEN[k][j]; force=true);
+		end
+
+		#solve the model
+		optimize!(model[t,k])
+
+		#check the status 
+		status = termination_status(model[t,k]);
+		if status != MOI.OPTIMAL
+			println(" in Backward Pass")
+			println("Model in stage =", t, " and state = ", k, ", in forward pass is ", status)
+			exit(0);
+		else
+			#collect values
+			Q[k] = objective_value(model[t,k]);
+			pi1[k] = shadow_price.(FB1[t,k]);
+			pi2[k] = shadow_price.(FB2[t,k]);
+		end                    
+    end
+    for n = 1:K
+        #what is the expected cost value 
+        Qvalue = sum(Q[k]*P_joint[n,k] for k=1:K);    
+        
+        # check if cut is violated at the sample path encountered in the forward pass
+        if n == sample_n && (Qvalue-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ
+            returnval = 1;
+        end
+        
+        # we are doing cut sharing so we will add the cut regardless
+        @constraint(model[t-1,n],
+            theta[t-1,n]
+            -sum(sum((pi1[k][i]+pi2[k][i])*x[t-1,n][i] for i=1:Ni)*P_joint[n,k] for k=1:K)
+            >=
+            Qvalue-sum(sum((pi1[k][i]+pi2[k][i])*xval[i,t-1] for i=1:Ni)*P_joint[n,k] for k=1:K)
+        );
+        
+    end 
+    return returnval;
+end
+
 
 #This is a function which generates a cut from any t<T to t-1 in the Backward pass
 function non_terminal_stage_cut(model,x,f,theta,y,d,z,FB1,FB2,T,xval,thetaval,in_sample,t)
@@ -344,8 +400,8 @@ function non_terminal_stage_cut(model,x,f,theta,y,d,z,FB1,FB2,T,xval,thetaval,in
         else
             #collect values
             Q[k] = objective_value(model[t,k]);
-            pi1[k] = dual.(FB1[t,k]);
-            pi2[k] = dual.(FB2[t,k]);
+            pi1[k] = shadow_price.(FB1[t,k]);
+            pi2[k] = shadow_price.(FB2[t,k]);
         end                    
     end
     
@@ -395,7 +451,7 @@ function train_models_offline(model,x,f,theta,y,d,z,FB1,FB2,k,T)
         #forward pass
         xval, thetaval, lb, in_sample = FOSDDP_forward_pass_oneSP_iteration(model,x,f,theta,y,d,z,FB1,FB2,k,T,xval,thetaval,lb);
         push!(LB,lb)
-        println("LB = ", lb)
+		#println("LB = ", lb)
         #termination check
         flag, Elapsed, relative_gap = termination_check(iter,relative_gap,LB,start,cutviol_iter);
         if flag == 1
@@ -418,7 +474,8 @@ end
 # this function runs SDDP for the MSP model with deterministic landfall
 function FOSDDP_eval_offline(model,x,f,theta,y,d,z,FB1,FB2,k,T,nbOS)
     OS_paths = Matrix(CSV.read("./data/OOS.csv",DataFrame)); #read the out-of-sample file
-    OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS
+	# we do not have this second layer now [REVISION]
+	#OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS
     
     actions = [];
     start=time();
@@ -444,9 +501,10 @@ function FOSDDP_eval_offline(model,x,f,theta,y,d,z,FB1,FB2,k,T,nbOS)
                 update_RHS(k_t,t,FB1,FB2,xval);
             end
             if t == T
-                m = OS_M[s];
+				#m = OS_M[s]; [REVISION]
                 for j=1:Nj
-                    fix(d[k_t][j], SCEN[k_t][j,m]; force=true);
+					#fix(d[k_t][j], SCEN[k_t][j,m]; force=true); [REVISION]
+					fix(d[k_t][j], SCEN[k_t][j]; force=true);
                 end
             end 
             #solve the model
@@ -498,8 +556,8 @@ function FOSDDP_eval_offline(model,x,f,theta,y,d,z,FB1,FB2,k,T,nbOS)
     UB_low = UB_bar-1.96*UB_std/sqrt(nbOS);
     UB_high = UB_bar+1.96*UB_std/sqrt(nbOS);
     
-    println("μ = ", UB_bar);
-    println("μ ± 1.96*σ/√NS = ", [UB_low,UB_high]);
+	#println("μ = ", UB_bar);
+	#println("μ ± 1.96*σ/√NS = ", [UB_low,UB_high]);
 
     return costs, UB_bar, UB_low, UB_high, elapsed, actions, COSTs
 end
@@ -589,18 +647,19 @@ end
 function clairvoyant_eval(model_cv,x_cv,f_cv,y_cv,d_cv,z_cv,T,nbOS)
     
     OS_paths = Matrix(CSV.read("./data/OOS.csv",DataFrame)); #read the out-of-sample file
-    OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS
+	# we do not have this second layer now [REVISION]
+   	# OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS
     k = OS_paths[1,1];
-    
     
     start=time();
     costs = zeros(nbOS);
     
     for s=1:nbOS   
         k_t = OS_paths[s,T]
-        m = OS_M[s];
+		# m = OS_M[s]; [REVISION]
         for j=1:Nj
-            fix(d_cv[j], SCEN[k_t][j,m]; force=true);
+			#fix(d_cv[j], SCEN[k_t][j,m]; force=true); [REVISION]
+			fix(d_cv[j], SCEN[k_t][j]; force=true);
         end
         
         #solve the model
@@ -624,13 +683,14 @@ function clairvoyant_eval(model_cv,x_cv,f_cv,y_cv,d_cv,z_cv,T,nbOS)
     cv_low = cv_bar-1.96*cv_std/sqrt(nbOS);
     cv_high = cv_bar+1.96*cv_std/sqrt(nbOS);
     
-    println("μ = ", cv_bar);
-    println("μ ± 1.96*σ/√NS = ", [cv_low,cv_high]);
+    #println("μ = ", cv_bar);
+    #println("μ ± 1.96*σ/√NS = ", [cv_low,cv_high]);
     
     elapsed = time() - start;
     return costs, cv_bar, cv_low, cv_high, elapsed 
 end
 
+#= We do not seem to benchmark with MVP anymore [Revision]
 function MVP_solve(model_mvp,x_mvp,f_mvp,y_mvp,d_mvp,z_mvp,k,T)
     start=time();
     xval_mvp = zeros(Ni,T);
@@ -641,8 +701,10 @@ function MVP_solve(model_mvp,x_mvp,f_mvp,y_mvp,d_mvp,z_mvp,k,T)
     for k=1:K, kk=1:K
         P_temp[k,kk] = P_temp_c[k,kk]/sum(P_temp_c[k,:])
     end
-    d_bar = sum(sum(SCEN[kk][:,m]*(1/M) for m=1:M)*P_temp[k,kk] for kk=1:K);
-    
+	# we do not have this second layer now [REVISION]
+	#d_bar = sum(sum(SCEN[kk][:,m]*(1/M) for m=1:M)*P_temp[k,kk] for kk=1:K);
+    d_bar = sum(SCEN[kk][:]*P_temp[k,kk] for kk=1:K);
+
     for j=1:Nj
         fix(d_mvp[j], d_bar[j]; force=true);
     end
@@ -710,7 +772,7 @@ function MVP_eval(model_mvp,x_mvp,f_mvp,y_mvp,d_mvp,z_mvp,k,T,xval_mvp,nbOS,OS_p
     
     return costs, mvp_bar, mvp_low, mvp_high, elapsed_eval 
 end
-
+=#
 
 function static_twostage_first_model(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,T,x_0)
     #######################
@@ -831,7 +893,7 @@ end
 function rolling_twostage_eval_online(T,nbOS,x0)
 
     OS_paths = Matrix(CSV.read("./data/OOS.csv",DataFrame)); #read the out-of-sample file
-    OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS
+	#OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS -- no longer needed [REVISION]
     k = OS_paths[1,1];    
     
     start=time();
@@ -885,7 +947,7 @@ function rolling_twostage_eval_online(T,nbOS,x0)
     fval_all1 = value.(f1)[:,:,1];
     for s=1:nbOS
         # starting the rolling horizon procedure one for each sample path
-        println("Start sample path #", s); 
+		#println("Start sample path #", s); 
         
         cx = imm_amount1;
         costs[s,1] = cx;
@@ -952,7 +1014,8 @@ function rolling_twostage_eval_online(T,nbOS,x0)
             set_normalized_rhs(FB2_T[i], xvals[i,T-1]);
         end    
         for j=1:Nj
-            fix(d_T[j], SCEN[OS_paths[s,T]][j,OS_M[s]]; force=true);
+			#fix(d_T[j], SCEN[OS_paths[s,T]][j,OS_M[s]]; force=true); [REVISION]
+			fix(d_T[j], SCEN[OS_paths[s,T]][j]; force=true);
         end
         #solve the model
         optimize!(model_T);
@@ -990,14 +1053,14 @@ function rolling_twostage_eval_online(T,nbOS,x0)
     UB_low = UB_bar-1.96*UB_std/sqrt(nbOS);
     UB_high = UB_bar+1.96*UB_std/sqrt(nbOS);
     
-    println("μ = ", UB_bar);
-    println("μ ± 1.96*σ/√NS = ", [UB_low,UB_high]);
+	#println("μ = ", UB_bar);
+	#println("μ ± 1.96*σ/√NS = ", [UB_low,UB_high]);
     
     return costs, UB_bar, UB_low, UB_high, elapsed, actions, COSTs
 end
 
-
-
+#=
+# Old version, with two-layer uncertainty [REVISION]
 function terminal_stage_cut_two_stage(model,x,theta,model_sub,d,FB1,FB2,t,T,xval,thetaval,init_k)
     # Just a single model: model_sub, FB1, FB2, etc. passed along here
     # t: when this two-stage SP model is solved
@@ -1028,8 +1091,8 @@ function terminal_stage_cut_two_stage(model,x,theta,model_sub,d,FB1,FB2,t,T,xval
             else
                 #collect values
                 Q[k,m] = objective_value(model_sub);
-                pi1[k,m] = dual.(FB1);
-                pi2[k,m] = dual.(FB2);
+                pi1[k,m] = shadow_price.(FB1);
+                pi2[k,m] = shadow_price.(FB2);
             end                    
         end
     end
@@ -1048,7 +1111,57 @@ function terminal_stage_cut_two_stage(model,x,theta,model_sub,d,FB1,FB2,t,T,xval
     end
     return returnval;
 end
+=#
 
+# new version, without two-layer uncertainty
+function terminal_stage_cut_two_stage(model,x,theta,model_sub,d,FB1,FB2,t,T,xval,thetaval,init_k)
+    # Just a single model: model_sub, FB1, FB2, etc. passed along here
+    # t: when this two-stage SP model is solved
+    returnval = 0;
+    Q = Array{Any}(undef,K); #list for all the optimal values
+    pi1 = Array{Any}(undef,K); #list for all the dual multiplies of the first set of constraints
+    pi2 = Array{Any}(undef,K); #list for all the dual multiplies of the second set of constraints
+
+    for k=1:K
+		for i=1:Ni
+			set_normalized_rhs(FB1[i], xval[i,T-t]);
+			set_normalized_rhs(FB2[i], xval[i,T-t]);
+		end
+		#calculate the conditional probability
+		for j=1:Nj
+			fix(d[j], SCEN[k][j]; force=true);
+		end
+
+		#solve the model
+		optimize!(model_sub)
+
+		#check the status 
+		status = termination_status(model_sub);
+		if status != MOI.OPTIMAL
+			println(" in static two stage cut generation")
+			exit(0);
+		else
+			#collect values
+			Q[k] = objective_value(model_sub);
+			pi1[k] = shadow_price.(FB1);
+			pi2[k] = shadow_price.(FB2);
+		end                    
+    end
+    Qvalue = sum(Q[k]*P_terminals[t][init_k,k] for k=1:K);    
+
+    # check if cut is violated at the sample path encountered in the forward pass
+    if (Qvalue-thetaval)/max(1e-10,abs(thetaval)) > ϵ
+        #add a cut if any needed
+        @constraint(model,
+        theta
+        -sum(sum((pi1[k][i]+pi2[k][i])*x[i,T-t] for i=1:Ni)*P_terminals[t][init_k,k] for k=1:K)
+        >=
+        Qvalue-sum(sum((pi1[k][i]+pi2[k][i])*xval[i,T-t] for i=1:Ni)*P_terminals[t][init_k,k] for k=1:K)
+        );
+        returnval = 1;
+    end
+    return returnval;
+end
 
 
 function two_stage_static_train()
@@ -1093,8 +1206,7 @@ end
 
 function two_stage_static_eval(xval_twoSP)
     OS_paths = Matrix(CSV.read("./data/OOS.csv",DataFrame)); #read the out-of-sample file
-    OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS
-    
+	#OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS -- No longer needed [REVISION]
     
     model_twoSP, x_twoSP, f_twoSP, y_twoSP, d_twoSP, z_twoSP = deterministic_model(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,T,x_0);
   
@@ -1115,9 +1227,10 @@ function two_stage_static_eval(xval_twoSP)
     
     for s=1:nbOS  
         k_t = OS_paths[s,T]
-        m = OS_M[s];
+		#m = OS_M[s]; [REVISION]
         for j=1:Nj
-            fix(d_twoSP[j], SCEN[k_t][j,m]; force=true);
+			#fix(d_twoSP[j], SCEN[k_t][j,m]; force=true); [REVISION]
+			fix(d_twoSP[j], SCEN[k_t][j]; force=true);
         end
         
         #solve the model
@@ -1168,8 +1281,8 @@ function two_stage_static_eval(xval_twoSP)
     twoSP_low = twoSP_bar-1.96*twoSP_std/sqrt(nbOS);
     twoSP_high = twoSP_bar+1.96*twoSP_std/sqrt(nbOS);
     
-    println("μ = ", twoSP_bar);
-    println("μ ± 1.96*σ/√NS = ", [twoSP_low,twoSP_high]);
+	#println("μ = ", twoSP_bar);
+	#println("μ ± 1.96*σ/√NS = ", [twoSP_low,twoSP_high]);
     
     elapsed_eval = time() - start;
     
@@ -1177,7 +1290,7 @@ function two_stage_static_eval(xval_twoSP)
 end
 
 
-
+#= We do not seem to benchmark with MVP anymore [Revision]
 function deterministic_RH_model(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,T,t0)
     #######################
     #Define the model, assuming that the current stage is t0, Note that we disable a "direct shipment" from MDC to DPs, hence y variables are not defined for N0
@@ -1413,6 +1526,9 @@ function rolling_MVP_eval_online(T,nbOS,OS_paths,OS_M,x0)
     return costs, UB_bar, UB_low, UB_high, elapsed, actions, COSTs
 end
 
+=#
+
+#= This function is depreciated [Revision]
 function expected_number_of_stages(P_landfall)
     Q = P_landfall[1:end-1,1:end-1];
     M = inv(I-Q);
@@ -1420,3 +1536,4 @@ function expected_number_of_stages(P_landfall)
     exp_Ts = round.(Int,exp_Ts)
     return exp_Ts
 end
+=#

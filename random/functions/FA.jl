@@ -76,17 +76,19 @@ end
 function define_models()
     m = Dict(); x = Dict(); f = Dict(); y = Dict(); z = Dict(); v = Dict(); 
     ϴ = Dict(); dCons = Dict(); FB1Cons = Dict(); FB2Cons = Dict(); 
-    for  t=1:T, k=1:K
+    for  t=1:T
         if t == 1
             m[t,k_init], x[t,k_init], f[t,k_init], y[t,k_init], z[t,k_init], v[t,k_init],
             ϴ[t,k_init], dCons[t,k_init], FB1Cons[t,k_init], FB2Cons[t,k_init] = stage_t_state_k_problem(t);
         else
-            if k in absorbing_states
-                continue 
-            else
-                m[t,k], x[t,k], f[t,k], y[t,k], z[t,k], v[t,k],
-                ϴ[t,k], dCons[t,k], FB1Cons[t,k], FB2Cons[t,k] = stage_t_state_k_problem(t);
-            end            
+			for k=1:K
+            	if k in absorbing_states
+                	continue 
+            	else
+                	m[t,k], x[t,k], f[t,k], y[t,k], z[t,k], v[t,k],
+                	ϴ[t,k], dCons[t,k], FB1Cons[t,k], FB2Cons[t,k] = stage_t_state_k_problem(t);
+            	end
+			end			
         end
     end    
     return m, x, f, y, z, v, ϴ, dCons, FB1Cons, FB2Cons
@@ -110,7 +112,8 @@ function FOSDDP_forward_pass_oneSP_iteration(lb,xval,thetaval)
                 continue 
             end
             #update the RHS
-            MSP_fa_update_RHS(k_t,t,xval,rand(1:M));
+			#MSP_fa_update_RHS(k_t,t,xval,rand(1:M)); # we do not have this second layer now [REVISION]
+			MSP_fa_update_RHS(k_t,t,xval);
         end
             
         #solve the model
@@ -137,7 +140,8 @@ end
 ###############################################################
 ###############################################################
 
-#Train model: backward pass
+#=
+#Train model: backward pass: old version, with two-layer uncertainty [REVISION]
 function FOSDDP_backward_pass_oneSP_iteration(lb,xval,thetaval,in_sample)
     cutviolFlag = 0;
     for t=T:-1:2
@@ -230,6 +234,70 @@ function FOSDDP_backward_pass_oneSP_iteration(lb,xval,thetaval,in_sample)
     end
     return cutviolFlag;
 end
+=#
+
+#Train model: backward pass: new version, without two-layer uncertainty
+function FOSDDP_backward_pass_oneSP_iteration(lb,xval,thetaval,in_sample)
+    cutviolFlag = 0;
+    for t=T:-1:2
+        #initialize
+        Q = zeros(K); #list for all the optimal values
+         #list for all the dual multiplies of the first and second set of constraints
+        pi1 = zeros(K,Ni); pi2 = zeros(K,Ni); 
+        sample_n = in_sample[t-1]; #the states observed at time t-1
+        for k=1:K
+            if k in absorbing_states
+                Q[k] = 0;
+                continue
+            else
+                # Here we just update xval
+                MSP_fa_update_RHS(k,t,xval);
+                #solve the model
+                optimize!(m_fa[t,k])
+
+                #check the status 
+                status = termination_status(m_fa[t,k]);
+                if status != MOI.OPTIMAL
+                    println(" in Backward Pass")
+                    println("Model in stage =", t, " and state = ", k, ", in forward pass is ", status)
+                    return 
+                else
+                    #collect values
+                    Q[k] = objective_value(m_fa[t,k]);
+                    for i=1:Ni
+                        pi1[k,i] = dual(FB1Cons_fa[t,k][i]);
+                        pi2[k,i] = dual(FB2Cons_fa[t,k][i]);
+                    end
+                end                 
+            end
+        end
+
+        for n = 1:K
+            if  n ∉ absorbing_states
+                if t-1 == 1 && n != k_init
+                    continue
+                end
+                #what is the expected cost value 
+                Qvalue = sum(Q[k]*P_joint[n,k]  for k=1:K);
+
+                # check if cut is violated at the sample path encountered in the forward pass
+                if n == sample_n && (Qvalue-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ
+                    cutviolFlag = 1;
+                end
+
+                # we are doing cut sharing so we will add the cut regardless
+                @constraint(m_fa[t-1,n],
+                ϴ_fa[t-1,n]
+                -sum(sum((pi1[k,i]+pi2[k,i])*x_fa[t-1,n][i] for i=1:Ni)*P_joint[n,k] for k=1:K)
+                >=
+                Qvalue-sum(sum((pi1[k,i]+pi2[k,i])*xval[i,t-1] for i=1:Ni)*P_joint[n,k] for k=1:K)
+                );
+            end
+        end
+    end
+    return cutviolFlag;
+end
+
 
 ###############################################################
 ###############################################################
@@ -257,7 +325,7 @@ function train_models_offline()
         #forward pass
         xval, thetaval, lb, in_sample = FOSDDP_forward_pass_oneSP_iteration(lb,xval,thetaval);
         push!(LB,lb)
-        println("LB = ", lb)
+		#println("LB = ", lb)
         #termination check
         flag, Elapsed = termination_check(iter,relative_gap,LB,start,cutviol_iter);
         if flag != 0
@@ -281,10 +349,10 @@ end
 
 #evaluate model
 function FOSDDP_eval_offline()
-    
     start=time();
     OS_paths = Matrix(CSV.read("./data/OOS.csv",DataFrame)); #read the out-of-sample file
-    OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS
+	# we do not have this second layer now [REVISION]
+	#OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS
     objs_fa = zeros(nbOS,T);
     
     xval_fa = Array{Any,2}(undef,nbOS,T); fval_fa = Array{Any,2}(undef,nbOS,T);
@@ -297,12 +365,12 @@ function FOSDDP_eval_offline()
         for t=1:T
             #the state is known in the first stage; if not sample a new state k 
             k_t = OS_paths[s,t];
-            m = OS_M[s]; # realization from OS path corresponding to layer 2
-
+            # we do not have this second layer now [REVISION]
+			#m = OS_M[s]; # realization from OS path corresponding to layer 2
 
             if k_t ∉ absorbing_states
                 if t > 1
-                    MSP_fa_update_RHS(k_t,t,xval,m);
+                    MSP_fa_update_RHS(k_t,t,xval);
                 end
                 #solve the model
                 optimize!(m_fa[t,k_t])
@@ -334,7 +402,6 @@ function FOSDDP_eval_offline()
     println("μ ± 1.96*σ/√NS = ", fa_bar, " ± ", [fa_low,fa_high]);
     elapsed = time() - start;
     vals = [xval_fa, fval_fa, yval_fa, zval_fa, vval_fa];
-    
     return objs_fa, fa_bar, fa_low, fa_high, elapsed#, vals
 end
 
@@ -343,14 +410,15 @@ end
 ###############################################################
 
 #update RHS of flow-balance and demand constraint
-function MSP_fa_update_RHS(k_t,t,xval,m)
+# we do not have this second layer now [REVISION]
+function MSP_fa_update_RHS(k_t,t,xval)
     for i=1:Ni        
         set_normalized_rhs(FB1Cons_fa[t,k_t][i], xval[i,t-1]);
         set_normalized_rhs(FB2Cons_fa[t,k_t][i], xval[i,t-1]);
     end 
     for j=1:Nj
         if S[k_t][3] == Nc-1 && k_t ∉ absorbing_states
-            set_normalized_rhs(dCons_fa[t,k_t][j], SCEN[k_t][j,m]);
+            set_normalized_rhs(dCons_fa[t,k_t][j], SCEN[k_t][j]);
         else
             set_normalized_rhs(dCons_fa[t,k_t][j], 0);
         end

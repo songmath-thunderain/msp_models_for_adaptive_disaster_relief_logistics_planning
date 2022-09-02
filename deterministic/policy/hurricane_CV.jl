@@ -39,6 +39,8 @@ function hurricane_CV()
 
     updf = DataFrame(reSults, :auto);
     CSV.write(fname,updf)
+
+	println("cv_bar = ", cv_bar);
     
 end
 

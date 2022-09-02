@@ -29,6 +29,8 @@ function hurricane_FA()
 
     updf = DataFrame(reSults, :auto);
     CSV.write(fname,updf)
+
+	println("FA UB_bar = ", UB_bar);
     
 end
 

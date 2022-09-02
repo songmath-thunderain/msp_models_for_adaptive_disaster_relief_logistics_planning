@@ -16,7 +16,7 @@ updf = DataFrame(reSults, :auto);
 CSV.write(fname,updf)
 
 
-
+println("UB_bar_RH_2S = ", UB_bar_RH_2S);
 
 println("############################################################")
 println("############################################################")

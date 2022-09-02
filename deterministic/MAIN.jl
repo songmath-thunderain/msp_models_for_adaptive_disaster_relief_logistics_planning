@@ -7,7 +7,7 @@ cd(cwd)
 #1: instance number 
 #2: number of supply points
 #3: number of demand points
-#4: number of stages
+#4: cost scaling factor
 #5: number of scenarios in the out-of-sample
 #6: initial state
 #7: number of stages
@@ -22,8 +22,9 @@ k_init = parse(Int, PARAMS[6][1:end]); #initial state
 Tmax = parse(Int, PARAMS[7][1:end]); #T_max
 
 include("packages.jl");
-include("./functions/functions.jl");
 include("./data/data.jl");
+include("./functions/functions.jl");
+
 
 #create gurobi environment
 const GRB_ENV = Gurobi.Env();
