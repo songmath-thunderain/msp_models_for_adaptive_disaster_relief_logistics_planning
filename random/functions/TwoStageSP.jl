@@ -1,13 +1,11 @@
-#static 2SSP models
-
 #Define first-stage master problem
-function RH_2SSP_first_stage(t_roll,nbstages1,x_init,ξ)
-    #######################
-    #Define the model.
+function RH_2SSP_first_stage(t_roll,x_init)
+    #Note that the static 2SSP corresponds to the case when t_roll = 1 
+	nbstages1 = T-t_roll+1;
     m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GRB_ENV), "OutputFlag" => 0));
 
     #######################
-    #Define the variables.
+    #Define the variables, note that t is a relative index (to the current roll) going from 1 to nbstages1; from relative index to absolute index: t-> t_roll-1+t
     @variables(m,
                 begin
                    0 <= x[i=1:Ni,t=1:nbstages1] <= x_cap[i]
@@ -38,19 +36,14 @@ function RH_2SSP_first_stage(t_roll,nbstages1,x_init,ξ)
                             ); 
                 @constraint(m, sum(f[i,j,t] for j=1:Ni if j != i) <= x_init[i]);                
             else
-                @constraint(m, sum(f[i,j,t] for j=1:Ni if j != i) <= x[i,t-1]);                
-                @constraint(m, x[i,t-1]
+				@constraint(m, x[i,t-1]
                              -x[i,t]
                              -sum(f[i,j,t] for j=1:Ni if j != i)
                              +sum(f[j,i,t] for j=1:N0 if j != i)==0);
+                @constraint(m, sum(f[i,j,t] for j=1:Ni if j != i) <= x[i,t-1]);                
             end
         end
     end
-    
-    #in case the first stage corresponds to the period where the hurricane make landfall
-	#for j=1:Nj
-	#    @constraint(m, z[j]+sum(y[i,j] for i=1:Ni) >= ξ[j]);
-	#end
     
     return m, x, f, θ 
     
@@ -61,9 +54,7 @@ end
 
 #Define second-stage scenario supbproblem
 function RH_2SSP_second_stage()
-    
     #######################
-    #Define the model.
     m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GRB_ENV), "OutputFlag" => 0, "Presolve" => 0));
 
     #######################
@@ -91,7 +82,6 @@ function RH_2SSP_second_stage()
     #Define the constraints.
     xCons = Dict(); #a dictonary to store all the inventory constraints
     dCons = Dict(); #a dictonary to store all the demand constraints
-    rCons = Dict(); #a dictonary to store the reimbursement constraint
     
 	for i=1:Ni
 		xCons[i] = @constraint(m, sum(y[i,j] for j=1:Nj)+v[i] == 0);             
@@ -101,15 +91,14 @@ function RH_2SSP_second_stage()
 	end
 	rCons = @constraint(m, reimbursement == 0)
 
-    return m, y, z, v, reimbursement, xCons, dCons, rCons
+    return m, y, xCons, dCons, rCons
 end
 
 ###############################################################
 ###############################################################
 #=
-#define a feasibility problem
+# No need to define a feasibility problem in this revised version.
 function feasability_problem(t_roll,nbstages1,nbstages2)
-    
     #######################
     #Define the model.
     m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GRB_ENV), "OutputFlag" => 0));
@@ -157,15 +146,15 @@ end
 ###############################################################
 ###############################################################
 
-#defines the two-stage SP models
-function RH_2SSP_define_models(t_roll,nbstages1,x_init,ξ)
+#defines the two-stage SP models: master problem and subproblem
+function RH_2SSP_define_models(t_roll,x_init)
     #define first stage (master problem) model  
-    master, x, f, θ = RH_2SSP_first_stage(t_roll,nbstages1,x_init,ξ)
+    master, x, f, θ = RH_2SSP_first_stage(t_roll,x_init)
     
     #define second stage (subproblem) optimality model
-    subproblem, y2, z2, v2, r2, xCons, dCons, rCons = RH_2SSP_second_stage()
+    subproblem, y2, xCons, dCons, rCons = RH_2SSP_second_stage()
     
-    return master, x, f, θ, subproblem, y2, z2, v2, r2, xCons, dCons, rCons
+    return master, x, f, θ, subproblem, y2, xCons, dCons, rCons
 end
 
 
@@ -173,11 +162,18 @@ end
 ###############################################################
 
 #initialize parameter for two-stage model
-function initialize(nbstages1,s,t_roll)
-    LB = -1e10; UB = 1e10; iter = 0; θval = 0;
-    xval = zeros(Ni,nbstages1);fval = zeros(N0,Ni,nbstages1);
+function initialize(s,t_roll)
+# s is the index for the sample path in the out-of-sample test 
+    nbstages1 = T-t_roll+1;
+	LB = -1e10; 
+	UB = 1e10; 
+	iter = 0; 
+	θval = 0;
+    xval = zeros(Ni,nbstages1);
+	fval = zeros(N0,Ni,nbstages1);
+	# Do sampling to create (in-sample) scenarios 
     allscen = Matrix(CSV.read("./data/OOS.csv",DataFrame));
-    scen = allscen[collect(1:convert(Int,10000/nbscen):10000),1:T]
+    scen = allscen[collect(1:convert(Int,10000/nbscen):10000),1:T]; # note that this is just an initialization for scen
 
     if t_roll > 1
         for n=1:nbscen
@@ -191,23 +187,25 @@ function initialize(nbstages1,s,t_roll)
         end
     end
     qprob = fill(1/nbscen,nbscen)
-	return LB, UB, iter, xval, fval, θval, nbscen, scen, qprob
+	return LB, UB, iter, xval, fval, θval, scen, qprob
 end
 
 ###############################################################
 ###############################################################
 
 #solves the two-stage SP model
-function RH_2SSP_solve_roll(s,t_roll,nbstages1,master,subproblem,x,f,θ,y,z,v,xCons,dCons,rCons)
-    
-    LB, UB, iter, xval, fval, θval, nbscen, scen, qprob = initialize2(nbstages1,s,t_roll)
+function RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y,xCons,dCons,rCons)
+# s is the index for the sample path in the out-of-sample test 
+# Assumption coming into this function: t_roll must be before the landfall stage of sample path s in the out-of-sample test
+    nbstages1 = T-t_roll+1;
+    LB, UB, iter, xval, fval, θval, scen, qprob = initialize(s,t_roll)
     while (UB-LB)*1.0/max(1e-10,abs(LB)) > ϵ 
         iter+=1;
         # solve first stage
         LB, xval, fval, θval = solve_first_stage(LB,xval,fval,θval,master,x,f,θ);
         if t_roll < T
             # solve second stage 
-            flag, Qbar = solve_second_stage(t_roll,nbstages1,nbstages2,xval,fval,θval,scen,nbscen,qprob,master,subproblem,x,f,θ,y,z,v,xCons,dCons,rCons)
+            flag, Qbar = solve_second_stage(t_roll,xval,fval,θval,scen,qprob,master,subproblem,x,f,θ,y,xCons,dCons,rCons)
             if flag != -1
                 UB = min(LB-θval+Qbar,UB);
             end
@@ -247,8 +245,9 @@ end
 ###############################################################
 
 #solves the second-stage problem
-function solve_second_stage(t_roll,nbstages1,xval,fval,θval,scen,nbscen,qprob,master,subproblem,x,f,θ,y,z,v,xCons,dCons,rCons)
+function solve_second_stage(t_roll,xval,fval,θval,scenqprob,master,subproblem,x,f,θ,y,xCons,dCons,rCons)
     flag = 0;
+	nbstages1 = T-t_roll+1;
     Q = zeros(nbscen); #list for all the optimal values
     pi1 = Array{Any,1}(undef,nbscen); #list for all the dual multiplies of the first set of constraints
     pi2 = Array{Any,1}(undef,nbscen); #list for all the dual multiplies of the second set of constraints
@@ -262,9 +261,9 @@ function solve_second_stage(t_roll,nbstages1,xval,fval,θval,scen,nbscen,qprob,m
         
         #update the RHS
         if τ === nothing     
-            RH_2SSP_update_RHS(τ,scen[n,end],nbstages1,subproblem,xCons,dCons,rCons,xval,fval,t_roll)
+            RH_2SSP_update_RHS(τ,scen[n,end],subproblem,xCons,dCons,rCons,xval,fval,y,t_roll)
         else
-            RH_2SSP_update_RHS(τ,scen[n,τ],nbstages1,subproblem,xCons,dCons,rCons,xval,fval,t_roll)
+            RH_2SSP_update_RHS(τ,scen[n,τ],subproblem,xCons,dCons,rCons,xval,fval,y,t_roll)
         end
         
         #solve the subproblem and store the dual information
@@ -274,34 +273,32 @@ function solve_second_stage(t_roll,nbstages1,xval,fval,θval,scen,nbscen,qprob,m
         	exit(0);
 		end
     end
-    Qbar = 0;
-    if flag != -1
-        Qbar = sum(Q[n]*qprob[n] for n=1:nbscen)
-        pi1bar = sum(pi1[n]*qprob[n] for n=1:nbscen)
-        pi2bar = sum(pi2[n]*qprob[n] for n=1:nbscen)
+	Qbar = sum(Q[n]*qprob[n] for n=1:nbscen);
+	#add a cut (if any)
+	### TBD FROM HERE ###
 
-        #add a cut (if any)
-		### TBD FROM HERE ###
-        if (Qbar-θval)/max(1e-10,abs(Qbar)) > ϵ
-            if τ === nothing
-                @constraint(master,
-                θ-sum(pi1bar[t-1,i]*(x[i,t-1]-x[i,t]-sum(f[i,j,t] for j=1:Ni if j != i)+sum(f[j,i,t] for j=1:N0 if j != i)) for i=1:Ni, t=2:nbstages1)
-                >= 
-             Qbar-sum(pi1bar[t-1,i]*(xval[i,t-1]-xval[i,t]-sum(fval[i,j,t] for j=1:Ni if j != i)+sum(fval[j,i,t] for j=1:N0 if j != i)) for i=1:Ni, t=2:nbstages1)
-                );
-            else
-                @constraint(master,
-                            θ-sum(pi1bar[t-1,i]*(x[i,t-1]-x[i,t]-sum(f[i,j,t] for j=1:Ni if j != i)+sum(f[j,i,t] for j=1:N0 if j != i)) for i=1:Ni, t=2:nbstages1)
-                             -sum(pi2bar[t-1]*(sum(sum(cb[i,ii,t_roll+t-1]*f[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*x[i,t] for i=1:Ni)+sum(f[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t=2:nbstages1 if t_roll+t-1>τ)
-                            >= 
-                         Qbar-sum(pi1bar[t-1,i]*(xval[i,t-1]-xval[i,t]-sum(fval[i,j,t] for j=1:Ni if j != i)+sum(fval[j,i,t] for j=1:N0 if j != i)) for i=1:Ni, t=2:nbstages1)
-                             -sum(pi2bar[t-1]*(sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)+sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t=2:nbstages1 if t_roll+t-1>τ)
-                            );
-            end
+	pi1bar = sum(pi1[n]*qprob[n] for n=1:nbscen)
+	pi2bar = sum(pi2[n]*qprob[n] for n=1:nbscen)
 
-            flag = 1;
-        end
-    end
+	
+	if (Qbar-θval)/max(1e-10,abs(Qbar)) > ϵ
+		if τ === nothing
+			# no reimbursement
+			@constraint(master,
+			θ-sum(qprob[n]*sum(pi1[i,n]*x[i,nbstages1] for i=1:Ni) for n=1:nbscen) 
+			>= 
+		 Qbar-sum(qprob[n]*sum(pi1[i,n]*xval[i,nbstages1] for i=1:Ni) for n=1:nbscen)
+			);
+		else
+			# has reimbursement
+			@constraint(master,
+			θ-sum(qprob[n]*sum(pi1[i,n]*x[i,τ] for i=1:Ni) for n=1:nbscen)-sum(qprob[n]*pi3[n]*(-sum(sum(sum(cb[i,ii,t_roll+t-1]*f[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*x[i,t] for i=1:Ni)+sum(f[N0,i,t] for i=1:Ni)*h[t_roll+t-1] for t = (τ+2-t_roll):nbstages1)) for n=1:nbscen) 
+			>= 
+		 Qbar-sum(qprob[n]*sum(pi1[i,n]*xval[i,τ] for i=1:Ni) for n=1:nbscen)-sum(qprob[n]*pi3[n]*(-sum(sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)+sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1] for t = (τ+2-t_roll):nbstages1)) for n=1:nbscen)
+			);
+		end
+		flag = 1;
+	end
     return flag, Qbar
 end
 
@@ -314,26 +311,19 @@ function solve_scen_subproblem(Q,pi1,pi2,pi3,n,subproblem,xCons,dCons,rCons)
     optimize!(subproblem) #solve the model
     status_subproblem = termination_status(subproblem); #check the status 
     if status_subproblem != MOI.OPTIMAL
-        #println("Subproblem problem status is: ", status_subproblem, " === Oops! :/")
         if status_subproblem == MOI.INFEASIBLE
             flag = -1
         end
-        #exit(0);
     else
         #update the values
         Q[n] = objective_value(subproblem);
-        pi1temp = zeros(Ni);
-		pi2temp = zeros(Nj);
-        
         for i=1:Ni
-            pi1temp[i] = dual(xCons[i]);
+            pi1[n,i] = shadow_price(xCons[i]);
         end
 		for j=1:Nj
-            pi2temp[j] = dual(dCons[j]);            
+            pi2[n,j] = shadow_price(dCons[j]);            
         end
-		pi3[n] = dual(rCons);
-        pi1[n] = pi1temp
-        pi2[n] = pi2temp
+		pi3[n] = shadow_price(rCons);
     end
     return Q, pi1, pi2, pi3, flag
 end
@@ -341,9 +331,10 @@ end
 ###############################################################
 ###############################################################
 
-#updates the RHS of the flow-balance and demand constraints 
-#function RH_2SSP_update_RHS(τ,k_t,m,nbstages1,ConsFB,dCons,rCons,xval,fval,t_roll) [REVISION]
-function RH_2SSP_update_RHS(τ,k_t,nbstages1,subproblem,xCons,dCons,rCons,xval,fval,t_roll)
+#updates the RHS of the 2nd-stage constraints and objective coefficients
+function RH_2SSP_update_RHS(τ,k_t,subproblem,xCons,dCons,rCons,xval,fval,y,t_roll)
+	# Note that the assumption coming into this function is that τ > t_roll if τ is not nothing
+	nbstages1 = T-t_roll+1;
 	for i=1:Ni
 		if τ === nothing
 			set_normalized_rhs(xCons[i],xvals[i,T]);
@@ -361,12 +352,13 @@ function RH_2SSP_update_RHS(τ,k_t,nbstages1,subproblem,xCons,dCons,rCons,xval,f
 	end
 
 	if τ === nothing 
+		# nothing to reimburse here
         set_normalized_rhs(rCons, 0)
     else
         set_normalized_rhs(rCons,
                     -sum(sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)
                     +sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)  
-                    +sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1] for t = (τ+2-t_roll):T) #WARNING: PLEASE CHECK!
+                    +sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1] for t = (τ+2-t_roll):nbstages1) 
                     );
     end
 
@@ -383,8 +375,7 @@ end
 ###############################################################
 ###############################################################
 #=
-#generate a feasability cut
-#function generate_feasability_cut(feas_m,feas_y,feas_z,feas_v,feas_ConsFB,feas_dCons,feas_rCons,n,scen,scenM,nbstages1,xval,fval,t_roll,nbstages2,master,x,f) [REVISION]
+# No need to generate a feasability cut in this revised version.
 function generate_feasability_cut(feas_m,feas_y,feas_z,feas_v,feas_ConsFB,feas_dCons,feas_rCons,n,scen,nbstages1,xval,fval,t_roll,nbstages2,master,x,f)
     #identify the period where the hurricane makes landfall 
     τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, scen[n,:]);
