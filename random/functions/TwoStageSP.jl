@@ -200,7 +200,7 @@ function RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y,xCons,dCons,rCon
     LB, UB, xval, fval, θval, scen, qprob = initialize(s,t_roll)
     while (UB-LB)*1.0/max(1e-10,abs(LB)) > ϵ 
         # solve first stage
-        LB, xval, fval, θval = solve_first_stage(LB,xval,fval,θval,master,x,f,θ);
+        solve_first_stage(LB,xval,fval,θval,master,x,f,θ);
         if t_roll < T
             # solve second stage 
             flag, Qbar = solve_second_stage(t_roll,xval,fval,θval,scen,qprob,master,subproblem,x,f,θ,y,xCons,dCons,rCons)
@@ -235,21 +235,19 @@ function solve_first_stage(LB,xval,fval,θval,master,x,f,θ)
         fval = value.(f);
         θval = value(θ);      
     end
-
-    return LB, xval, fval, θval
 end
 
 ###############################################################
 ###############################################################
 
 #solves the second-stage problem
-function solve_second_stage(t_roll,xval,fval,θval,scenqprob,master,subproblem,x,f,θ,y,xCons,dCons,rCons)
+function solve_second_stage(t_roll,xval,fval,θval,scen,qprob,master,subproblem,x,f,θ,y,xCons,dCons,rCons)
     flag = 0;
 	nbstages1 = T-t_roll+1;
     Q = zeros(nbscen); #list for all the optimal values
     pi1 = Array{Any,1}(undef,nbscen); #list for all the dual multiplies of the first set of constraints
     pi2 = Array{Any,1}(undef,nbscen); #list for all the dual multiplies of the second set of constraints
-	pi3 = zeros(nbscens); # dual multipliers of the third set of constraints
+	pi3 = zeros(nbscen); # dual multipliers of the third set of constraints
     Qbar = 0;
     
     τ = nothing
@@ -265,7 +263,7 @@ function solve_second_stage(t_roll,xval,fval,θval,scenqprob,master,subproblem,x
         end
         
         #solve the subproblem and store the dual information
-        Q, pi1, pi2, pi3, flag = solve_scen_subproblem(Q,pi1,pi2,pi3,n,subproblem,xCons,dCons,rCons)
+        flag = solve_scen_subproblem(Q,pi1,pi2,pi3,n,subproblem,xCons,dCons,rCons)
         if flag == -1
         	println("subproblem status is infeasible?!")
         	exit(0);
@@ -278,16 +276,16 @@ function solve_second_stage(t_roll,xval,fval,θval,scenqprob,master,subproblem,x
 		if τ === nothing
 			# no reimbursement
 			@constraint(master,
-			θ-sum(qprob[n]*sum(pi1[i,n]*x[i,nbstages1] for i=1:Ni) for n=1:nbscen) 
+			θ-sum(qprob[n]*sum(pi1[n][i]*x[i,nbstages1] for i=1:Ni) for n=1:nbscen) 
 			>= 
-		 Qbar-sum(qprob[n]*sum(pi1[i,n]*xval[i,nbstages1] for i=1:Ni) for n=1:nbscen)
+		 Qbar-sum(qprob[n]*sum(pi1[n][i]*xval[i,nbstages1] for i=1:Ni) for n=1:nbscen)
 			);
 		else
 			# has reimbursement
 			@constraint(master,
-			θ-sum(qprob[n]*sum(pi1[i,n]*x[i,τ] for i=1:Ni) for n=1:nbscen)-sum(qprob[n]*pi3[n]*(-sum(sum(sum(cb[i,ii,t_roll+t-1]*f[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*x[i,t] for i=1:Ni)+sum(f[N0,i,t] for i=1:Ni)*h[t_roll+t-1] for t = (τ+2-t_roll):nbstages1)) for n=1:nbscen) 
+			θ-sum(qprob[n]*sum(pi1[n][i]*x[i,τ-t_roll+1] for i=1:Ni) for n=1:nbscen)-sum(qprob[n]*pi3[n]*(-sum(sum(sum(cb[i,ii,t_roll+t-1]*f[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*x[i,t] for i=1:Ni)+sum(f[N0,i,t] for i=1:Ni)*h[t_roll+t-1] for t = (τ+2-t_roll):nbstages1)) for n=1:nbscen) 
 			>= 
-		 Qbar-sum(qprob[n]*sum(pi1[i,n]*xval[i,τ] for i=1:Ni) for n=1:nbscen)-sum(qprob[n]*pi3[n]*(-sum(sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)+sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1] for t = (τ+2-t_roll):nbstages1)) for n=1:nbscen)
+		 Qbar-sum(qprob[n]*sum(pi1[n][i]*xval[i,τ-t_roll+1] for i=1:Ni) for n=1:nbscen)-sum(qprob[n]*pi3[n]*(-sum(sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)+sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1] for t = (τ+2-t_roll):nbstages1)) for n=1:nbscen)
 			);
 		end
 		flag = 1;
@@ -310,15 +308,19 @@ function solve_scen_subproblem(Q,pi1,pi2,pi3,n,subproblem,xCons,dCons,rCons)
     else
         #update the values
         Q[n] = objective_value(subproblem);
+		pi1temp = zeros(Ni);
+        pi2temp = zeros(Nj);
         for i=1:Ni
-            pi1[n,i] = shadow_price(xCons[i]);
+            pi1temp[i] = shadow_price(xCons[i]);
         end
 		for j=1:Nj
-            pi2[n,j] = shadow_price(dCons[j]);            
+            pi2temp[j] = shadow_price(dCons[j]);            
         end
+		pi1[n] = pi1temp;
+		pi2[n] = pi2temp;
 		pi3[n] = shadow_price(rCons);
     end
-    return Q, pi1, pi2, pi3, flag
+    return flag
 end
 
 ###############################################################
@@ -330,9 +332,9 @@ function RH_2SSP_update_RHS(τ,k_t,subproblem,xCons,dCons,rCons,xval,fval,y,t_ro
 	nbstages1 = T-t_roll+1;
 	for i=1:Ni
 		if τ === nothing
-			set_normalized_rhs(xCons[i],xvals[i,T]);
+			set_normalized_rhs(xCons[i],xval[i,T-t_roll+1]);
 		else
-			set_normalized_rhs(xCons[i],xvals[i,τ]);
+			set_normalized_rhs(xCons[i],xval[i,τ-t_roll+1]);
 		end
 	end
 

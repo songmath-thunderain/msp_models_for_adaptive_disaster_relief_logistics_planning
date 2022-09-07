@@ -7,7 +7,7 @@ master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_
 
 #solve the model.
 start=time();
-LB_st2SSP, UB_st2SSP, iter_st2SSP, xval_st2SSP, fval_st2SSP, θval_st2SSP = RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
+LB_st2SSP, UB_st2SSP, xval_st2SSP, fval_st2SSP, θval_st2SSP = RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
 elapsed = time() - start;
 
 f1cost = LB_st2SSP-θval_st2SSP;
@@ -20,6 +20,10 @@ OS_paths = Matrix(CSV.read("./data/OOS.csv",DataFrame)); #read the out-of-sample
     
 objs_st2SSP = fill(f1cost,nbOS);
 Q = zeros(nbOS); #list for all the optimal values
+pi1 = Array{Any,1}(undef,nbOS); 
+pi2 = Array{Any,1}(undef,nbOS); 
+pi3 = zeros(nbOS);
+
 for s=1:nbOS
 	#identify the period where the hurricane makes landfall 
 	τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, OS_paths[s,1:T]);
@@ -27,19 +31,14 @@ for s=1:nbOS
 	#update the RHS
 	if τ === nothing
 		#RH_2SSP_update_RHS(τ,OS_paths[s,end],OS_M[s],nbstages1,ConsFB,dCons,rCons,xval,fval,t_roll) [REVISION]
-		RH_2SSP_update_RHS(τ,OS_paths[s,end],subproblem,xCons,dCons,rCons,xval,fval,y2,t_roll)
+		RH_2SSP_update_RHS(τ,OS_paths[s,end],subproblem,xCons,dCons,rCons,xval_st2SSP,fval_st2SSP,y2,t_roll)
 	else
 		#RH_2SSP_update_RHS(τ,OS_paths[s,τ],OS_M[s],nbstages1,ConsFB,dCons,rCons,xval,fval,t_roll) [REVISION]
-		RH_2SSP_update_RHS(τ,OS_paths[s,τ],subproblem,xCons,dCons,rCons,xval,fval,y2,t_roll)
+		RH_2SSP_update_RHS(τ,OS_paths[s,τ],subproblem,xCons,dCons,rCons,xval_st2SSP,fval_st2SSP,y2,t_roll)
 	end
 	
-	
-	#list for all the dual multiplies of the first and second set of constraints
-	pi1 = Array{Any,1}(undef,nbOS); 
-	pi2 = Array{Any,1}(undef,nbOS); 
-	pi3 = zeros(nbOS);
 	#solve the subproblem and store the dual information
-	Q, pi1, pi2, pi3, flag = solve_scen_subproblem(Q,pi1,pi2,pi3,s,subproblem,xCons,dCons,rCons)
+	flag = solve_scen_subproblem(Q,pi1,pi2,pi3,s,subproblem,xCons,dCons,rCons)
 	objs_st2SSP[s] = objs_st2SSP[s] + Q[s];
 end
   
@@ -60,7 +59,7 @@ results_st2SSP[inst,2] = st2SSP_bar
 results_st2SSP[inst,3] = st2SSP_bar-st2SSP_low
 results_st2SSP[inst,4] = elapsed
 results_st2SSP[inst,5] = elapsed2
-results_st2SSP[inst,6] = iter_st2SSP
+results_st2SSP[inst,6] = 0
 
 updf = DataFrame(results_st2SSP, :auto);
 CSV.write(fname,updf)
