@@ -16,6 +16,7 @@ objs_RH2SSP = zeros(nbOS,T);
 objs_RH2SSP[:,1] .= f1cost;
 
 for s=1:nbOS
+	# TBD HERE
 	#println("s = ", s)
 	τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, OS_paths[s,1:T]);
 	x_init = deepcopy(xval_1stRoll[:,1]);
@@ -23,46 +24,63 @@ for s=1:nbOS
 		# This rolling procedure will stop at t = τ
 		for t_roll=2:(τ-1)
 			# roll up to t = τ-1
-			k_t = OS_paths[s,t_roll]
-			if S[k_t][3] == Nc-1 && k_t ∉ absorbing_states
-				ξ = SCEN[k_t];
-			end
-
 			#define the the model.
 			master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_roll,x_init);
 			
 			#solve the model.
-			LB_Roll, UB_Roll, iter_Roll, xval_Roll, fval_Roll, θval_Roll = RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
+			LB_Roll, UB_Roll, xval_Roll, fval_Roll, θval_Roll = RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
 
 			#implement xₜ, pay cost, and pass xₜ to new t+1.
 			x_init = deepcopy(xval_Roll[:,1]);
 			objs_RH2SSP[s,t_roll] = LB_Roll - θval_Roll;
 			if t_roll == (τ-1)
 				# Now we get the realization, do the recourse now and finish the rolling procedure
-				# TBD
+				t_roll = t_roll + 1;
+				nbstages1 = T-t_roll+1;
+				for i=1:Ni
+					set_normalized_rhs(xCons[i],xvals_Roll[i,τ]);
+				end
+				k_t = OS_paths[s,t_roll];
+				for j=1:Nj
+					if k_t ∉ absorbing_states           
+						set_normalized_rhs(dCons[j], SCEN[k_t][j]);
+					else
+						set_normalized_rhs(dCons[j], 0);
+					end
+				end
+
+				set_normalized_rhs(rCons,
+								-sum(sum(sum(cb[i,ii,t_roll+t-1]*fval_Roll[i,ii,t] for ii=1:Ni) for i=1:N0)
+								+sum(ch[i,t_roll+t-1]*xval_Roll[i,t] for i=1:Ni)  
+								+sum(fval_Roll[N0,i,t] for i=1:Ni)*h[t_roll+t-1] for t = (τ+2-t_roll):nbstages1) 
+								);
+				# Also need to update the coefficients of y[i,j] variables in the 2nd stage
+				for i=1:Ni
+					for j=1:Nj
+						set_objective_coefficient(subproblem, y[i,j], ca[i,j,τ]);
+					end
+				end
+				optimize!(subproblem); 
+      			objs_RH2SSP[s,t_roll] = objective_value(subproblem);
 			end
 		end
 	else
 		# This rolling procedure will go all the way to the end
 		for t_roll=2:(T-1)
 			# roll up to t = T-1
-			k_t = OS_paths[s,t_roll]
-			if S[k_t][3] == Nc-1 && k_t ∉ absorbing_states
-				ξ = SCEN[k_t];
-			end
-
 			#define the the model.
 			master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_roll,x_init);
 			
 			#solve the model.
-			LB_Roll, UB_Roll, iter_Roll, xval_Roll, fval_Roll, θval_Roll = RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
+			LB_Roll, UB_Roll, xval_Roll, fval_Roll, θval_Roll = RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
 
 			#implement xₜ, pay cost, and pass xₜ to new t+1.
 			x_init = deepcopy(xval_Roll[:,1]);
 			objs_RH2SSP[s,t_roll] = LB_Roll - θval_Roll;
 			if t_roll == (T-1)
 				# Now we get the realization, do the recourse now and finish the rolling procedure
-				# TBD
+				t_roll = t_roll + 1;
+
 			end
 		end
 	end

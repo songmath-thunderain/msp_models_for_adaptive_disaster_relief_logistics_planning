@@ -167,7 +167,6 @@ function initialize(s,t_roll)
     nbstages1 = T-t_roll+1;
 	LB = -1e10; 
 	UB = 1e10; 
-	iter = 0; 
 	θval = 0;
     xval = zeros(Ni,nbstages1);
 	fval = zeros(N0,Ni,nbstages1);
@@ -187,7 +186,7 @@ function initialize(s,t_roll)
         end
     end
     qprob = fill(1/nbscen,nbscen)
-	return LB, UB, iter, xval, fval, θval, scen, qprob
+	return LB, UB, xval, fval, θval, scen, qprob
 end
 
 ###############################################################
@@ -198,9 +197,8 @@ function RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y,xCons,dCons,rCon
 # s is the index for the sample path in the out-of-sample test 
 # Assumption coming into this function: t_roll must be before the landfall stage of sample path s in the out-of-sample test
     nbstages1 = T-t_roll+1;
-    LB, UB, iter, xval, fval, θval, scen, qprob = initialize(s,t_roll)
+    LB, UB, xval, fval, θval, scen, qprob = initialize(s,t_roll)
     while (UB-LB)*1.0/max(1e-10,abs(LB)) > ϵ 
-        iter+=1;
         # solve first stage
         LB, xval, fval, θval = solve_first_stage(LB,xval,fval,θval,master,x,f,θ);
         if t_roll < T
@@ -215,7 +213,7 @@ function RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y,xCons,dCons,rCon
         end
     end
 
-    return LB, UB, iter, xval, fval, θval
+    return LB, UB, xval, fval, θval
 end
 
 
@@ -275,11 +273,6 @@ function solve_second_stage(t_roll,xval,fval,θval,scenqprob,master,subproblem,x
     end
 	Qbar = sum(Q[n]*qprob[n] for n=1:nbscen);
 	#add a cut (if any)
-	### TBD FROM HERE ###
-
-	pi1bar = sum(pi1[n]*qprob[n] for n=1:nbscen)
-	pi2bar = sum(pi2[n]*qprob[n] for n=1:nbscen)
-
 	
 	if (Qbar-θval)/max(1e-10,abs(Qbar)) > ϵ
 		if τ === nothing
