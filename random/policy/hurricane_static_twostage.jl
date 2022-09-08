@@ -46,6 +46,7 @@ st2SSP_bar = mean(objs_st2SSP);
 st2SSP_std = std(objs_st2SSP);
 st2SSP_low = st2SSP_bar-1.96*st2SSP_std/sqrt(nbOS);
 st2SSP_high = st2SSP_bar+1.96*st2SSP_std/sqrt(nbOS);
+println("static 2SSP....");
 println("μ ± 1.96*σ/√NS = ", st2SSP_bar, " ± ", [st2SSP_low,st2SSP_high]);
 
 elapsed2 = time() - start;

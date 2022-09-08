@@ -13,10 +13,18 @@ LB_1stRoll, UB_1stRoll, xval_1stRoll, fval_1stRoll, θval_1stRoll = RH_2SSP_solv
 OS_paths = Matrix(CSV.read("./data/OOS.csv",DataFrame)); #read the out-of-sample file
 #OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS [REVISION: no need anymore]
 
-f1cost = LB_1stRoll-θval_1stRoll;
-
 objs_RH2SSP = zeros(nbOS,T);
-objs_RH2SSP[:,1] .= f1cost;
+
+for s=1:nbOS
+	for i = 1:N0
+		for ii = 1:Ni
+			objs_RH2SSP[s,1] += cb[i,ii,1]*fval_1stRoll[i,ii,1];
+		end
+	end
+	for i = 1:Ni
+		objs_RH2SSP[s,1] += ch[i,1]*xval_1stRoll[i,1] + h[1]*fval_1stRoll[N0,i,1];
+	end
+end
 
 for s=1:nbOS
 	τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, OS_paths[s,1:T]);
@@ -35,11 +43,11 @@ for s=1:nbOS
 			objs_RH2SSP[s,t_roll] = 0;
 			for i = 1:N0
 				for ii = 1:Ni
-					objs_RH2SSP[s,t_roll] = objs_RH2SSP[s,t_roll] + cb[i,ii,t_roll]*fval_Roll[i,ii,1];
+					objs_RH2SSP[s,t_roll] += cb[i,ii,t_roll]*fval_Roll[i,ii,1];
 				end
 			end
 			for i = 1:Ni
-				objs_RH2SSP[s,t_roll] = objs_RH2SSP[s,t_roll] + ch[i,t_roll]*xval_Roll[i,1] + h[t_roll]*fval_Roll[N0,i,1];
+				objs_RH2SSP[s,t_roll] += ch[i,t_roll]*xval_Roll[i,1] + h[t_roll]*fval_Roll[N0,i,1];
 			end
 			
 			if t_roll == (τ-1)
@@ -84,11 +92,11 @@ for s=1:nbOS
 			objs_RH2SSP[s,t_roll] = 0;
 			for i = 1:N0
 				for ii = 1:Ni
-					objs_RH2SSP[s,t_roll] = objs_RH2SSP[s,t_roll] + cb[i,ii,t_roll]*fval_Roll[i,ii,1];
+					objs_RH2SSP[s,t_roll] += cb[i,ii,t_roll]*fval_Roll[i,ii,1];
 				end
 			end
 			for i = 1:Ni
-				objs_RH2SSP[s,t_roll] = objs_RH2SSP[s,t_roll] + ch[i,t_roll]*xval_Roll[i,1] + h[t_roll]*fval_Roll[N0,i,1];
+				objs_RH2SSP[s,t_roll] += ch[i,t_roll]*xval_Roll[i,1] + h[t_roll]*fval_Roll[N0,i,1];
 			end
 			if t_roll == (absorbingT-1)
 				# Now we get the realization, do the recourse now and finish the rolling procedure
@@ -96,7 +104,7 @@ for s=1:nbOS
 				# Just salvage all the x_init
 				objs_RH2SSP[s,t_roll] = 0;
 				for i=1:Ni
-					objs_RH2SSP[s,t_roll] = objs_RH2SSP[s,t_roll] + x_init[i]*q;
+					objs_RH2SSP[s,t_roll] += x_init[i]*q;
 				end
 			end
 		end
@@ -109,6 +117,7 @@ RH2SSP_bar = mean(sum(objs_RH2SSP[:,t] for t=1:T));
 RH2SSP_std = std(sum(objs_RH2SSP[:,t] for t=1:T));
 RH2SSP_low = RH2SSP_bar-1.96*RH2SSP_std/sqrt(nbOS);
 RH2SSP_high = RH2SSP_bar+1.96*RH2SSP_std/sqrt(nbOS);
+println("RH2SSP....");
 println("μ ± 1.96*σ/√NS = ", RH2SSP_bar, " ± ", [RH2SSP_low,RH2SSP_high]);
 
 
