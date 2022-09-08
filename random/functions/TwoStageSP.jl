@@ -200,7 +200,7 @@ function RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y,xCons,dCons,rCon
     LB, UB, xval, fval, θval, scen, qprob = initialize(s,t_roll)
     while (UB-LB)*1.0/max(1e-10,abs(LB)) > ϵ 
         # solve first stage
-        solve_first_stage(LB,xval,fval,θval,master,x,f,θ);
+        LB, xval, fval, θval = solve_first_stage(LB,xval,fval,θval,master,x,f,θ);
         if t_roll < T
             # solve second stage 
             flag, Qbar = solve_second_stage(t_roll,xval,fval,θval,scen,qprob,master,subproblem,x,f,θ,y,xCons,dCons,rCons)
@@ -235,6 +235,8 @@ function solve_first_stage(LB,xval,fval,θval,master,x,f,θ)
         fval = value.(f);
         θval = value(θ);      
     end
+
+	return LB, xval, fval, θval
 end
 
 ###############################################################
@@ -263,7 +265,7 @@ function solve_second_stage(t_roll,xval,fval,θval,scen,qprob,master,subproblem,
         end
         
         #solve the subproblem and store the dual information
-        flag = solve_scen_subproblem(Q,pi1,pi2,pi3,n,subproblem,xCons,dCons,rCons)
+        Q[n], pi1[n], pi2[n], pi3[n], flag = solve_scen_subproblem(subproblem,xCons,dCons,rCons);
         if flag == -1
         	println("subproblem status is infeasible?!")
         	exit(0);
@@ -297,17 +299,21 @@ end
 ###############################################################
 ###############################################################
 #solves scenario subproblem of the second stage
-function solve_scen_subproblem(Q,pi1,pi2,pi3,n,subproblem,xCons,dCons,rCons)
+function solve_scen_subproblem(subproblem,xCons,dCons,rCons)
     flag = 0
     optimize!(subproblem) #solve the model
     status_subproblem = termination_status(subproblem); #check the status 
+	Qtemp = 0;
+	pi1temp = zeros(Ni);
+	pi2temp = zeros(Nj);
+	pi3temp = 0;
     if status_subproblem != MOI.OPTIMAL
         if status_subproblem == MOI.INFEASIBLE
             flag = -1
         end
     else
         #update the values
-        Q[n] = objective_value(subproblem);
+        Qtemp = objective_value(subproblem);
 		pi1temp = zeros(Ni);
         pi2temp = zeros(Nj);
         for i=1:Ni
@@ -316,11 +322,9 @@ function solve_scen_subproblem(Q,pi1,pi2,pi3,n,subproblem,xCons,dCons,rCons)
 		for j=1:Nj
             pi2temp[j] = shadow_price(dCons[j]);            
         end
-		pi1[n] = pi1temp;
-		pi2[n] = pi2temp;
-		pi3[n] = shadow_price(rCons);
+		pi3temp = shadow_price(rCons);
     end
-    return flag
+    return Qtemp, pi1temp, pi2temp, pi3temp, flag
 end
 
 ###############################################################

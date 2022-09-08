@@ -38,7 +38,7 @@ for s=1:nbOS
 	end
 	
 	#solve the subproblem and store the dual information
-	flag = solve_scen_subproblem(Q,pi1,pi2,pi3,s,subproblem,xCons,dCons,rCons)
+	Q[s], pi1[s], pi2[s], pi3[s], flag = solve_scen_subproblem(subproblem,xCons,dCons,rCons)
 	objs_st2SSP[s] = objs_st2SSP[s] + Q[s];
 end
   
