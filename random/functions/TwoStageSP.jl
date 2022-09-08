@@ -20,7 +20,7 @@ function RH_2SSP_first_stage(t_roll,x_init)
                Min,
                sum(sum(sum(cb[i,ii,t_roll-1+t]*f[i,ii,t] for ii=1:Ni) for i=1:N0) for t=1:nbstages1)
               +sum(sum(ch[i,t_roll-1+t]*x[i,t] for i=1:Ni) for t=1:nbstages1)
-              +sum(sum(f[N0,i,t] for i=1:Ni)*h[t_roll-1+t] for t=1:nbstages1)
+              +sum(sum(h[t_roll-1+t]*f[N0,i,t] for i=1:Ni) for t=1:nbstages1)
               +θ 
                );
     
