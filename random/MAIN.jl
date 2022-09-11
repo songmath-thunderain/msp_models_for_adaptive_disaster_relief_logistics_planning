@@ -29,17 +29,23 @@ nbscen = parse(Int, PARAMS[7]); #number of sample paths when solving two-stage
 include("packages.jl");
 include("./data/data.jl");
 include("./functions/functions.jl");
+
+println("Na = ", Na);
+println("Nb = ", Nb);
+println("Nc = ", Nc);
+
+
 #create gurobi environment
 const GRB_ENV = Gurobi.Env();
 
 #Clairvoyance solution 
-include("./policy/hurricane_CV.jl");
+#include("./policy/hurricane_CV.jl");
 
 #Fully adaptive model
-include("./policy/hurricane_FA.jl");
+#include("./policy/hurricane_FA.jl");
  
 #Rolling-horizon 2SSP
-include("./policy/hurricane_rolling_twostage.jl")
+#include("./policy/hurricane_rolling_twostage.jl")
 
 #Static 2SSP
 include("./policy/hurricane_static_twostage.jl");

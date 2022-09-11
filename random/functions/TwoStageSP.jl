@@ -255,7 +255,7 @@ function solve_second_stage(t_roll,xval,fval,θval,scen,qprob,master,subproblem,
     τ = nothing
     for n=1:nbscen
         #identify the period when the hurricane makes landfall 
-        τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, scen[n,:]);
+        τ = findfirst(x -> S[x][3] >= Nc-1 && x ∉ absorbing_states, scen[n,:]);
         
         #update the RHS
         if τ === nothing     

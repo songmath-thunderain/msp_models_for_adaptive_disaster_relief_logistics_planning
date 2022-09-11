@@ -27,7 +27,7 @@ for s=1:nbOS
 end
 
 for s=1:nbOS
-	τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, OS_paths[s,1:T]);
+	τ = findfirst(x -> S[x][3] >= Nc-1 && x ∉ absorbing_states, OS_paths[s,1:T]);
 	x_init = deepcopy(xval_1stRoll[:,1]);
 	if τ !== nothing
 		# This rolling procedure will stop at t = τ
@@ -79,7 +79,7 @@ for s=1:nbOS
 			end
 		end
 	else
-		absorbingT = findfirst(x -> S[x][1] == 1 && x ∈ absorbing_states, OS_paths[s,1:T]);
+		absorbingT = findfirst(x -> S[x][1] == 1, OS_paths[s,1:T]);
 		# This rolling procedure will go all the way until the hurricane gets into the absorbing state of dissipating [TBD]
 		for t_roll=2:(absorbingT-1)
 			# roll up to t = absorbingT-1

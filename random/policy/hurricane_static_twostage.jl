@@ -31,6 +31,11 @@ for s=1:nbOS
 	#update the RHS
 	if τ === nothing
 		#RH_2SSP_update_RHS(τ,OS_paths[s,end],OS_M[s],nbstages1,ConsFB,dCons,rCons,xval,fval,t_roll) [REVISION]
+		absorbingT = findfirst(x -> S[x][1] == 1, OS_paths[s,1:T]);
+		println("absorbingT = ", absorbingT);
+		for t = 1:T
+			println("s[state] = ", S[OS_paths[s,t]]);
+		end
 		RH_2SSP_update_RHS(τ,OS_paths[s,end],subproblem,xCons,dCons,rCons,xval_st2SSP,fval_st2SSP,y2,t_roll)
 	else
 		#RH_2SSP_update_RHS(τ,OS_paths[s,τ],OS_M[s],nbstages1,ConsFB,dCons,rCons,xval,fval,t_roll) [REVISION]
