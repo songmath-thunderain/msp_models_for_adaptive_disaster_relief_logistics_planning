@@ -12,6 +12,8 @@ elapsed = time() - start;
 
 f1cost = LB_st2SSP-θval_st2SSP;
 
+println("training UB = ", UB_st2SSP);
+
 #eval the model.
 start=time();
 
@@ -32,11 +34,7 @@ for s=1:nbOS
 	if τ === nothing
 		#RH_2SSP_update_RHS(τ,OS_paths[s,end],OS_M[s],nbstages1,ConsFB,dCons,rCons,xval,fval,t_roll) [REVISION]
 		absorbingT = findfirst(x -> S[x][1] == 1, OS_paths[s,1:T]);
-		println("absorbingT = ", absorbingT);
-		for t = 1:T
-			println("s[state] = ", S[OS_paths[s,t]]);
-		end
-		RH_2SSP_update_RHS(τ,OS_paths[s,end],subproblem,xCons,dCons,rCons,xval_st2SSP,fval_st2SSP,y2,t_roll)
+		RH_2SSP_update_RHS(absorbingT,OS_paths[s,absorbingT],subproblem,xCons,dCons,rCons,xval_st2SSP,fval_st2SSP,y2,t_roll)
 	else
 		#RH_2SSP_update_RHS(τ,OS_paths[s,τ],OS_M[s],nbstages1,ConsFB,dCons,rCons,xval,fval,t_roll) [REVISION]
 		RH_2SSP_update_RHS(τ,OS_paths[s,τ],subproblem,xCons,dCons,rCons,xval_st2SSP,fval_st2SSP,y2,t_roll)

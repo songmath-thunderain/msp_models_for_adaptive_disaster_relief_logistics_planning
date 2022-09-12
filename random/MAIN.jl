@@ -39,13 +39,13 @@ println("Nc = ", Nc);
 const GRB_ENV = Gurobi.Env();
 
 #Clairvoyance solution 
-#include("./policy/hurricane_CV.jl");
+include("./policy/hurricane_CV.jl");
 
 #Fully adaptive model
-#include("./policy/hurricane_FA.jl");
+include("./policy/hurricane_FA.jl");
  
 #Rolling-horizon 2SSP
-#include("./policy/hurricane_rolling_twostage.jl")
+include("./policy/hurricane_rolling_twostage.jl")
 
 #Static 2SSP
 include("./policy/hurricane_static_twostage.jl");

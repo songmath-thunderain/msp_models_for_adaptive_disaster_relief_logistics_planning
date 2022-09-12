@@ -22,14 +22,45 @@ for s=1:nbOS
 		end
 	end
 	for i = 1:Ni
-		objs_RH2SSP[s,1] += ch[i,1]*xval_1stRoll[i,1] + h[1]*fval_1stRoll[N0,i,1];
+		objs_RH2SSP[s,1] += (ch[i,1]*xval_1stRoll[i,1] + h[1]*fval_1stRoll[N0,i,1]);
 	end
 end
 
 for s=1:nbOS
-	τ = findfirst(x -> S[x][3] >= Nc-1 && x ∉ absorbing_states, OS_paths[s,1:T]);
+	τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, OS_paths[s,1:T]);
 	x_init = deepcopy(xval_1stRoll[:,1]);
-	if τ !== nothing
+	if τ === nothing
+		absorbingT = findfirst(x -> S[x][1] == 1, OS_paths[s,1:T]);
+		# This rolling procedure will go all the way until the hurricane gets into the absorbing state of dissipating [TBD]
+		for t_roll=2:(absorbingT-1)
+			# roll up to t = absorbingT-1
+			#define the the model.
+			master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_roll,x_init);
+			#solve the model.
+			LB_Roll, UB_Roll, xval_Roll, fval_Roll, θval_Roll = RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
+			#implement xₜ, pay cost, and pass xₜ to new t+1.
+			x_init = deepcopy(xval_Roll[:,1]);
+			objs_RH2SSP[s,t_roll] = 0;
+			for i = 1:N0
+				for ii = 1:Ni
+					objs_RH2SSP[s,t_roll] += cb[i,ii,t_roll]*fval_Roll[i,ii,1];
+				end
+			end
+			for i = 1:Ni
+				objs_RH2SSP[s,t_roll] += (ch[i,t_roll]*xval_Roll[i,1] + h[t_roll]*fval_Roll[N0,i,1]);
+			end
+			if t_roll == (absorbingT-1)
+				# Now we get the realization, do the recourse now and finish the rolling procedure
+				t_roll = t_roll + 1;
+				# Just salvage all the x_init
+				objs_RH2SSP[s,t_roll] = 0;
+				for i=1:Ni
+					objs_RH2SSP[s,t_roll] += x_init[i]*q;
+				end
+			end
+		end
+
+	else
 		# This rolling procedure will stop at t = τ
 		for t_roll=2:(τ-1)
 			# roll up to t = τ-1
@@ -76,36 +107,6 @@ for s=1:nbOS
 				end
 				optimize!(subproblem); 
       			objs_RH2SSP[s,t_roll] = objective_value(subproblem);
-			end
-		end
-	else
-		absorbingT = findfirst(x -> S[x][1] == 1, OS_paths[s,1:T]);
-		# This rolling procedure will go all the way until the hurricane gets into the absorbing state of dissipating [TBD]
-		for t_roll=2:(absorbingT-1)
-			# roll up to t = absorbingT-1
-			#define the the model.
-			master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_roll,x_init);
-			#solve the model.
-			LB_Roll, UB_Roll, xval_Roll, fval_Roll, θval_Roll = RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
-			#implement xₜ, pay cost, and pass xₜ to new t+1.
-			x_init = deepcopy(xval_Roll[:,1]);
-			objs_RH2SSP[s,t_roll] = 0;
-			for i = 1:N0
-				for ii = 1:Ni
-					objs_RH2SSP[s,t_roll] += cb[i,ii,t_roll]*fval_Roll[i,ii,1];
-				end
-			end
-			for i = 1:Ni
-				objs_RH2SSP[s,t_roll] += ch[i,t_roll]*xval_Roll[i,1] + h[t_roll]*fval_Roll[N0,i,1];
-			end
-			if t_roll == (absorbingT-1)
-				# Now we get the realization, do the recourse now and finish the rolling procedure
-				t_roll = t_roll + 1;
-				# Just salvage all the x_init
-				objs_RH2SSP[s,t_roll] = 0;
-				for i=1:Ni
-					objs_RH2SSP[s,t_roll] += x_init[i]*q;
-				end
 			end
 		end
 	end

@@ -255,11 +255,12 @@ function solve_second_stage(t_roll,xval,fval,θval,scen,qprob,master,subproblem,
     τ = nothing
     for n=1:nbscen
         #identify the period when the hurricane makes landfall 
-        τ = findfirst(x -> S[x][3] >= Nc-1 && x ∉ absorbing_states, scen[n,:]);
+        τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, scen[n,:]);
         
         #update the RHS
         if τ === nothing     
-            RH_2SSP_update_RHS(τ,scen[n,end],subproblem,xCons,dCons,rCons,xval,fval,y,t_roll)
+			absorbingT = findfirst(x -> S[x][1] == 1, scen[n,:]);
+            RH_2SSP_update_RHS(absorbingT,scen[n,absorbingT],subproblem,xCons,dCons,rCons,xval,fval,y,t_roll)
         else
             RH_2SSP_update_RHS(τ,scen[n,τ],subproblem,xCons,dCons,rCons,xval,fval,y,t_roll)
         end
@@ -336,7 +337,9 @@ function RH_2SSP_update_RHS(τ,k_t,subproblem,xCons,dCons,rCons,xval,fval,y,t_ro
 	nbstages1 = T-t_roll+1;
 	for i=1:Ni
 		if τ === nothing
-			set_normalized_rhs(xCons[i],xval[i,T-t_roll+1]);
+			println("We shouldn't come here any more!");
+			exit(0);
+			#set_normalized_rhs(xCons[i],xval[i,T-t_roll+1]);
 		else
 			set_normalized_rhs(xCons[i],xval[i,τ-t_roll+1]);
 		end
@@ -352,23 +355,22 @@ function RH_2SSP_update_RHS(τ,k_t,subproblem,xCons,dCons,rCons,xval,fval,y,t_ro
 
 	if τ === nothing 
 		# nothing to reimburse here
-        set_normalized_rhs(rCons, 0)
+		println("We shouldn't come here any more!");
+		exit(0);
+		#set_normalized_rhs(rCons, 0)
     else
         set_normalized_rhs(rCons,
                     -sum(sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)
                     +sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)  
                     +sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1] for t = (τ+2-t_roll):nbstages1) 
                     );
-    end
-
-	# Also need to update the coefficients of y[i,j] variables in the 2nd stage
-	if τ != nothing
+		# Also need to update the coefficients of y[i,j] variables in the 2nd stage
 		for i=1:Ni
 			for j=1:Nj
 				set_objective_coefficient(subproblem, y[i,j], ca[i,j,τ]);
 			end
 		end
-	end
+    end
 end
 
 ###############################################################

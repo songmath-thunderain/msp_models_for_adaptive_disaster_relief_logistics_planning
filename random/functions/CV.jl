@@ -119,6 +119,7 @@ function clairvoyant_eval()
     cv_std = std(objs_cv);
     cv_low = cv_bar-1.96*cv_std/sqrt(nbOS);
     cv_high = cv_bar+1.96*cv_std/sqrt(nbOS);
+	println("Clairvoyant....");
     println("μ ± 1.96*σ/√NS = ", cv_bar, "±", [cv_low,cv_high]);
     elapsed = time() - start;
     vals = [xval_cv, fval_cv, yval_cv, zval_cv, vval_cv];

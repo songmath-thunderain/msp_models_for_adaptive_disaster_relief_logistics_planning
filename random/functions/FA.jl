@@ -399,6 +399,7 @@ function FOSDDP_eval_offline()
     fa_std = std(sum(objs_fa[:,t] for t=1:T));
     fa_low = fa_bar-1.96*fa_std/sqrt(nbOS);
     fa_high = fa_bar+1.96*fa_std/sqrt(nbOS);
+	println("FA...");
     println("μ ± 1.96*σ/√NS = ", fa_bar, " ± ", [fa_low,fa_high]);
     elapsed = time() - start;
     vals = [xval_fa, fval_fa, yval_fa, zval_fa, vval_fa];
