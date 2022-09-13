@@ -1,11 +1,11 @@
 function hurricane_FA()
     #Fully adaptive
     #Defne the model 
-    model, x, f, theta, y, d, z, FB1, FB2 = define_models(K,T,Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q);
+    model, x, f, theta, y, z, FB1, FB2, dCons = define_models(K,T,Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q);
 
     #train the model
     k = copy(k_init)
-    LB, train_time, iter = train_models_offline(model,x,f,theta,y,d,z,FB1,FB2,k,T);
+    LB, train_time, iter = train_models_offline(model,x,f,theta,y,z,FB1,FB2,dCons,k,T);
     println("***********************************************")
     println("***********************************************")
     println("finished training!")
@@ -15,7 +15,7 @@ function hurricane_FA()
 
 
     #evaluate the model 
-    costs, UB_bar, UB_low, UB_high, elapsed, actions, COSTs = FOSDDP_eval_offline(model,x,f,theta,y,d,z,FB1,FB2,k,T,nbOS);
+    costs, UB_bar, UB_low, UB_high, elapsed, actions, COSTs = FOSDDP_eval_offline(model,x,f,theta,y,z,FB1,FB2,dCons,k,T,nbOS);
 
     fname = "./output/benchmark/FAresults.csv"
     df = CSV.read(fname,DataFrame);

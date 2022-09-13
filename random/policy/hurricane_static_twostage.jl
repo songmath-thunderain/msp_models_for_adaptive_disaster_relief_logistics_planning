@@ -34,14 +34,14 @@ for s=1:nbOS
 	if τ === nothing
 		#RH_2SSP_update_RHS(τ,OS_paths[s,end],OS_M[s],nbstages1,ConsFB,dCons,rCons,xval,fval,t_roll) [REVISION]
 		absorbingT = findfirst(x -> S[x][1] == 1, OS_paths[s,1:T]);
-		RH_2SSP_update_RHS(absorbingT,OS_paths[s,absorbingT],subproblem,xCons,dCons,rCons,xval_st2SSP,fval_st2SSP,y2,t_roll)
+		RH_2SSP_update_RHS(absorbingT,OS_paths[s,absorbingT],subproblem,xCons,dCons,rCons,xval_st2SSP,fval_st2SSP,y2,t_roll);
 	else
 		#RH_2SSP_update_RHS(τ,OS_paths[s,τ],OS_M[s],nbstages1,ConsFB,dCons,rCons,xval,fval,t_roll) [REVISION]
-		RH_2SSP_update_RHS(τ,OS_paths[s,τ],subproblem,xCons,dCons,rCons,xval_st2SSP,fval_st2SSP,y2,t_roll)
+		RH_2SSP_update_RHS(τ,OS_paths[s,τ],subproblem,xCons,dCons,rCons,xval_st2SSP,fval_st2SSP,y2,t_roll);
 	end
 	
 	#solve the subproblem and store the dual information
-	Q[s], pi1[s], pi2[s], pi3[s], flag = solve_scen_subproblem(subproblem,xCons,dCons,rCons)
+	Q[s], pi1[s], pi2[s], pi3[s], flag = solve_scen_subproblem(subproblem,xCons,dCons,rCons);
 	objs_st2SSP[s] = objs_st2SSP[s] + Q[s];
 end
   
@@ -58,12 +58,12 @@ fname = "./output/benchmark/static2SPresults.csv"
 df = CSV.read(fname,DataFrame);
 
 results_st2SSP = Matrix(df);
-results_st2SSP[inst,1] = LB_st2SSP
-results_st2SSP[inst,2] = st2SSP_bar
-results_st2SSP[inst,3] = st2SSP_bar-st2SSP_low
-results_st2SSP[inst,4] = elapsed
-results_st2SSP[inst,5] = elapsed2
-results_st2SSP[inst,6] = 0
+results_st2SSP[inst,1] = LB_st2SSP;
+results_st2SSP[inst,2] = st2SSP_bar;
+results_st2SSP[inst,3] = st2SSP_bar-st2SSP_low;
+results_st2SSP[inst,4] = elapsed;
+results_st2SSP[inst,5] = elapsed2;
+results_st2SSP[inst,6] = 0;
 
 updf = DataFrame(results_st2SSP, :auto);
-CSV.write(fname,updf)
+CSV.write(fname,updf);

@@ -31,7 +31,7 @@ for s=1:nbOS
 	x_init = deepcopy(xval_1stRoll[:,1]);
 	if τ === nothing
 		absorbingT = findfirst(x -> S[x][1] == 1, OS_paths[s,1:T]);
-		# This rolling procedure will go all the way until the hurricane gets into the absorbing state of dissipating [TBD]
+		# This rolling procedure will go all the way until the hurricane gets into the absorbing state of dissipating 
 		for t_roll=2:(absorbingT-1)
 			# roll up to t = absorbingT-1
 			#define the the model.
@@ -84,7 +84,6 @@ for s=1:nbOS
 			if t_roll == (τ-1)
 				# Now we get the realization, do the recourse now and finish the rolling procedure
 				t_roll = t_roll + 1;
-				nbstages1 = T-t_roll+1;
 				for i=1:Ni
 					set_normalized_rhs(xCons[i],xval_Roll[i,1]); # xval_Roll[i,1] gets carried over to period τ
 				end
@@ -122,20 +121,20 @@ println("RH2SSP....");
 println("μ ± 1.96*σ/√NS = ", RH2SSP_bar, " ± ", [RH2SSP_low,RH2SSP_high]);
 
 
-fname = "./output/benchmark/roliing2SPresults.csv"
+fname = "./output/benchmark/rolling2SPresults.csv";
 df = CSV.read(fname,DataFrame);
 
 results_RH2SSP = Matrix(df);
-results_RH2SSP[inst,1] = 0
-results_RH2SSP[inst,2] = RH2SSP_bar
-results_RH2SSP[inst,3] = RH2SSP_bar-RH2SSP_low
-results_RH2SSP[inst,4] = 0
-results_RH2SSP[inst,5] = elapsed_RH2SSP
-results_RH2SSP[inst,6] = 0
+results_RH2SSP[inst,1] = 0;
+results_RH2SSP[inst,2] = RH2SSP_bar;
+results_RH2SSP[inst,3] = RH2SSP_bar-RH2SSP_low;
+results_RH2SSP[inst,4] = 0;
+results_RH2SSP[inst,5] = elapsed_RH2SSP;
+results_RH2SSP[inst,6] = 0;
 
 updf = DataFrame(results_RH2SSP, :auto);
-CSV.write(fname,updf)
+CSV.write(fname,updf);
 
 
-println("############################################################")
-println("############################################################")
+println("############################################################");
+println("############################################################");

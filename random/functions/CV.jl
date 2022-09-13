@@ -79,14 +79,17 @@ function clairvoyant_eval()
 	# OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS
     objs_cv = zeros(nbOS);
     
-    xval_cv = Array{Any,1}(undef,nbOS); fval_cv = Array{Any,1}(undef,nbOS);
-    yval_cv = Array{Any,1}(undef,nbOS); zval_cv = Array{Any,1}(undef,nbOS); vval_cv = Array{Any,1}(undef,nbOS);
+    xval_cv = Array{Any,1}(undef,nbOS); 
+	fval_cv = Array{Any,1}(undef,nbOS);
+    yval_cv = Array{Any,1}(undef,nbOS); 
+	zval_cv = Array{Any,1}(undef,nbOS); 
+	vval_cv = Array{Any,1}(undef,nbOS);
 
     for s=1:nbOS
         #find the period when the hurricane made landfall && intensity != 1
         τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, OS_paths[s,1:T]);
         if τ === nothing
-            continue 
+            continue;
         else
             k_t = OS_paths[s,τ] # state corresponding to the landfall
 			# m = OS_M[s]; [REVISION]
@@ -102,7 +105,7 @@ function clairvoyant_eval()
             optimize!(m_cv); #solve the model        
             status = termination_status(m_cv); #check the status 
             if status != MOI.OPTIMAL
-                println(" Model in clairvoyant is ", status)
+                println(" Model in clairvoyant is ", status);
                 exit(0);
             else
                 xval_cv[s] = value.(x_cv);

@@ -8,9 +8,9 @@ function non_terminal_stage_single_period_problem(Ni,Nj,N0,x_cap,cb,ch,h,t)
     #Define the variables.
     @variables(m,
             begin
-               0 <= x[i=1:Ni] <= x_cap[i]
-               0 <= f[i=1:N0,ii=1:Ni] <= f_cap[i,ii] 
-               0 <= ϴ
+               0 <= x[i=1:Ni] <= x_cap[i];
+               0 <= f[i=1:N0,ii=1:Ni] <= f_cap[i,ii]; 
+               0 <= ϴ;
             end
           );
 
@@ -49,6 +49,8 @@ function non_terminal_stage_single_period_problem(Ni,Nj,N0,x_cap,cb,ch,h,t)
     return m, x, f, ϴ, FB1, FB2
 end
 
+###############################################################
+###############################################################
 
 # This function defines the terminal stage for the MSP model with deterministic landfall
 function terminal_stage_single_period_problem(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,t)
@@ -60,11 +62,10 @@ function terminal_stage_single_period_problem(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,t)
     #Define the variables.
     @variables(m,
             begin
-               0 <= x[i=1:Ni] <= x_cap[i]
-               0 <= f[i=1:N0,ii=1:Ni] <= f_cap[i,ii]
-               0 <= y[i=1:Ni,j=1:Nj]
-               0 <= d[j=1:Nj]
-               0 <= z[j=1:Nj]
+               0 <= x[i=1:Ni] <= x_cap[i];
+               0 <= f[i=1:N0,ii=1:Ni] <= f_cap[i,ii];
+               0 <= y[i=1:Ni,j=1:Nj];
+               0 <= z[j=1:Nj];
             end
           );
     
@@ -87,6 +88,7 @@ function terminal_stage_single_period_problem(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,t)
     #initialize two arrays to store the constraints which containt x_{t-1}
     FB1 = Array{Any,1}(undef,Ni);
     FB2 = Array{Any,1}(undef,Ni);
+	dCons = Array{Any,1}(undef,Nj);
     
     #create the following constraints for every SP i
     #initialize the RHS to be zero for now, and will change it later 
@@ -107,6 +109,11 @@ function terminal_stage_single_period_problem(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,t)
                    );
     end
     for j=1:Nj
+	   dCons[j] = @constraint(m, z[j]+sum(y[i,j] for i=1:Ni) == 0);
+	end
+
+#=
+	for j=1:Nj
         # this constraint ensures that the flow sent to an SP is not more than the realized demand
         @constraint(m,
                     sum(y[i,j] for i=1:Ni)
@@ -118,14 +125,19 @@ function terminal_stage_single_period_problem(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,t)
                     <=z[j]
                    );
     end
-    
+=#
+
     # this constraint ensures that items cannot be shipped directly from the MDC to SP
     @constraint(m,
             sum(f[N0,i] for i=1:Ni) == 0
             );
     
-    return m, x, f, y, d, z, FB1, FB2
+    return m, x, f, y, z, FB1, FB2, dCons
 end
+
+
+###############################################################
+###############################################################
 
 # This function defines all the models for the MSP with deterministic landfall
 function define_models(K,T,Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q)
@@ -135,10 +147,10 @@ function define_models(K,T,Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q)
     f = Array{Any,2}(undef,T,K); # ..............
     theta = Array{Any,2}(undef,T-1,K); # ..............
     y = Array{Any,1}(undef,K);
-    d = Array{Any,1}(undef,K);
     z = Array{Any,1}(undef,K);
     FB1 = Array{Any,2}(undef,T,K);
     FB2 = Array{Any,2}(undef,T,K);
+	dCons = Array{Any,1}(undef,K);
     
     #Then we define the a model for every stage and Markovian state state 
     for k=1:K, t=1:T
@@ -147,13 +159,14 @@ function define_models(K,T,Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q)
             model[t,k], x[t,k], f[t,k], theta[t,k], FB1[t,k], FB2[t,k] = non_terminal_stage_single_period_problem(Ni,Nj,N0,x_cap,cb,ch,h,t);
         else
             #use the function terminal_stage_single_period_problem
-            model[t,k], x[t,k], f[t,k], y[k], d[k], z[k], FB1[t,k], FB2[t,k] = terminal_stage_single_period_problem(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,t);
+            model[t,k], x[t,k], f[t,k], y[k], z[k], FB1[t,k], FB2[t,k], dCons[k] = terminal_stage_single_period_problem(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,t);
         end
     end
-    return model, x, f, theta, y, d, z, FB1, FB2
+    return model, x, f, theta, y, z, FB1, FB2, dCons
 end
 
-
+###############################################################
+###############################################################
 
 # this is a function which takes the current Markovian state as input and returns a randomly generaterd MC
 function MC_sample(current_state)
@@ -171,10 +184,11 @@ function update_RHS(k_t,t,FB1,FB2,xval)
     end
 end
 
+###############################################################
+###############################################################
 
 # this function runs one iteration of the forward pass of the MC-SDDP in the MSP model with deterministic landfall
-function FOSDDP_forward_pass_oneSP_iteration(model,x,f,theta,y,d,z,FB1,FB2,k,T,xval,thetaval,lb)
-    
+function FOSDDP_forward_pass_oneSP_iteration(model,x,f,theta,y,z,FB1,FB2,dCons,k,T,xval,thetaval,lb)
     #initial list where we will store the sample path encountered during the forward pass
     in_sample = [];
     #what is the state in the first stage
@@ -191,13 +205,13 @@ function FOSDDP_forward_pass_oneSP_iteration(model,x,f,theta,y,d,z,FB1,FB2,k,T,x
         end
         
         #solve the model
-        optimize!(model[t,k_t])
+        optimize!(model[t,k_t]);
 
         #check the status 
         status = termination_status(model[t,k_t]);
         if status != MOI.OPTIMAL
-            println(" in Forward Pass")
-            println("Model in stage =", t, " and state = ", k_t, ", in forward pass is ", status)
+            println("Error in Forward Pass");
+            println("Model in stage =", t, " and state = ", k_t, ", in forward pass is ", status);
             exit(0);
         else
             #collect values
@@ -208,26 +222,29 @@ function FOSDDP_forward_pass_oneSP_iteration(model,x,f,theta,y,d,z,FB1,FB2,k,T,x
             end
             if t < T
                 # if it's a non-terminal stage update the value of theta
-                thetaval[t] = value(theta[t,k_t])
+                thetaval[t] = value(theta[t,k_t]);
             end
         end
         # add the current state to the sample path
-        push!(in_sample,k_t)
+        push!(in_sample,k_t);
     end
     
     return xval, thetaval, lb, in_sample
 end
 
-function FOSDDP_backward_pass_oneSP_iteration(model,x,f,theta,y,d,z,FB1,FB2,T,xval,thetaval,in_sample)
+###############################################################
+###############################################################
+
+function FOSDDP_backward_pass_oneSP_iteration(model,x,f,theta,y,z,FB1,FB2,dCons,T,xval,thetaval,in_sample)
     cutviolFlag = 0;
     for t=T:-1:2
         if t == T
-            flag1 = terminal_stage_cut(model,x,f,theta,y,d,z,FB1,FB2,T,xval,thetaval,in_sample,t);
+            flag1 = terminal_stage_cut(model,x,f,theta,y,z,FB1,FB2,dCons,T,xval,thetaval,in_sample,t);
             if flag1 == 1
                 cutviolFlag = 1;
             end
         else
-            flag2 = non_terminal_stage_cut(model,x,f,theta,y,d,z,FB1,FB2,T,xval,thetaval,in_sample,t);
+            flag2 = non_terminal_stage_cut(model,x,f,theta,FB1,FB2,T,xval,thetaval,in_sample,t);
             if flag2 == 1
                 cutviolFlag = 1;
             end
@@ -236,7 +253,8 @@ function FOSDDP_backward_pass_oneSP_iteration(model,x,f,theta,y,d,z,FB1,FB2,T,xv
     return cutviolFlag;
 end
 
-
+###############################################################
+###############################################################
 
 # this a function which runs check for termination based on 4 criterion: time, number of iterations, LB progress and cut violation 
 function termination_check(iter,relative_gap,LB,start,cutviol_iter)
@@ -249,10 +267,10 @@ function termination_check(iter,relative_gap,LB,start,cutviol_iter)
     if relative_gap < ϵ ||  iter > max_iter || Elapsed > time_limit || cutviol_iter > cutviol_maxiter
         if relative_gap > ϵ
             if iter > max_iter
-                println("terminated because iteration limit was hit")
+                println("terminated because iteration limit was hit");
             else
                 if Elapsed > time_limit
-                    println("terminated because time limit was hit")
+                    println("terminated because time limit was hit");
                 else
                     println("terminated because cut violation stopping criterion was hit");
                 end
@@ -321,8 +339,11 @@ function terminal_stage_cut(model,x,f,theta,y,d,z,FB1,FB2,T,xval,thetaval,in_sam
 end
 =#
 
+###############################################################
+###############################################################
+
 #This is a function which generates a cut from T to T-1 in the Backward pass: new version, without two-layer uncertainty
-function terminal_stage_cut(model,x,f,theta,y,d,z,FB1,FB2,T,xval,thetaval,in_sample,t)
+function terminal_stage_cut(model,x,f,theta,y,z,FB1,FB2,dCons,T,xval,thetaval,in_sample,t)
     #initialize
     returnval = 0;
     Q = Array{Any}(undef,K); #list for all the optimal values
@@ -332,20 +353,23 @@ function terminal_stage_cut(model,x,f,theta,y,d,z,FB1,FB2,T,xval,thetaval,in_sam
 
     sample_n = in_sample[t-1]; #the states observed at time t-1
     for k=1:K
-        update_RHS(k,t,FB1,FB2,xval)
+        update_RHS(k,t,FB1,FB2,xval);
 		#calculate the conditional probability
-		for j=1:Nj
-			fix(d[k][j], SCEN[k][j]; force=true);
+		for j = 1:Nj
+			set_normalized_rhs(dCons[k][j], SCEN[k][j]);
 		end
+		#for j=1:Nj
+		#	fix(d[k][j], SCEN[k][j]; force=true);
+		#end
 
 		#solve the model
-		optimize!(model[t,k])
+		optimize!(model[t,k]);
 
 		#check the status 
 		status = termination_status(model[t,k]);
 		if status != MOI.OPTIMAL
-			println(" in Backward Pass")
-			println("Model in stage =", t, " and state = ", k, ", in forward pass is ", status)
+			println(" in Backward Pass");
+			println("Model in stage =", t, " and state = ", k, ", in forward pass is ", status);
 			exit(0);
 		else
 			#collect values
@@ -372,12 +396,14 @@ function terminal_stage_cut(model,x,f,theta,y,d,z,FB1,FB2,T,xval,thetaval,in_sam
         );
         
     end 
-    return returnval;
+    return returnval
 end
 
+###############################################################
+###############################################################
 
 #This is a function which generates a cut from any t<T to t-1 in the Backward pass
-function non_terminal_stage_cut(model,x,f,theta,y,d,z,FB1,FB2,T,xval,thetaval,in_sample,t)
+function non_terminal_stage_cut(model,x,f,theta,FB1,FB2,T,xval,thetaval,in_sample,t)
     #initialize
     returnval = 0;
     Q = Array{Any,1}(undef,K); #list for all the optimal values
@@ -387,15 +413,15 @@ function non_terminal_stage_cut(model,x,f,theta,y,d,z,FB1,FB2,T,xval,thetaval,in
     
     sample_n = in_sample[t-1]; #the states observed at time t-1
     for k=1:K
-        update_RHS(k,t,FB1,FB2,xval)
+        update_RHS(k,t,FB1,FB2,xval);
         #solve the model
-        optimize!(model[t,k])
+        optimize!(model[t,k]);
 
         #check the status 
         status = termination_status(model[t,k]);
         if status != MOI.OPTIMAL
-            println(" in Backward Pass")
-            println("Model in stage =", t, " and state = ", k, ", in forward pass is ", status)
+            println("Error in Backward Pass");
+            println("Model in stage =", t, " and state = ", k, ", in forward pass is ", status);
             exit(0);
         else
             #collect values
@@ -409,7 +435,6 @@ function non_terminal_stage_cut(model,x,f,theta,y,d,z,FB1,FB2,T,xval,thetaval,in
         #what is the expected cost value 
         Qvalue = sum(Q[k]*P_joint[n,k]  for k=1:K);
 
-        
         # check if cut is violated at the sample path encountered in the forward pass
         if n == sample_n && (Qvalue-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ
             returnval = 1;
@@ -424,12 +449,13 @@ function non_terminal_stage_cut(model,x,f,theta,y,d,z,FB1,FB2,T,xval,thetaval,in
         );
         
     end 
-    return returnval; 
+    return returnval
 end
 
+###############################################################
+###############################################################
 
-
-function train_models_offline(model,x,f,theta,y,d,z,FB1,FB2,k,T)
+function train_models_offline(model,x,f,theta,y,z,FB1,FB2,dCons,k,T)
     #set the RHS of the first_stage problem
     for i=1:Ni
         set_normalized_rhs(FB1[1,k][i], x_0[i]);
@@ -449,17 +475,17 @@ function train_models_offline(model,x,f,theta,y,d,z,FB1,FB2,k,T)
     while true
         iter+=1
         #forward pass
-        xval, thetaval, lb, in_sample = FOSDDP_forward_pass_oneSP_iteration(model,x,f,theta,y,d,z,FB1,FB2,k,T,xval,thetaval,lb);
-        push!(LB,lb)
+        xval, thetaval, lb, in_sample = FOSDDP_forward_pass_oneSP_iteration(model,x,f,theta,y,z,FB1,FB2,dCons,k,T,xval,thetaval,lb);
+        push!(LB,lb);
 		#println("LB = ", lb)
         #termination check
         flag, Elapsed, relative_gap = termination_check(iter,relative_gap,LB,start,cutviol_iter);
         if flag == 1
-            train_time = Elapsed
-            break
+            train_time = Elapsed;
+            break;
         end
         #backward pass (if not terminated)
-        cutviolFlag = FOSDDP_backward_pass_oneSP_iteration(model,x,f,theta,y,d,z,FB1,FB2,T,xval,thetaval,in_sample);
+        cutviolFlag = FOSDDP_backward_pass_oneSP_iteration(model,x,f,theta,y,z,FB1,FB2,dCons,T,xval,thetaval,in_sample);
         if cutviolFlag == 1
             cutviol_iter = 0;
         else
@@ -469,10 +495,11 @@ function train_models_offline(model,x,f,theta,y,d,z,FB1,FB2,k,T)
     return LB, train_time, iter
 end
 
-
+###############################################################
+###############################################################
 
 # this function runs SDDP for the MSP model with deterministic landfall
-function FOSDDP_eval_offline(model,x,f,theta,y,d,z,FB1,FB2,k,T,nbOS)
+function FOSDDP_eval_offline(model,x,f,theta,y,z,FB1,FB2,dCons,k,T,nbOS)
     OS_paths = Matrix(CSV.read("./data/OOS.csv",DataFrame)); #read the out-of-sample file
 	# we do not have this second layer now [REVISION]
 	#OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS
@@ -504,25 +531,26 @@ function FOSDDP_eval_offline(model,x,f,theta,y,d,z,FB1,FB2,k,T,nbOS)
 				#m = OS_M[s]; [REVISION]
                 for j=1:Nj
 					#fix(d[k_t][j], SCEN[k_t][j,m]; force=true); [REVISION]
-					fix(d[k_t][j], SCEN[k_t][j]; force=true);
+					#fix(d[k_t][j], SCEN[k_t][j]; force=true);
+					set_normalized_rhs(dCons[k_t][j],SCEN[k_t][j]);
                 end
             end 
             #solve the model
-            optimize!(model[t,k_t])
+            optimize!(model[t,k_t]);
 
             #check the status 
             status = termination_status(model[t,k_t]);
             if status != MOI.OPTIMAL
-                println(" in Forward Pass")
-                println("Model in stage =", t, " and state = ", k_t, ", in forward pass is ", status)
+                println("Error in Forward Pass");
+                println("Model in stage =", t, " and state = ", k_t, ", in forward pass is ", status);
                 exit(0);
             else
                 #collect values
                 xval[:,t] = value.(x[t,k_t]);
                 
-                procurmnt_amount[t] += (sum(value.(f[t,k_t])[N0,i] for i=1:Ni))/nbOS
-                transport_amount[t] += sum(sum(value.(f[t,k_t])[i,ii] for ii=1:Ni) for i=1:N0)/nbOS
-                inventory_amount[t] += sum(xval[i,t] for i=1:Ni)/nbOS
+                procurmnt_amount[t] += (sum(value.(f[t,k_t])[N0,i] for i=1:Ni))/nbOS;
+                transport_amount[t] += sum(sum(value.(f[t,k_t])[i,ii] for ii=1:Ni) for i=1:N0)/nbOS;
+                inventory_amount[t] += sum(xval[i,t] for i=1:Ni)/nbOS;
                 
                 if t < T
                     costs[s,t] = objective_value(model[t,k_t]) - value(theta[t,k_t]);
@@ -536,15 +564,15 @@ function FOSDDP_eval_offline(model,x,f,theta,y,d,z,FB1,FB2,k,T,nbOS)
                 cx+=costs[s,t];
             end
         end
-        push!(Z,cx)
-        push!(actions,temp_action)
+        push!(Z,cx);
+        push!(actions,temp_action);
     end
-    cfa_fname = string("./output/cost_factor_analysis.csv")
+    cfa_fname = string("./output/cost_factor_analysis.csv");
     df = CSV.read(cfa_fname,DataFrame);
     reSults = convert.(Float64,Matrix(df)); 
-    reSults[inst,1:T] = procurmnt_amount
+    reSults[inst,1:T] = procurmnt_amount;
     updf = DataFrame(reSults, :auto);
-    CSV.write(cfa_fname,updf)
+    CSV.write(cfa_fname,updf);
     
     
     COSTs = [procurmnt_amount, transport_amount, inventory_amount, dshortage_amount, desalvege_amount];
@@ -562,20 +590,22 @@ function FOSDDP_eval_offline(model,x,f,theta,y,d,z,FB1,FB2,k,T,nbOS)
     return costs, UB_bar, UB_low, UB_high, elapsed, actions, COSTs
 end
 
+###############################################################
+###############################################################
+
 function deterministic_model(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,T,x_0)
     #######################
     #Define the model.
     m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GRB_ENV), "OutputFlag" => 0));
-
+	dCons = Array{Any,1}(undef,Nj);
     #######################
     #Define the variables. Note that we disable a "direct shipment" from MDC to DPs at the terminal stage, hence y variables are not defined for N0
     @variables(m,
             begin
-               0 <= x[i=1:Ni,t=1:T] <= x_cap[i]
-               0 <= f[i=1:N0,ii=1:Ni,t=1:T] <= f_cap[i,ii]
-               0 <= y[i=1:Ni,j=1:Nj]
-               0 <= d[j=1:Nj]
-               0 <= z[j=1:Nj]
+               0 <= x[i=1:Ni,t=1:T] <= x_cap[i];
+               0 <= f[i=1:N0,ii=1:Ni,t=1:T] <= f_cap[i,ii];
+               0 <= y[i=1:Ni,j=1:Nj];
+               0 <= z[j=1:Nj];
             end
           );
     
@@ -625,26 +655,33 @@ function deterministic_model(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,T,x_0)
             <=x[i,T]
            );
     end
+	for j=1:Nj
+	   dCons[j] = @constraint(m, z[j]+sum(y[i,j] for i=1:Ni) == 0);
+	end
+#=
     for j=1:Nj
         @constraint(m,
                     sum(y[i,j] for i=1:Ni)
-                    <=d[j]
+                    ==d[j]
                    );
         @constraint(m,
                     d[j]-sum(y[i,j] for i=1:Ni)
                     <=z[j]
                    );
     end
+=#
 	# Assuming no flow from MDC at the terminal stage
     @constraint(m,
         sum(f[N0,i,T] for i=1:Ni) == 0
         );
     
-    return m, x, f, y, d, z
+    return m, x, f, y, z, dCons
 end
 
+###############################################################
+###############################################################
 
-function clairvoyant_eval(model_cv,x_cv,f_cv,y_cv,d_cv,z_cv,T,nbOS)
+function clairvoyant_eval(model_cv,x_cv,f_cv,y_cv,z_cv,dCons_cv,T,nbOS)
     
     OS_paths = Matrix(CSV.read("./data/OOS.csv",DataFrame)); #read the out-of-sample file
 	# we do not have this second layer now [REVISION]
@@ -659,7 +696,8 @@ function clairvoyant_eval(model_cv,x_cv,f_cv,y_cv,d_cv,z_cv,T,nbOS)
 		# m = OS_M[s]; [REVISION]
         for j=1:Nj
 			#fix(d_cv[j], SCEN[k_t][j,m]; force=true); [REVISION]
-			fix(d_cv[j], SCEN[k_t][j]; force=true);
+			#fix(d_cv[j], SCEN[k_t][j]; force=true);
+			set_normalized_rhs(dCons_cv[j], SCEN[k_t][j]);
         end
         
         #solve the model
@@ -668,11 +706,11 @@ function clairvoyant_eval(model_cv,x_cv,f_cv,y_cv,d_cv,z_cv,T,nbOS)
         #check the status 
         status = termination_status(model_cv);
         if status != MOI.OPTIMAL
-            println(" Model in clairvoyant is ", status)
+            println(" Model in clairvoyant is ", status);
             exit(0);
         else
             #collect values
-            costs[s] = objective_value(model_cv)
+            costs[s] = objective_value(model_cv);
         end
     end
     
@@ -690,89 +728,8 @@ function clairvoyant_eval(model_cv,x_cv,f_cv,y_cv,d_cv,z_cv,T,nbOS)
     return costs, cv_bar, cv_low, cv_high, elapsed 
 end
 
-#= We do not seem to benchmark with MVP anymore [Revision]
-function MVP_solve(model_mvp,x_mvp,f_mvp,y_mvp,d_mvp,z_mvp,k,T)
-    start=time();
-    xval_mvp = zeros(Ni,T);
-    
-    P_temp = P_joint^(T-1);
-    P_temp_c = deepcopy(P_temp);
-    #normalize the probabilities
-    for k=1:K, kk=1:K
-        P_temp[k,kk] = P_temp_c[k,kk]/sum(P_temp_c[k,:])
-    end
-	# we do not have this second layer now [REVISION]
-	#d_bar = sum(sum(SCEN[kk][:,m]*(1/M) for m=1:M)*P_temp[k,kk] for kk=1:K);
-    d_bar = sum(SCEN[kk][:]*P_temp[k,kk] for kk=1:K);
-
-    for j=1:Nj
-        fix(d_mvp[j], d_bar[j]; force=true);
-    end
-    
-    #solve the model
-    optimize!(model_mvp)
-    
-    #check the status 
-    status = termination_status(model_mvp);
-    if status != MOI.OPTIMAL
-        println(" Model in mean value problem is ", status)
-        exit(0);
-    else
-        #collect values
-        xval_mvp = value.(x_mvp)
-    end
-    
-    elapsed_solve=time()-start;
-    
-    return xval_mvp, elapsed_solve
-    
-end
-
-
-function MVP_eval(model_mvp,x_mvp,f_mvp,y_mvp,d_mvp,z_mvp,k,T,xval_mvp,nbOS,OS_paths,OS_M)
-    start=time();
-    costs = zeros(nbOS);
-    
-    #fix all the x values using the MVP solution 
-    for i=1:Ni, t=1:T
-        fix(x_mvp[i,t], xval_mvp[i,t]; force=true);
-    end
-    
-    for s=1:nbOS   
-        k_t = OS_paths[s,T]
-        m = OS_M[s];
-        for j=1:Nj
-            fix(d_mvp[j], SCEN[k_t][j,m]; force=true);
-        end
-        
-        #solve the model
-        optimize!(model_mvp)
-        
-        #check the status 
-        status = termination_status(model_mvp);
-        if status != MOI.OPTIMAL
-            println(" Model in clairvoyant is ", status)
-            exit(0);
-        else
-            #collect values
-            costs[s] = objective_value(model_mvp)
-        end
-    end
-    
-    mvp_bar = mean(costs);
-    mvp_std = std(costs);
-  
-    mvp_low = mvp_bar-1.96*mvp_std/sqrt(nbOS);
-    mvp_high = mvp_bar+1.96*mvp_std/sqrt(nbOS);
-    
-    println("μ = ", mvp_bar);
-    println("μ ± 1.96*σ/√NS = ", [mvp_low,mvp_high]);
-    
-    elapsed_eval = time() - start;
-    
-    return costs, mvp_bar, mvp_low, mvp_high, elapsed_eval 
-end
-=#
+###############################################################
+###############################################################
 
 function static_twostage_first_model(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,T,x_0)
     #######################
@@ -832,6 +789,9 @@ function static_twostage_first_model(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,T,x_0)
     return m, x, f, theta
 end
 
+###############################################################
+###############################################################
+
 function rolling_twostage_first_model(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,t0,T)
     #######################
     #Define the first-stage (multi-period) model for each roll of the rolling two-stage SP model, assuming that the current stage is t0
@@ -840,10 +800,10 @@ function rolling_twostage_first_model(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,t0,T)
     #Define the variables.
     @variables(m,
             begin
-               0 <= x_prev[i=1:Ni]
-               0 <= x[i=1:Ni,t=1:(T-t0)] <= x_cap[i]
-               0 <= f[i=1:N0,ii=1:Ni,t=1:(T-t0)] <= f_cap[i,ii]
-               0 <= ϴ
+               0 <= x_prev[i=1:Ni];
+               0 <= x[i=1:Ni,t=1:(T-t0)] <= x_cap[i];
+               0 <= f[i=1:N0,ii=1:Ni,t=1:(T-t0)] <= f_cap[i,ii];
+               0 <= ϴ;
             end
           );
     
@@ -890,6 +850,9 @@ function rolling_twostage_first_model(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,t0,T)
     return m, x, ϴ, x_prev, f
 end
 
+###############################################################
+###############################################################
+
 function rolling_twostage_eval_online(T,nbOS,x0)
 
     OS_paths = Matrix(CSV.read("./data/OOS.csv",DataFrame)); #read the out-of-sample file
@@ -908,7 +871,7 @@ function rolling_twostage_eval_online(T,nbOS,x0)
     desalvege_amount = 0;
     
     # define the terminal-stage problem
-    model_T, x_T, f_T, y_T, d_T, z_T, FB1_T, FB2_T = terminal_stage_single_period_problem(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,T);
+    model_T, x_T, f_T, y_T, z_T, FB1_T, FB2_T, dCons_T = terminal_stage_single_period_problem(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,T);
 
     # solve the first roll model (same for all sample paths!)
     m1, x1, theta1, x_prev1, f1 = rolling_twostage_first_model(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,1,T);
@@ -939,7 +902,7 @@ function rolling_twostage_eval_online(T,nbOS,x0)
              +sum(ch[i,1]*xval1[i,1] for i=1:Ni)
              +sum(fval1[N0,i,1] for i=1:Ni)*h[1]);
         end
-        flag1 = terminal_stage_cut_two_stage(m1,x1,theta1,model_T,d_T,FB1_T,FB2_T,1,T,xval1,thetaval1,init_k);
+        flag1 = terminal_stage_cut_two_stage(m1,x1,theta1,model_T,FB1_T,FB2_T,dCons_T,1,T,xval1,thetaval1,init_k);
     end
     
 
@@ -956,11 +919,11 @@ function rolling_twostage_eval_online(T,nbOS,x0)
         
         
         temp_action = [];
-        push!(temp_action,f_val1)
+        push!(temp_action,f_val1);
         
-        procurmnt_amount[1] += (sum(f_val1[i] for i=1:Ni)*h[1])/nbOS
-        transport_amount[1] += sum(sum(cb[i,ii,1]*fval_all1[i,ii] for ii=1:Ni) for i=1:N0)/nbOS
-        inventory_amount[1] += sum(ch[i,1]*xval1[i] for i=1:Ni)/nbOS
+        procurmnt_amount[1] += (sum(f_val1[i] for i=1:Ni)*h[1])/nbOS;
+        transport_amount[1] += sum(sum(cb[i,ii,1]*fval_all1[i,ii] for ii=1:Ni) for i=1:N0)/nbOS;
+        inventory_amount[1] += sum(ch[i,1]*xval1[i] for i=1:Ni)/nbOS;
         
         for t=2:(T-1)
             k_t = OS_paths[s,t];
@@ -981,7 +944,7 @@ function rolling_twostage_eval_online(T,nbOS,x0)
                 optimize!(m_roll);
                 status = termination_status(m_roll);
                 if status != MOI.OPTIMAL
-                    println(" in the final out-of-sample evaluation at roll = ", t);
+                    println("Error in the final out-of-sample evaluation at roll = ", t);
                     exit(0);
                 else
                     #collect values
@@ -993,7 +956,7 @@ function rolling_twostage_eval_online(T,nbOS,x0)
                                      +sum(ch[i,t]*xval_running[i,1] for i=1:Ni)
                                      +sum(fval_running[N0,i,1] for i=1:Ni)*h[t]);
                 end
-                flag = terminal_stage_cut_two_stage(m_roll,x_roll,theta_roll,model_T,d_T,FB1_T,FB2_T,t,T,xval_running,thetaval,init_k);
+                flag = terminal_stage_cut_two_stage(m_roll,x_roll,theta_roll,model_T,FB1_T,FB2_T,dCons_T,t,T,xval_running,thetaval,init_k);
             end
 
             xvals[:,t] = xval_running[:,1];
@@ -1001,11 +964,11 @@ function rolling_twostage_eval_online(T,nbOS,x0)
             cx+=costs[s,t];
             f_val_roll = value.(f_roll)[:,:,1];
             
-            push!(temp_action,value.(f_roll)[N0,:,1])
+            push!(temp_action,value.(f_roll)[N0,:,1]);
     
-            procurmnt_amount[t] += (sum(f_val_roll[N0,i] for i=1:Ni)*h[t])/nbOS
-            transport_amount[t] += sum(sum(cb[i,ii,t]*f_val_roll[i,ii] for ii=1:Ni) for i=1:N0)/nbOS
-            inventory_amount[t] += sum(ch[i,t]*xval_running[i] for i=1:Ni)/nbOS
+            procurmnt_amount[t] += (sum(f_val_roll[N0,i] for i=1:Ni)*h[t])/nbOS;
+            transport_amount[t] += sum(sum(cb[i,ii,t]*f_val_roll[i,ii] for ii=1:Ni) for i=1:N0)/nbOS;
+            inventory_amount[t] += sum(ch[i,t]*xval_running[i] for i=1:Ni)/nbOS;
         end
 
         # last stage?
@@ -1015,7 +978,8 @@ function rolling_twostage_eval_online(T,nbOS,x0)
         end    
         for j=1:Nj
 			#fix(d_T[j], SCEN[OS_paths[s,T]][j,OS_M[s]]; force=true); [REVISION]
-			fix(d_T[j], SCEN[OS_paths[s,T]][j]; force=true);
+			#fix(d_T[j], SCEN[OS_paths[s,T]][j]; force=true);
+			set_normalized_rhs(dCons_T[j],SCEN[OS_paths[s,T]][j]);
         end
         #solve the model
         optimize!(model_T);
@@ -1027,17 +991,17 @@ function rolling_twostage_eval_online(T,nbOS,x0)
             costs[s,T] = objective_value(model_T);
             cx += costs[s,T];
         end
-        push!(Z,cx)
-        push!(temp_action,-value.(z_T))
-        push!(actions,temp_action)
+        push!(Z,cx);
+        push!(temp_action,-value.(z_T));
+        push!(actions,temp_action);
         fval_T = value.(f_T);
         xval_T = value.(x_T);
         zval_T = value.(z_T);
         yval_T = value.(y_T);
       
-        procurmnt_amount[T] += (sum(fval_T[N0,i] for i=1:Ni)*h[T])/nbOS
-        transport_amount[T] += sum(sum(cb[i,ii,T]*fval_T[i,ii] for ii=1:Ni) for i=1:N0)/nbOS
-        inventory_amount[T] += sum(ch[i,T]*xval_T[i] for i=1:Ni)/nbOS
+        procurmnt_amount[T] += (sum(fval_T[N0,i] for i=1:Ni)*h[T])/nbOS;
+        transport_amount[T] += sum(sum(cb[i,ii,T]*fval_T[i,ii] for ii=1:Ni) for i=1:N0)/nbOS;
+        inventory_amount[T] += sum(ch[i,T]*xval_T[i] for i=1:Ni)/nbOS;
 
         dshortage_amount += (sum(zval_T[j] for j=1:Nj)*p)/nbOS;
         desalvege_amount += (sum(xval_T[i]-sum(yval_T[i,j] for j=1:Nj) for i=1:Ni)*q)/nbOS;
@@ -1061,7 +1025,7 @@ end
 
 #=
 # Old version, with two-layer uncertainty [REVISION]
-function terminal_stage_cut_two_stage(model,x,theta,model_sub,d,FB1,FB2,t,T,xval,thetaval,init_k)
+function terminal_stage_cut_two_stage(model,x,theta,model_sub,FB1,FB2,dCons,t,T,xval,thetaval,init_k)
     # Just a single model: model_sub, FB1, FB2, etc. passed along here
     # t: when this two-stage SP model is solved
     returnval = 0;
@@ -1077,7 +1041,8 @@ function terminal_stage_cut_two_stage(model,x,theta,model_sub,d,FB1,FB2,t,T,xval
             end
             #calculate the conditional probability
             for j=1:Nj
-                fix(d[j], SCEN[k][j,m]; force=true);
+				set_normalized_rhs(dCons[j],SCEN[k][j);
+				#fix(d[j], SCEN[k][j,m]; force=true);
             end
 
             #solve the model
@@ -1113,8 +1078,11 @@ function terminal_stage_cut_two_stage(model,x,theta,model_sub,d,FB1,FB2,t,T,xval
 end
 =#
 
+###############################################################
+###############################################################
+
 # new version, without two-layer uncertainty
-function terminal_stage_cut_two_stage(model,x,theta,model_sub,d,FB1,FB2,t,T,xval,thetaval,init_k)
+function terminal_stage_cut_two_stage(model,x,theta,model_sub,FB1,FB2,dCons,t,T,xval,thetaval,init_k)
     # Just a single model: model_sub, FB1, FB2, etc. passed along here
     # t: when this two-stage SP model is solved
     returnval = 0;
@@ -1129,16 +1097,17 @@ function terminal_stage_cut_two_stage(model,x,theta,model_sub,d,FB1,FB2,t,T,xval
 		end
 		#calculate the conditional probability
 		for j=1:Nj
-			fix(d[j], SCEN[k][j]; force=true);
+			set_normalized_rhs(dCons[j],SCEN[k][j]);
+			#fix(d[j], SCEN[k][j]; force=true);
 		end
 
 		#solve the model
-		optimize!(model_sub)
+		optimize!(model_sub);
 
 		#check the status 
 		status = termination_status(model_sub);
 		if status != MOI.OPTIMAL
-			println(" in static two stage cut generation")
+			println("Error in static two stage cut generation")
 			exit(0);
 		else
 			#collect values
@@ -1163,13 +1132,15 @@ function terminal_stage_cut_two_stage(model,x,theta,model_sub,d,FB1,FB2,t,T,xval
     return returnval;
 end
 
+###############################################################
+###############################################################
 
 function two_stage_static_train()
     #define the first-stage problem 
     model_2s, x_2s, f_2s, theta_2s = static_twostage_first_model(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,T,x_0);
 
     # define the terminal-stage problem
-    model_T, x_T, f_T, y_T, d_T, z_T, FB1_T, FB2_T = terminal_stage_single_period_problem(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,T);
+    model_T, x_T, f_T, y_T, z_T, FB1_T, FB2_T, dCons_T = terminal_stage_single_period_problem(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,T);
     
     init_k = copy(k_init);
     flag = 1;
@@ -1194,7 +1165,7 @@ function two_stage_static_train()
             #println("LB = ", LB);
             #println("thetaval = ", thetaval);
         end
-        flag = terminal_stage_cut_two_stage(model_2s,x_2s,theta_2s,model_T,d_T,FB1_T,FB2_T,1,T,xval,thetaval,init_k);
+        flag = terminal_stage_cut_two_stage(model_2s,x_2s,theta_2s,model_T,FB1_T,FB2_T,dCons_T,1,T,xval,thetaval,init_k);
     end
     
     Elapsed = time()-start;
@@ -1203,12 +1174,14 @@ function two_stage_static_train()
     
 end
 
+###############################################################
+###############################################################
 
 function two_stage_static_eval(xval_twoSP)
     OS_paths = Matrix(CSV.read("./data/OOS.csv",DataFrame)); #read the out-of-sample file
 	#OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS -- No longer needed [REVISION]
     
-    model_twoSP, x_twoSP, f_twoSP, y_twoSP, d_twoSP, z_twoSP = deterministic_model(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,T,x_0);
+    model_twoSP, x_twoSP, f_twoSP, y_twoSP, z_twoSP, dCons_twoSP = deterministic_model(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,T,x_0);
   
     start=time();
     costs = zeros(nbOS);
@@ -1229,48 +1202,47 @@ function two_stage_static_eval(xval_twoSP)
         k_t = OS_paths[s,T]
 		#m = OS_M[s]; [REVISION]
         for j=1:Nj
+			set_normalized_rhs(dCons_twoSP[j],SCEN[k_t][j]);
 			#fix(d_twoSP[j], SCEN[k_t][j,m]; force=true); [REVISION]
-			fix(d_twoSP[j], SCEN[k_t][j]; force=true);
+			#fix(d_twoSP[j], SCEN[k_t][j]; force=true);
         end
         
         #solve the model
-        optimize!(model_twoSP)
+        optimize!(model_twoSP);
         
         #check the status 
         status = termination_status(model_twoSP);
         if status != MOI.OPTIMAL
-            println(" Model in clairvoyant is ", status)
+            println(" Model in clairvoyant is ", status);
             exit(0);
         else
             #collect values
-            costs[s] = objective_value(model_twoSP)
+            costs[s] = objective_value(model_twoSP);
         end
         
         
         temp_action = [];
-        xval_all = value.(x_twoSP)
+        xval_all = value.(x_twoSP);
        
         for t=1:T
-            fval_all = value.(f_twoSP)[:,:,t]
-            procurmnt_amount[t] += (sum(fval_all[N0,i] for i=1:Ni)*h[t])/nbOS
-            transport_amount[t] += sum(sum(cb[i,ii,t]*fval_all[i,ii] for ii=1:Ni) for i=1:N0)/nbOS
-            inventory_amount[t] += sum(ch[i,t]*xval_all[i,t] for i=1:Ni)/nbOS
+            fval_all = value.(f_twoSP)[:,:,t];
+            procurmnt_amount[t] += (sum(fval_all[N0,i] for i=1:Ni)*h[t])/nbOS;
+            transport_amount[t] += sum(sum(cb[i,ii,t]*fval_all[i,ii] for ii=1:Ni) for i=1:N0)/nbOS;
+            inventory_amount[t] += sum(ch[i,t]*xval_all[i,t] for i=1:Ni)/nbOS;
             
             if t < T
-                f_valt = value.(f_twoSP)[N0,:,t]
-                push!(temp_action,f_valt)
+                f_valt = value.(f_twoSP)[N0,:,t];
+                push!(temp_action,f_valt);
             else
                 z_valt = value.(z_twoSP);
-                push!(temp_action,-z_valt)
+                push!(temp_action,-z_valt);
                 
                 dshortage_amount += (sum(z_valt[j] for j=1:Nj)*p)/nbOS;
                 desalvege_amount += (sum(xval_all[i,t]-sum(value.(y_twoSP)[i,j] for j=1:Nj) for i=1:Ni)*q)/nbOS;
                 
             end
         end
-
-        
-        push!(actions,temp_action)
+        push!(actions,temp_action);
 
     end
     COSTs = [procurmnt_amount, transport_amount, inventory_amount, dshortage_amount, desalvege_amount];
@@ -1290,250 +1262,3 @@ function two_stage_static_eval(xval_twoSP)
 end
 
 
-#= We do not seem to benchmark with MVP anymore [Revision]
-function deterministic_RH_model(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,T,t0)
-    #######################
-    #Define the model, assuming that the current stage is t0, Note that we disable a "direct shipment" from MDC to DPs, hence y variables are not defined for N0
-    m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GRB_ENV), "OutputFlag" => 0));
-
-    #######################
-    #Define the variables.
-    @variables(m,
-            begin
-               0 <= x_prev[i=1:Ni]
-               0 <= x[i=1:Ni,t=1:(T-t0+1)] <= x_cap[i]
-               0 <= f[i=1:N0,ii=1:Ni,t=1:(T-t0+1)] <= f_cap[i,ii]
-               0 <= y[i=1:Ni,j=1:Nj]
-               0 <= d[j=1:Nj]
-               0 <= z[j=1:Nj]
-            end
-          );
-    
-    #######################
-    #Define the objective.
-    @objective(m,
-               Min,
-               sum(sum(sum(cb[i,ii,t+t0-1]*f[i,ii,t] for ii=1:Ni) for i=1:N0) for t=1:(T-t0+1))
-              +sum(sum(ch[i,t+t0-1]*x[i,t] for i=1:Ni) for t=1:(T-t0+1))
-              +sum(sum(f[N0,i,t] for i=1:Ni)*h[t+t0-1] for t=1:(T-t0+1))
-              +sum(sum(ca[i,j,T]*y[i,j] for j=1:Nj) for i=1:Ni)
-              +sum(z[j] for j=1:Nj)*p
-              +sum(x[i,T-t0+1]-sum(y[i,j] for j=1:Nj) for i=1:Ni)*q
-               );
-    
-    #######################
-    #Define the constraints.
-    for i=1:Ni
-        for t=1:(T-t0+1)
-            if t == 1
-                @constraint(m, 
-                            x[i,t]
-                           +sum(f[i,j,t] for j=1:Ni if j != i)
-                           -sum(f[j,i,t] for j=1:N0 if j != i)
-                           == x_prev[i]
-                            );
-               @constraint(m, 
-                            sum(f[i,j,t] for j=1:Ni if j != i)
-                            <= x_prev[i]
-                            );
-            else
-                
-                @constraint(m, 
-                            x[i,t]
-                           +sum(f[i,j,t] for j=1:Ni if j != i)
-                           -sum(f[j,i,t] for j=1:N0 if j != i)
-                           == x[i,t-1]
-                            );
-               @constraint(m, 
-                            sum(f[i,j,t] for j=1:Ni if j != i)
-                            <= x[i,t-1]
-                            );                
-            end
-        end
-       @constraint(m,
-            sum(y[i,j] for j=1:Nj)
-            <=x[i,T-t0+1]
-           );
-    end
-    for j=1:Nj
-        @constraint(m,
-                    sum(y[i,j] for i=1:Ni)
-                    <=d[j]
-                   );
-        @constraint(m,
-                    d[j]-sum(y[i,j] for i=1:Ni)
-                    <=z[j]
-                   );
-    end
-    # Assuming no flow from MDC at the terminal stage
-    @constraint(m,
-        sum(f[N0,i,T-t0+1] for i=1:Ni) == 0
-        );
-    
-    return m, x_prev, x, f, y, d, z
-end
-
-
-function rolling_MVP_eval_online(T,nbOS,OS_paths,OS_M,x0)
-    start=time();
-    costs = zeros(nbOS,T);
-    Z = [];
-
-    actions = [];
-    procurmnt_amount = zeros(T);
-    transport_amount = zeros(T);
-    inventory_amount = zeros(T);
-    dshortage_amount = 0;
-    desalvege_amount = 0;
-    
-    #solve the first stage problem outside the loop because it's the same for all sample paths
-    x1_initial = x0;
-    s = 1;
-    t0 = 1;
-    imm_amount1 = 0;
-    #define the determistic MVP problem at time t0 
-    model_mvp, x_prev_mvp, x_mvp, f_mvp, y_mvp, d_mvp, z_mvp = deterministic_RH_model(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,T,t0);
-    #fix the state variable value at time t0
-    for i=1:Ni
-        fix(x_prev_mvp[i], x1_initial[i]; force=true);
-    end
-    #which state are we currently in?
-    current_k = OS_paths[s,t0];
-    #what is the expected demand at time T
-    d_bar = sum(sum(SCEN[kk][:,m]*(1/M) for m=1:M)*P_terminals[t0][current_k,kk] for kk=1:K);
-    for j=1:Nj
-        fix(d_mvp[j], d_bar[j]; force=true);
-    end
-   
-    #solve the problem
-    optimize!(model_mvp);
-    status = termination_status(model_mvp);
-    
-    if status != MOI.OPTIMAL
-        println(" in the out-of-sample evaluation at roll = ", t0);
-        exit(0);
-    else
-        xval_running = value.(x_mvp);
-        fval_running = value.(f_mvp);
-
-        imm_amount1 = (sum(sum(cb[i,ii,t0]*fval_running[i,ii,1] for ii=1:Ni) for i=1:N0)
-                         +sum(ch[i,t0]*xval_running[i,1] for i=1:Ni)
-                         +sum(fval_running[N0,i,1] for i=1:Ni)*h[t0]); 
-        x1_initial = xval_running[:,1];
-        
-        costs[s,t0] = imm_amount1
-    end
-    
-    f_val1 = fval_running[N0,:,1];
-    fval_all1 = fval_running[:,:,1];    
-    
-    
-    for s=1:nbOS
-        # starting the rolling horizon procedure one for each sample path
-        println("Start sample path #", s); 
-        x_initial = deepcopy(x1_initial);
-        costs[s,1] = imm_amount1;
-        
-        #initialize the sample path cost
-        path_amount = imm_amount1;
-        
-        
-        temp_action = [];
-        push!(temp_action,f_val1)
-        
-        procurmnt_amount[1] += (sum(f_val1[i] for i=1:Ni)*h[1])/nbOS
-        transport_amount[1] += sum(sum(cb[i,ii,1]*fval_all1[i,ii] for ii=1:Ni) for i=1:N0)/nbOS
-        inventory_amount[1] += sum(ch[i,1]*x_initial[i] for i=1:Ni)/nbOS
-        
-        for t0=2:T
-            #initialize the stage cost
-            imm_amount = 0;
-            
-            #define the determistic MVP problem at time t0 
-            model_mvp, x_prev_mvp, x_mvp, f_mvp, y_mvp, d_mvp, z_mvp = deterministic_RH_model(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,T,t0);
-            
-            #fix the state variable value at time t0
-            for i=1:Ni
-                fix(x_prev_mvp[i], x_initial[i]; force=true);
-            end
-            #which state are we currently in?
-            current_k = OS_paths[s,t0];
-            #what is the expected demand at time T
-            d_bar = sum(sum(SCEN[kk][:,m]*(1/M) for m=1:M)*P_terminals[t0][current_k,kk] for kk=1:K);
-            for j=1:Nj
-                fix(d_mvp[j], d_bar[j]; force=true);
-            end
-            
-            #solve the problem
-            optimize!(model_mvp);
-            status = termination_status(model_mvp);
-            
-            if status != MOI.OPTIMAL
-                println(" in the out-of-sample evaluation at roll = ", t0);
-                exit(0);
-            else
-                #collect values
-                if t0<T
-                    xval_running = value.(x_mvp);
-                    fval_running = value.(f_mvp);
-                    
-                    imm_amount = (sum(sum(cb[i,ii,t0]*fval_running[i,ii,1] for ii=1:Ni) for i=1:N0)
-                                     +sum(ch[i,t0]*xval_running[i,1] for i=1:Ni)
-                                     +sum(fval_running[N0,i,1] for i=1:Ni)*h[t0]); 
-                    x_initial = xval_running[:,1];
-                    push!(temp_action,value.(f_mvp)[N0,:,1]);
-                    
-                    procurmnt_amount[t0] += (sum(fval_running[N0,i,1] for i=1:Ni)*h[t0])/nbOS
-                    transport_amount[t0] += sum(sum(cb[i,ii,t0]*fval_running[i,ii,1] for ii=1:Ni) for i=1:N0)/nbOS
-                    inventory_amount[t0] += sum(ch[i,t0]*xval_running[i,1] for i=1:Ni)/nbOS
-                else
-                    fval_T = value.(f_mvp)[:,:,(T-t0+1)]
-                    xval_T = value.(x_mvp)[:,(T-t0+1)];                    
-                    zval_T = value.(z_mvp);
-                    yval_T = value.(y_mvp);
-                    imm_amount = objective_value(model_mvp);
-                    push!(temp_action,-zval_T);
-                    
-                    procurmnt_amount[t0] += (sum(fval_T[N0,i] for i=1:Ni)*h[t0])/nbOS
-                    transport_amount[t0] += sum(sum(cb[i,ii,t0]*fval_T[i,ii] for ii=1:Ni) for i=1:N0)/nbOS
-                    inventory_amount[t0] += sum(ch[i,t0]*xval_T[i] for i=1:Ni)/nbOS
-                    
-                    dshortage_amount += (sum(zval_T[j] for j=1:Nj)*p)/nbOS;
-                    desalvege_amount += (sum(xval_T[i]-sum(yval_T[i,j] for j=1:Nj) for i=1:Ni)*q)/nbOS;
-                end
-                
-                path_amount += imm_amount
-                costs[s,t0] = imm_amount
-            end
-        end
-        push!(Z,path_amount)
-        push!(actions,temp_action)
-    end
-    
-    COSTs = [procurmnt_amount, transport_amount, inventory_amount, dshortage_amount, desalvege_amount];
-
-    elapsed = time() - start;
-    
-    UB_bar = mean(Z);
-    UB_std = std(Z);
-  
-    UB_low = UB_bar-1.96*UB_std/sqrt(nbOS);
-    UB_high = UB_bar+1.96*UB_std/sqrt(nbOS);
-
-    println("μ = ", UB_bar);
-    println("μ ± 1.96*σ/√NS = ", [UB_low,UB_high]);
-    
-    return costs, UB_bar, UB_low, UB_high, elapsed, actions, COSTs
-end
-
-=#
-
-#= This function is depreciated [Revision]
-function expected_number_of_stages(P_landfall)
-    Q = P_landfall[1:end-1,1:end-1];
-    M = inv(I-Q);
-    exp_Ts = M*ones(size(M)[1]);
-    exp_Ts = round.(Int,exp_Ts)
-    return exp_Ts
-end
-=#
