@@ -1,7 +1,7 @@
 function hurricane_FA()
     #Fully adaptive
     #Defne the model 
-    model, x, f, theta, y, z, FB1, FB2, dCons = define_models(K,T,Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q);
+    model, x, f, theta, y, z, FB1, FB2, dCons = define_models(T);
 
     #train the model
     k = copy(k_init)

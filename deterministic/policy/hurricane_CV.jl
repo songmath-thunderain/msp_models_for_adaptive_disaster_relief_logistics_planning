@@ -2,7 +2,7 @@ function hurricane_CV()
     #clairvoyant solution 
 
     #define the clairvoyant model 
-    model_cv, x_cv, f_cv, y_cv, z_cv, dCons_cv = deterministic_model(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,T,x_0);
+    model_cv, x_cv, f_cv, y_cv, z_cv, dCons_cv = deterministic_model(T,x_0);
 
     #evaluate the clairvoyant solution
     costs_cv, cv_bar, cv_low, cv_high, elapsed_cv =  clairvoyant_eval(model_cv,x_cv,f_cv,y_cv,z_cv,dCons_cv,T,nbOS);

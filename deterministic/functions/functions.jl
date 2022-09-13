@@ -1,5 +1,5 @@
 # This function defines a non-terminal stage for the MSP model with deterministic landfall
-function non_terminal_stage_single_period_problem(Ni,Nj,N0,x_cap,cb,ch,h,t)
+function non_terminal_stage_single_period_problem(t)
     #######################
     #Define the model.
     m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GRB_ENV), "OutputFlag" => 0));
@@ -53,7 +53,7 @@ end
 ###############################################################
 
 # This function defines the terminal stage for the MSP model with deterministic landfall
-function terminal_stage_single_period_problem(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,t)
+function terminal_stage_single_period_problem(t)
     #######################
     #Define the model.
     m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GRB_ENV), "OutputFlag" => 0));
@@ -140,7 +140,7 @@ end
 ###############################################################
 
 # This function defines all the models for the MSP with deterministic landfall
-function define_models(K,T,Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q)
+function define_models(T)
     # first we initialize the list where we store all the models
     model = Array{Any,2}(undef,T,K); # list to store all the models for every stage and Markovian state
     x = Array{Any,2}(undef,T,K); # list to store all the x variables for every stage and Markovian state
@@ -156,10 +156,10 @@ function define_models(K,T,Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q)
     for k=1:K, t=1:T
         if t < T
             # define use the function non_terminal_stage_single_period_problem
-            model[t,k], x[t,k], f[t,k], theta[t,k], FB1[t,k], FB2[t,k] = non_terminal_stage_single_period_problem(Ni,Nj,N0,x_cap,cb,ch,h,t);
+            model[t,k], x[t,k], f[t,k], theta[t,k], FB1[t,k], FB2[t,k] = non_terminal_stage_single_period_problem(t);
         else
             #use the function terminal_stage_single_period_problem
-            model[t,k], x[t,k], f[t,k], y[k], z[k], FB1[t,k], FB2[t,k], dCons[k] = terminal_stage_single_period_problem(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,t);
+            model[t,k], x[t,k], f[t,k], y[k], z[k], FB1[t,k], FB2[t,k], dCons[k] = terminal_stage_single_period_problem(t);
         end
     end
     return model, x, f, theta, y, z, FB1, FB2, dCons
@@ -593,7 +593,7 @@ end
 ###############################################################
 ###############################################################
 
-function deterministic_model(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,T,x_0)
+function deterministic_model(T,x_0)
     #######################
     #Define the model.
     m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GRB_ENV), "OutputFlag" => 0));
@@ -731,7 +731,7 @@ end
 ###############################################################
 ###############################################################
 
-function static_twostage_first_model(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,T,x_0)
+function static_twostage_first_model()
     #######################
     #Define the first-stage (multi-period) model for the static two-stage SP model
      m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GRB_ENV), "OutputFlag" => 0));
@@ -792,7 +792,7 @@ end
 ###############################################################
 ###############################################################
 
-function rolling_twostage_first_model(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,t0,T)
+function rolling_twostage_first_model(t0)
     #######################
     #Define the first-stage (multi-period) model for each roll of the rolling two-stage SP model, assuming that the current stage is t0
     m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GRB_ENV), "OutputFlag" => 0));
@@ -871,10 +871,10 @@ function rolling_twostage_eval_online(T,nbOS,x0)
     desalvege_amount = 0;
     
     # define the terminal-stage problem
-    model_T, x_T, f_T, y_T, z_T, FB1_T, FB2_T, dCons_T = terminal_stage_single_period_problem(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,T);
+    model_T, x_T, f_T, y_T, z_T, FB1_T, FB2_T, dCons_T = terminal_stage_single_period_problem(T);
 
     # solve the first roll model (same for all sample paths!)
-    m1, x1, theta1, x_prev1, f1 = rolling_twostage_first_model(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,1,T);
+    m1, x1, theta1, x_prev1, f1 = rolling_twostage_first_model(1);
     for i=1:Ni
         fix(x_prev1[i], x0[i]; force=true);
     end
@@ -928,7 +928,7 @@ function rolling_twostage_eval_online(T,nbOS,x0)
         for t=2:(T-1)
             k_t = OS_paths[s,t];
             # create a two-stage SP model for each stage t
-            m_roll, x_roll, theta_roll, x_prev, f_roll = rolling_twostage_first_model(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,t,T);
+            m_roll, x_roll, theta_roll, x_prev, f_roll = rolling_twostage_first_model(t);
             #update the RHS
             for i=1:Ni
                 fix(x_prev[i], xvals[i,t-1]; force=true);
@@ -1137,10 +1137,10 @@ end
 
 function two_stage_static_train()
     #define the first-stage problem 
-    model_2s, x_2s, f_2s, theta_2s = static_twostage_first_model(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,T,x_0);
+    model_2s, x_2s, f_2s, theta_2s = static_twostage_first_model();
 
     # define the terminal-stage problem
-    model_T, x_T, f_T, y_T, z_T, FB1_T, FB2_T, dCons_T = terminal_stage_single_period_problem(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,T);
+    model_T, x_T, f_T, y_T, z_T, FB1_T, FB2_T, dCons_T = terminal_stage_single_period_problem(T);
     
     init_k = copy(k_init);
     flag = 1;
@@ -1181,7 +1181,7 @@ function two_stage_static_eval(xval_twoSP)
     OS_paths = Matrix(CSV.read("./data/OOS.csv",DataFrame)); #read the out-of-sample file
 	#OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS -- No longer needed [REVISION]
     
-    model_twoSP, x_twoSP, f_twoSP, y_twoSP, z_twoSP, dCons_twoSP = deterministic_model(Ni,Nj,N0,x_cap,cb,ch,h,ca,p,q,T,x_0);
+    model_twoSP, x_twoSP, f_twoSP, y_twoSP, z_twoSP, dCons_twoSP = deterministic_model(T,x_0);
   
     start=time();
     costs = zeros(nbOS);
