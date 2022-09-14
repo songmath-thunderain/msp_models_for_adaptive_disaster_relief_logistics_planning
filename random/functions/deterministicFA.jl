@@ -1,6 +1,6 @@
 #MSP fully adaptive model functions, but assuming that the landfall time is deterministic
 
-function non_terminal_stage_single_period_problem(t)
+function non_terminal_stage_single_period_problem_FAD(t)
     #######################
     #Define the model.
     m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GRB_ENV), "OutputFlag" => 0));
@@ -53,8 +53,8 @@ end
 ###############################################################
 ###############################################################
 
-# This function defines the terminal stage for the MSP model with deterministic landfall
-function terminal_stage_single_period_problem(t)
+# This function defines the terminal stage T for the MSP model with deterministic landfall
+function terminal_stage_single_period_problem_FAD(t)
     #######################
     #Define the model.
     m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GRB_ENV), "OutputFlag" => 0));
@@ -86,7 +86,7 @@ function terminal_stage_single_period_problem(t)
     #######################
     #Define the constraints.
     
-    #initialize two arrays to store the constraints which containt x_{t-1}
+    #initialize two arrays to store the constraints which contains x_{t-1}
     FB1 = Array{Any,1}(undef,Ni);
     FB2 = Array{Any,1}(undef,Ni);
 	dCons = Array{Any,1}(undef,Nj);
@@ -113,21 +113,6 @@ function terminal_stage_single_period_problem(t)
 	   dCons[j] = @constraint(m, z[j]+sum(y[i,j] for i=1:Ni) == 0);
 	end
 
-#=
-	for j=1:Nj
-        # this constraint ensures that the flow sent to an SP is not more than the realized demand
-        @constraint(m,
-                    sum(y[i,j] for i=1:Ni)
-                    <=d[j]
-                   );
-        # this constraint computes the unsatisfied demand
-        @constraint(m,
-                    d[j]-sum(y[i,j] for i=1:Ni)
-                    <=z[j]
-                   );
-    end
-=#
-
     # this constraint ensures that items cannot be shipped directly from the MDC to SP
     @constraint(m,
             sum(f[N0,i] for i=1:Ni) == 0
@@ -140,9 +125,57 @@ end
 ###############################################################
 ###############################################################
 
+# This function defines the final stage T+1 for the MSP model with deterministic landfall, only some states (where landfall has not occured at T) need this
+function final_stage_problem_FAD()
+    #######################
+    #Define the model.
+    m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GRB_ENV), "OutputFlag" => 0));
+
+    #######################
+    #Define the variables.
+    @variables(m,
+            begin
+               0 <= y[i=1:Ni,j=1:Nj];
+               0 <= z[j=1:Nj];
+			   0 <= v[i=1:Ni];
+            end
+          );
+    
+    #######################
+    #Define the objective.
+    @objective(m,
+               Min,
+              sum(sum(ca[i,j,t]*y[i,j] for j=1:Nj) for i=1:Ni)
+              +sum(z[j] for j=1:Nj)*p
+              +sum(v[i] for i=1:Ni)*q
+               );
+    
+
+    #######################
+    #Define the constraints.
+    
+    #initialize two arrays to store the constraints which contains x_{T}
+    FB = Array{Any,1}(undef,Ni);
+	dCons = Array{Any,1}(undef,Nj);
+    
+    #create the following constraints for every SP i
+    #initialize the RHS to be zero for now, and will change it later 
+    for i=1:Ni
+        FB[i] = @constraint(m, sum(y[i,j] for j=1:Nj)+v[i] == 0);
+    end
+    for j=1:Nj
+	   dCons[j] = @constraint(m, z[j]+sum(y[i,j] for i=1:Ni) == 0);
+	end
+
+    return m, FB, dCons
+end
+
+
+###############################################################
+###############################################################
 
 # This function defines all the models for the MSP with deterministic landfall
-function define_models(T)
+function define_models_FAD()
     # first we initialize the list where we store all the models
     model = Array{Any,2}(undef,T,K); # list to store all the models for every stage and Markovian state
     x = Array{Any,2}(undef,T,K); # list to store all the x variables for every stage and Markovian state
@@ -164,15 +197,26 @@ function define_models(T)
             model[t,k], x[t,k], f[t,k], y[k], z[k], FB1[t,k], FB2[t,k], dCons[k] = terminal_stage_single_period_problem(t);
         end
     end
-    return model, x, f, theta, y, z, FB1, FB2, dCons
+
+	model_final = Array{Any,1}(undef,K);
+	y_final = Array{Any,1}(undef,K);
+    z_final = Array{Any,1}(undef,K);
+    FB_final = Array{Any,1}(undef,K);
+	dCons_final = Array{Any,1}(undef,K);
+
+	#To accomodate deterministic landfall model for a random landfall time, need to define a "final" stage problem
+	for k=1:K
+		model_final[k], FB_final[k], dCons_final[k] = final_stage_problem_FAD();
+	end
+
+    return model, x, f, theta, y, z, FB1, FB2, dCons, model_final, FB_final, dCons_final
 end
 
 ###############################################################
 ###############################################################
 
-### TBD ###
 #Train model: forward pass
-function FOSDDP_forward_pass_oneSP_iteration(lb,xval,thetaval)
+function FOSDDP_forward_pass_oneSP_iteration_FAD(lb,xval,thetaval)
     k_t = copy(k_init);
     in_sample = [k_t]; #what is the state in the first stage
     for t=1:T
@@ -215,7 +259,7 @@ end
 ###############################################################
 
 #Train model: backward pass: new version, without two-layer uncertainty
-function FOSDDP_backward_pass_oneSP_iteration(lb,xval,thetaval,in_sample)
+function FOSDDP_backward_pass_oneSP_iteration_FAD(lb,xval,thetaval,in_sample)
     cutviolFlag = 0;
     for t=T:-1:2
         #initialize
@@ -282,7 +326,7 @@ end
 ###############################################################
 
 #Train model
-function train_models_offline()
+function train_models_offline_FAD()
     #set the RHS of the first_stage problem
     for i=1:Ni
         set_normalized_rhs(FB1Cons_fa[1,k_init][i], x_0[i]);
@@ -327,7 +371,7 @@ end
 ###############################################################
 
 #evaluate model
-function FOSDDP_eval_offline()
+function FOSDDP_eval_offline_FAD()
     start=time();
     OS_paths = Matrix(CSV.read("./data/OOS.csv",DataFrame)); #read the out-of-sample file
 	# we do not have this second layer now [REVISION]
@@ -391,17 +435,25 @@ end
 
 #update RHS of flow-balance and demand constraint
 # we do not have this second layer now [REVISION]
-function MSP_fa_update_RHS(k_t,t,xval)
+function MSP_fa_update_RHS_FAD(k_t,t,xval)
     for i=1:Ni        
         set_normalized_rhs(FB1Cons_fa[t,k_t][i], xval[i,t-1]);
         set_normalized_rhs(FB2Cons_fa[t,k_t][i], xval[i,t-1]);
     end 
-    for j=1:Nj
-        if S[k_t][3] == Nc-1 && k_t ∉ absorbing_states
-            set_normalized_rhs(dCons_fa[t,k_t][j], SCEN[k_t][j]);
-        else
-            set_normalized_rhs(dCons_fa[t,k_t][j], 0);
-        end
-    end
+
+	if t == T
+		for j=1:Nj
+			if S[k_t][3] == Nc-1
+				# Hurricane has made landfall
+				if k_t ∉ absorbing_states
+					set_normalized_rhs(dCons_fa[t,k_t][j], SCEN[k_t][j]);
+				else
+					set_normalized_rhs(dCons_fa[t,k_t][j], 0);
+				end
+			else
+				# Hurricane has not made landfall yet
+			end
+		end
+	end
 end
 
