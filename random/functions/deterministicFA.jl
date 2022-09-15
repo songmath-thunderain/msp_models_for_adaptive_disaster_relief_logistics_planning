@@ -188,14 +188,14 @@ end
 function FOSDDP_backward_pass_oneSP_iteration_FAD(lb,xval,thetaval,in_sample)
     cutviolFlag = 0;
     for t=(Tmin+1):-1:2
-        #initialize
-        Q = zeros(K); #list for all the optimal values
-         #list for all the dual multiplies of the first and second set of constraints
-        pi1 = zeros(K,Ni); 
-		pi2 = zeros(K,Ni); 
         sample_n = in_sample[t-1]; #the states observed at time t-1
 		if t <= Tmin
 			# There is nothing related to the demand realization/landfall
+			#initialize
+			Q = zeros(K); #list for all the optimal values
+			 #list for all the dual multiplies of the first and second set of constraints
+			pi1 = zeros(K,Ni); 
+			pi2 = zeros(K,Ni);
 			for k=1:K
 				if k in absorbing_states
 					Q[k] = 0;
@@ -203,8 +203,8 @@ function FOSDDP_backward_pass_oneSP_iteration_FAD(lb,xval,thetaval,in_sample)
 				else
 					# Here we just update xval
 					for i=1:Ni
-						set_normalized_rhs(FB1Cons_fa[t,k_t][i], xval[i,t-1]);
-      	 		 		set_normalized_rhs(FB2Cons_fa[t,k_t][i], xval[i,t-1]);
+						set_normalized_rhs(FB1Cons_fa[t,k][i], xval[i,t-1]);
+      	 		 		set_normalized_rhs(FB2Cons_fa[t,k][i], xval[i,t-1]);
 					end
 					#solve the model
 					optimize!(m_fa[t,k]);
@@ -213,7 +213,7 @@ function FOSDDP_backward_pass_oneSP_iteration_FAD(lb,xval,thetaval,in_sample)
 					status = termination_status(m_fa[t,k]);
 					if status != MOI.OPTIMAL
 						println("Error in Backward Pass");
-						println("Model in stage =", t, " and state = ", k, ", in forward pass is ", status);
+						println("Model in stage =", t, " and state = ", k, ", in backward pass is ", status);
 						exit(0);
 					else
 						#collect values
@@ -250,8 +250,132 @@ function FOSDDP_backward_pass_oneSP_iteration_FAD(lb,xval,thetaval,in_sample)
 			end
 		else
 			# This is the tricky part, need to consider the demand realization/landfall
-			# TBD
-		end
+			if sample_n in absorbing_states
+				Q[sample_n] = 0;
+				continue
+			else
+				if S[sample_n][3] == Nc-1
+					# made landfall -> deterministic realization
+					for i = 1:Ni
+						set_normalized_rhs(FB_final[i], xval[i,t-1]);
+			   		end
+					for j = 1:Nj
+						set_normalized_rhs(dCons_final[j], SCEN[sample_n][j]);
+					end
+					for i=1:Ni
+						for j=1:Nj
+							set_objective_coefficient(model_final, y_final[i,j], ca[i,j,Tmin]);
+						end
+					end
+					#solve the model
+					optimize!(model_final);
+
+					#check the status 
+					status = termination_status(model_final);
+					if status != MOI.OPTIMAL
+						println("Error in Backward Pass, final step");
+						println("Model in stage =", t, " and state = ", sample_n, ", in backward pass is ", status);
+						exit(0);
+					else
+						#collect values
+						lastQ = objective_value(model_final);
+						lastpi = zeros(Ni); 
+						for i=1:Ni
+							lastpi[i] = shadow_price(FB_final[i]);
+						end
+						if (lastQ-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ
+							@constraint(m_fa[t-1,sample_n],
+								ϴ_fa[t-1,sample_n]
+								-sum(lastpi[i]*x_fa[t-1,sample_n][i] for i=1:Ni)
+								>=
+								lastQ-sum(lastpi[i]*xval[i,t-1] for i=1:Ni)
+								);
+						end
+					end
+				else
+					# has not made landfall yet -> random realization, go ahead and do random sampling just as we did for RH	
+					scen = zeros(nbscen,T);
+					for n=1:nbscen
+						for tt=1:Tmin
+							scen[n,tt] = in_sample[tt];
+						end
+						for tt=Tmin+1:T
+							scen[n,tt] = MC_sample(scen[n,tt-1]);
+						end
+					end
+					lastQ = zeros(nbscen); #list for all the optimal values
+					lastpi = Array{Any,1}(undef,nbscen); #list for all the dual multiplies of the first set of constraints
+					qprob = fill(1/nbscen,nbscen);
+					absorbingT = -1;
+					τ = nothing
+					for n=1:nbscen
+						#identify the period when the hurricane makes landfall 
+						τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, scen[n,:]);
+						
+						#update the RHS
+						if τ === nothing     
+							absorbingT = findfirst(x -> S[x][1] == 1, scen[n,:]);
+							for i = 1:Ni
+								set_normalized_rhs(FB_final[i], xval[i,t-1]);
+							end
+							for j = 1:Nj
+								set_normalized_rhs(dCons_final[j], 0);
+							end
+							for i=1:Ni
+								for j=1:Nj
+									set_objective_coefficient(model_final, y_final[i,j], ca[i,j,absorbingT]);
+								end
+							end
+							for tt=(Tmin+1):absorbingT
+								lastQ[n] += sum(ch[i,tt]*xvals[i,t-1] for i=1:Ni);
+							end
+						else
+							for i = 1:Ni
+								set_normalized_rhs(FB_final[i], xval[i,t-1]);
+							end
+							for j = 1:Nj
+								set_normalized_rhs(dCons_final[j], SCEN[scen[n,τ]][j]);
+							end
+							for i=1:Ni
+								for j=1:Nj
+									set_objective_coefficient(model_final, y_final[i,j], ca[i,j,τ]);
+								end
+							end
+							for tt=(Tmin+1):τ 
+								lastQ[n] += sum(ch[i,tt]*xvals[i,t-1] for i=1:Ni);
+							end
+						end
+						#solve the subproblem and store the dual information
+						optimize!(model_final) #solve the model
+						status_subproblem = termination_status(model_final); #check the status 
+						pitemp = zeros(Ni);
+						if status_subproblem != MOI.OPTIMAL
+							println("Error in Backward Pass, final step");
+							println("Model in stage =", t, " and state = ", sample_n, ", in backward pass is ", status);
+							exit(0);
+						else
+							#update the values
+							lastQ[n] += objective_value(model_final);
+							#need to include the inventory cost
+							for i=1:Ni
+								pitemp[i] = shadow_price(FB_final[i]);
+							end
+							lastpi[n] = pitemp;
+						end
+					end
+					lastQbar = sum(lastQ[n]*qprob[n] for n=1:nbscen);
+					
+					if (lastQbar-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ
+						@constraint(m_fa[t-1,sample_n],
+								ϴ_fa[t-1,sample_n]
+								-sum(qprob[n]*sum(lastpi[n][i]*x_fa[t-1,sample_n][i] for i=1:Ni) for n=1:nscen)
+								>=
+								lastQbar-sum(qprob[n]*sum(lastpi[n][i]*xval[i,t-1] for i=1:Ni) for n=1:nscen)
+						);
+					end
+				end
+			end
+        end
     end
     return cutviolFlag;
 end
@@ -311,16 +435,11 @@ function FOSDDP_eval_offline_FAD()
     OS_paths = Matrix(CSV.read("./data/OOS.csv",DataFrame)); #read the out-of-sample file
 	# we do not have this second layer now [REVISION]
 	#OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS
-    objs_fa = zeros(nbOS,T);
-    
-    xval_fa = Array{Any,2}(undef,nbOS,T); fval_fa = Array{Any,2}(undef,nbOS,T);
-    yval_fa = Array{Any,2}(undef,nbOS,T); zval_fa = Array{Any,2}(undef,nbOS,T); vval_fa = Array{Any,2}(undef,nbOS,T);
-
-    procurmnt_amount = zeros(T); 
+    objs_fa = zeros(nbOS,Tmin+1);
     
     for s=1:nbOS
-        xval = zeros(Ni,T);
-        for t=1:T
+        xval = zeros(Ni,Tmin);
+        for t=1:Tmin
             #the state is known in the first stage; if not sample a new state k 
             k_t = OS_paths[s,t];
             # we do not have this second layer now [REVISION]
@@ -341,27 +460,100 @@ function FOSDDP_eval_offline_FAD()
                     exit(0);
                 else
                     #collect values
-                    xval_fa[s,t] = value.(x_fa[t,k_t]); xval[:,t] = xval_fa[s,t];
-                    fval_fa[s,t] = value.(f_fa[t,k_t]);                 
-                    yval_fa[s,t] = value.(y_fa[t,k_t]);
-                    zval_fa[s,t] = value.(z_fa[t,k_t]);
-                    vval_fa[s,t] = value.(v_fa[t,k_t]);
                     objs_fa[s,t] = objective_value(m_fa[t,k_t])- value(ϴ_fa[t,k_t]);
-                    
-                    procurmnt_amount[t] += (sum(fval_fa[s,t][N0,i] for i=1:Ni))/nbOS;
                 end
             end
-        end        
+        end     
+		k_t = OS_paths[s,Tmin+1];
+		if k_t in absorbing_states
+			continue
+		if S[k_t][3] == Nc-1
+			# made landfall -> deterministic realization
+			for i = 1:Ni
+				set_normalized_rhs(FB_final[i], xval[i,Tmin]);
+			end
+			for j = 1:Nj
+				set_normalized_rhs(dCons_final[j], SCEN[k_t][j]);
+			end
+			for i=1:Ni
+				for j=1:Nj
+					set_objective_coefficient(model_final, y_final[i,j], ca[i,j,Tmin]);
+				end
+			end
+			#solve the model
+			optimize!(model_final);
+
+			#check the status 
+			status = termination_status(model_final);
+			if status != MOI.OPTIMAL
+				println("Error in evaluation, final step");
+				exit(0);
+			else
+				#collect values
+				objs_fa[s,Tmin+1] = objective_value(model_final);
+			end
+		else
+			absorbingT = -1;
+			τ = nothing
+			for n=1:nbscen
+				#identify the period when the hurricane makes landfall 
+				τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, OS_paths[s,:]);
+				
+				#update the RHS
+				if τ === nothing     
+					absorbingT = findfirst(x -> S[x][1] == 1, OS_paths[s,:]);
+					for i = 1:Ni
+						set_normalized_rhs(FB_final[i], xval[i,Tmin]);
+					end
+					for j = 1:Nj
+						set_normalized_rhs(dCons_final[j], 0);
+					end
+					for i=1:Ni
+						for j=1:Nj
+							set_objective_coefficient(model_final, y_final[i,j], ca[i,j,absorbingT]);
+						end
+					end
+					for tt = (Tmin+1):absorbingT 
+						objs_fa[s,Tmin+1] += sum(ch[i,tt]*xvals[i,Tmin] for i=1:Ni);
+					end
+				else
+					for i = 1:Ni
+						set_normalized_rhs(FB_final[i], xval[i,Tmin]);
+					end
+					for j = 1:Nj
+						set_normalized_rhs(dCons_final[j], SCEN[OS_paths[s,τ]][j]);
+					end
+					for i=1:Ni
+						for j=1:Nj
+							set_objective_coefficient(model_final, y_final[i,j], ca[i,j,τ]);
+						end
+					end
+					for tt = (Tmin+1):τ 
+						objs_fa[s,Tmin+1] += sum(ch[i,tt]*xvals[i,Tmin] for i=1:Ni);
+					end
+				end
+				#solve the subproblem and store the dual information
+				optimize!(model_final) #solve the model
+				status_subproblem = termination_status(model_final); #check the status 
+				if status_subproblem != MOI.OPTIMAL
+					println("Error in Backward Pass, final step");
+					println("Model in stage =", t, " and state = ", sample_n, ", in backward pass is ", status);
+					exit(0);
+				else
+					#update the values
+					objs_fa[s,Tmin+1] += objective_value(model_final);
+				end
+			end
+		end
     end
-    fa_bar = mean(sum(objs_fa[:,t] for t=1:T));
-    fa_std = std(sum(objs_fa[:,t] for t=1:T));
+    fa_bar = mean(sum(objs_fa[:,t] for t=1:(Tmin+1)));
+    fa_std = std(sum(objs_fa[:,t] for t=1:(Tmin+1)));
     fa_low = fa_bar-1.96*fa_std/sqrt(nbOS);
     fa_high = fa_bar+1.96*fa_std/sqrt(nbOS);
 	println("FA...");
     println("μ ± 1.96*σ/√NS = ", fa_bar, " ± ", [fa_low,fa_high]);
     elapsed = time() - start;
-    vals = [xval_fa, fval_fa, yval_fa, zval_fa, vval_fa];
-    return objs_fa, fa_bar, fa_low, fa_high, elapsed#, vals
+    return objs_fa, fa_bar, fa_low, fa_high, elapsed
 end
 
 

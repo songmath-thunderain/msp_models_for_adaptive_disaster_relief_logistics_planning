@@ -58,7 +58,7 @@ end
 #normalize the probabilities
 P_temp = deepcopy(P_joint);
 for k=1:K, kk=1:K
-    P_joint[k,kk] = P_temp[k,kk]/sum(P_temp[k,:])
+    P_joint[k,kk] = P_temp[k,kk]/sum(P_temp[k,:]);
 end
 
 ########################################################################################
