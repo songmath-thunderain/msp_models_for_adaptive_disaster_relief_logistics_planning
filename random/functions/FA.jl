@@ -170,8 +170,8 @@ function FOSDDP_backward_pass_oneSP_iteration(lb,xval,thetaval,in_sample)
                     #collect values
                     Q[k] = objective_value(m_fa[t,k]);
                     for i=1:Ni
-                        pi1[k,i] = dual(FB1Cons_fa[t,k][i]);
-                        pi2[k,i] = dual(FB2Cons_fa[t,k][i]);
+                        pi1[k,i] = shadow_price(FB1Cons_fa[t,k][i]);
+                        pi2[k,i] = shadow_price(FB2Cons_fa[t,k][i]);
                     end
                 end                 
             end

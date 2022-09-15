@@ -47,6 +47,11 @@ function non_terminal_stage_single_period_problem_FAD(t)
                             );
     end
 
+	if t == Tmin	
+		# this constraint ensures that items cannot be shipped directly from the MDC to SP
+  		@constraint(m, sum(f[N0,i] for i=1:Ni) == 0);
+	end
+
     return m, x, f, ϴ, FB1, FB2
 end
 
@@ -54,80 +59,8 @@ end
 ###############################################################
 
 # This function defines the terminal stage T for the MSP model with deterministic landfall
-function terminal_stage_single_period_problem_FAD(t)
-    #######################
-    #Define the model.
-    m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GRB_ENV), "OutputFlag" => 0));
-
-    #######################
-    #Define the variables.
-    @variables(m,
-            begin
-               0 <= x[i=1:Ni] <= x_cap[i];
-               0 <= f[i=1:N0,ii=1:Ni] <= f_cap[i,ii];
-               0 <= y[i=1:Ni,j=1:Nj];
-               0 <= z[j=1:Nj];
-            end
-          );
-    
-    #######################
-    #Define the objective.
-    @objective(m,
-               Min,
-               sum(sum(cb[i,ii,t]*f[i,ii] for ii=1:Ni) for i=1:N0)
-              +sum(ch[i,t]*x[i] for i=1:Ni)
-              +sum(f[N0,i] for i=1:Ni)*h[t]
-              +sum(sum(ca[i,j,t]*y[i,j] for j=1:Nj) for i=1:Ni)
-              +sum(z[j] for j=1:Nj)*p
-              +sum(x[i]-sum(y[i,j] for j=1:Nj) for i=1:Ni)*q
-               );
-    
-
-    #######################
-    #Define the constraints.
-    
-    #initialize two arrays to store the constraints which contains x_{t-1}
-    FB1 = Array{Any,1}(undef,Ni);
-    FB2 = Array{Any,1}(undef,Ni);
-	dCons = Array{Any,1}(undef,Nj);
-    
-    #create the following constraints for every SP i
-    #initialize the RHS to be zero for now, and will change it later 
-    for i=1:Ni
-        FB1[i] = @constraint(m, 
-                             x[i]
-                            +sum(f[i,j] for j=1:Ni if j != i)
-                            -sum(f[j,i] for j=1:N0 if j != i)
-                            == 0
-                            );
-        FB2[i] = @constraint(m, 
-                            sum(f[i,j] for j=1:Ni if j != i)
-                            <= 0
-                            );
-        @constraint(m,
-                    sum(y[i,j] for j=1:Nj)
-                    <=x[i]
-                   );
-    end
-    for j=1:Nj
-	   dCons[j] = @constraint(m, z[j]+sum(y[i,j] for i=1:Ni) == 0);
-	end
-
-    # this constraint ensures that items cannot be shipped directly from the MDC to SP
-    @constraint(m,
-            sum(f[N0,i] for i=1:Ni) == 0
-            );
-    
-    return m, x, f, y, z, FB1, FB2, dCons
-end
-
-
-###############################################################
-###############################################################
-
-# This function defines the final stage T+1 for the MSP model with deterministic landfall, only some states (where landfall has not occured at T) need this
-function final_stage_problem_FAD()
-    #######################
+function terminal_stage_single_period_problem_FAD()
+	#######################
     #Define the model.
     m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GRB_ENV), "OutputFlag" => 0));
 
@@ -164,10 +97,10 @@ function final_stage_problem_FAD()
         FB[i] = @constraint(m, sum(y[i,j] for j=1:Nj)+v[i] == 0);
     end
     for j=1:Nj
-	   dCons[j] = @constraint(m, z[j]+sum(y[i,j] for i=1:Ni) == 0);
+	   	dCons[j] = @constraint(m, z[j]+sum(y[i,j] for i=1:Ni) == 0);
 	end
 
-    return m, FB, dCons
+    return m, FB, dCons, y
 end
 
 
@@ -180,46 +113,37 @@ function define_models_FAD()
     model = Array{Any,2}(undef,T,K); # list to store all the models for every stage and Markovian state
     x = Array{Any,2}(undef,T,K); # list to store all the x variables for every stage and Markovian state
     f = Array{Any,2}(undef,T,K); # ..............
-    theta = Array{Any,2}(undef,T-1,K); # ..............
-    y = Array{Any,1}(undef,K);
-    z = Array{Any,1}(undef,K);
+    theta = Array{Any,2}(undef,T,K); # ..............
     FB1 = Array{Any,2}(undef,T,K);
     FB2 = Array{Any,2}(undef,T,K);
-	dCons = Array{Any,1}(undef,K);
     
     #Then we define the a model for every stage and Markovian state state 
-    for k=1:K, t=1:T
-        if t < T
-            # define use the function non_terminal_stage_single_period_problem
-            model[t,k], x[t,k], f[t,k], theta[t,k], FB1[t,k], FB2[t,k] = non_terminal_stage_single_period_problem(t);
-        else
-            #use the function terminal_stage_single_period_problem
-            model[t,k], x[t,k], f[t,k], y[k], z[k], FB1[t,k], FB2[t,k], dCons[k] = terminal_stage_single_period_problem(t);
-        end
+    for k=1:K, t=1:Tmin
+        # define use the function non_terminal_stage_single_period_problem
+        model[t,k], x[t,k], f[t,k], theta[t,k], FB1[t,k], FB2[t,k] = non_terminal_stage_single_period_problem(t);
     end
 
 	model_final = Array{Any,1}(undef,K);
 	y_final = Array{Any,1}(undef,K);
-    z_final = Array{Any,1}(undef,K);
     FB_final = Array{Any,1}(undef,K);
 	dCons_final = Array{Any,1}(undef,K);
 
 	#To accomodate deterministic landfall model for a random landfall time, need to define a "final" stage problem
 	for k=1:K
-		model_final[k], FB_final[k], dCons_final[k] = final_stage_problem_FAD();
+		model_final[k], FB_final[k], dCons_final[k], y_final[k] = final_stage_problem_FAD();
 	end
 
-    return model, x, f, theta, y, z, FB1, FB2, dCons, model_final, FB_final, dCons_final
+    return model, x, f, theta, y, z, FB1, FB2, dCons, model_final, FB_final, dCons_final, y_final
 end
 
 ###############################################################
 ###############################################################
 
-#Train model: forward pass
+#Train model: forward pass, up to Tmin, we assume that there is no demand realization yet. If landfall does occur on Tmin, then there will be a deterministic realization, otherwise, there will be a random realization
 function FOSDDP_forward_pass_oneSP_iteration_FAD(lb,xval,thetaval)
     k_t = copy(k_init);
     in_sample = [k_t]; #what is the state in the first stage
-    for t=1:T
+    for t=1:Tmin
         #the state is known in the first stage; if not sample a new state k 
         if t>1
             #sample a new state k
@@ -230,8 +154,10 @@ function FOSDDP_forward_pass_oneSP_iteration_FAD(lb,xval,thetaval)
                 continue; 
             end
             #update the RHS
-			#MSP_fa_update_RHS(k_t,t,xval,rand(1:M)); # we do not have this second layer now [REVISION]
-			MSP_fa_update_RHS(k_t,t,xval);
+			for i=1:Ni
+				set_normalized_rhs(FB1Cons_fa[t,k_t][i], xval[i,t-1]);
+      	  		set_normalized_rhs(FB2Cons_fa[t,k_t][i], xval[i,t-1]);
+			end
         end
             
         #solve the model
@@ -258,65 +184,74 @@ end
 ###############################################################
 ###############################################################
 
-#Train model: backward pass: new version, without two-layer uncertainty
+#Train model: backward pass
 function FOSDDP_backward_pass_oneSP_iteration_FAD(lb,xval,thetaval,in_sample)
     cutviolFlag = 0;
-    for t=T:-1:2
+    for t=(Tmin+1):-1:2
         #initialize
         Q = zeros(K); #list for all the optimal values
          #list for all the dual multiplies of the first and second set of constraints
         pi1 = zeros(K,Ni); 
 		pi2 = zeros(K,Ni); 
         sample_n = in_sample[t-1]; #the states observed at time t-1
-        for k=1:K
-            if k in absorbing_states
-                Q[k] = 0;
-                continue
-            else
-                # Here we just update xval
-                MSP_fa_update_RHS(k,t,xval);
-                #solve the model
-                optimize!(m_fa[t,k]);
+		if t <= Tmin
+			# There is nothing related to the demand realization/landfall
+			for k=1:K
+				if k in absorbing_states
+					Q[k] = 0;
+					continue
+				else
+					# Here we just update xval
+					for i=1:Ni
+						set_normalized_rhs(FB1Cons_fa[t,k_t][i], xval[i,t-1]);
+      	 		 		set_normalized_rhs(FB2Cons_fa[t,k_t][i], xval[i,t-1]);
+					end
+					#solve the model
+					optimize!(m_fa[t,k]);
 
-                #check the status 
-                status = termination_status(m_fa[t,k]);
-                if status != MOI.OPTIMAL
-                    println("Error in Backward Pass");
-                    println("Model in stage =", t, " and state = ", k, ", in forward pass is ", status);
-                    exit(0);
-                else
-                    #collect values
-                    Q[k] = objective_value(m_fa[t,k]);
-                    for i=1:Ni
-                        pi1[k,i] = dual(FB1Cons_fa[t,k][i]);
-                        pi2[k,i] = dual(FB2Cons_fa[t,k][i]);
-                    end
-                end                 
-            end
-        end
+					#check the status 
+					status = termination_status(m_fa[t,k]);
+					if status != MOI.OPTIMAL
+						println("Error in Backward Pass");
+						println("Model in stage =", t, " and state = ", k, ", in forward pass is ", status);
+						exit(0);
+					else
+						#collect values
+						Q[k] = objective_value(m_fa[t,k]);
+						for i=1:Ni
+							pi1[k,i] = shadow_price(FB1Cons_fa[t,k][i]);
+							pi2[k,i] = shadow_price(FB2Cons_fa[t,k][i]);
+						end
+					end                 
+				end
+			end
 
-        for n = 1:K
-            if  n ∉ absorbing_states
-                if t-1 == 1 && n != k_init
-                    continue
-                end
-                #what is the expected cost value 
-                Qvalue = sum(Q[k]*P_joint[n,k]  for k=1:K);
+			for n = 1:K
+				if  n ∉ absorbing_states
+					if t-1 == 1 && n != k_init
+						continue
+					end
+					#what is the expected cost value 
+					Qvalue = sum(Q[k]*P_joint[n,k]  for k=1:K);
 
-                # check if cut is violated at the sample path encountered in the forward pass
-                if n == sample_n && (Qvalue-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ
-                    cutviolFlag = 1;
-                end
+					# check if cut is violated at the sample path encountered in the forward pass
+					if n == sample_n && (Qvalue-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ
+						cutviolFlag = 1;
+					end
 
-                # we are doing cut sharing so we will add the cut regardless
-                @constraint(m_fa[t-1,n],
-                ϴ_fa[t-1,n]
-                -sum(sum((pi1[k,i]+pi2[k,i])*x_fa[t-1,n][i] for i=1:Ni)*P_joint[n,k] for k=1:K)
-                >=
-                Qvalue-sum(sum((pi1[k,i]+pi2[k,i])*xval[i,t-1] for i=1:Ni)*P_joint[n,k] for k=1:K)
-                );
-            end
-        end
+					# we are doing cut sharing so we will add the cut regardless
+					@constraint(m_fa[t-1,n],
+					ϴ_fa[t-1,n]
+					-sum(sum((pi1[k,i]+pi2[k,i])*x_fa[t-1,n][i] for i=1:Ni)*P_joint[n,k] for k=1:K)
+					>=
+					Qvalue-sum(sum((pi1[k,i]+pi2[k,i])*xval[i,t-1] for i=1:Ni)*P_joint[n,k] for k=1:K)
+					);
+				end
+			end
+		else
+			# This is the tricky part, need to consider the demand realization/landfall
+			# TBD
+		end
     end
     return cutviolFlag;
 end
@@ -429,31 +364,4 @@ function FOSDDP_eval_offline_FAD()
     return objs_fa, fa_bar, fa_low, fa_high, elapsed#, vals
 end
 
-
-###############################################################
-###############################################################
-
-#update RHS of flow-balance and demand constraint
-# we do not have this second layer now [REVISION]
-function MSP_fa_update_RHS_FAD(k_t,t,xval)
-    for i=1:Ni        
-        set_normalized_rhs(FB1Cons_fa[t,k_t][i], xval[i,t-1]);
-        set_normalized_rhs(FB2Cons_fa[t,k_t][i], xval[i,t-1]);
-    end 
-
-	if t == T
-		for j=1:Nj
-			if S[k_t][3] == Nc-1
-				# Hurricane has made landfall
-				if k_t ∉ absorbing_states
-					set_normalized_rhs(dCons_fa[t,k_t][j], SCEN[k_t][j]);
-				else
-					set_normalized_rhs(dCons_fa[t,k_t][j], 0);
-				end
-			else
-				# Hurricane has not made landfall yet
-			end
-		end
-	end
-end
 
