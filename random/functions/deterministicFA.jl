@@ -294,7 +294,7 @@ function FOSDDP_backward_pass_oneSP_iteration_FAD(lb,xval,thetaval,in_sample)
 					end
 				else
 					# has not made landfall yet -> random realization, go ahead and do random sampling just as we did for RH	
-					scen = zeros(nbscen,T);
+					scen = zeros(Int,nbscen,T);
 					for n=1:nbscen
 						for tt=1:Tmin
 							scen[n,tt] = in_sample[tt];
