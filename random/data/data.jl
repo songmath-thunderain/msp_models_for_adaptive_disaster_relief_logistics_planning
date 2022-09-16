@@ -24,6 +24,8 @@ Nb = size(P_location)[1]; #location MC number of states
 Nc = size(P_landfall)[1]; #landfall MC number of states
 T = copy(Nc); #define T_max
 
+Tmin = 2; # for now we just hard code it
+
 K = Na*Nb*Nc; #number of state in the joint MC
 P_joint = zeros(K,K); #initialize the joint probability distribution MC
 S = Array{Any,1}(undef,K); #list with elements [intensity,location]

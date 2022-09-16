@@ -78,7 +78,7 @@ function terminal_stage_single_period_problem_FAD()
     #Define the objective.
     @objective(m,
                Min,
-              sum(sum(ca[i,j,t]*y[i,j] for j=1:Nj) for i=1:Ni)
+              sum(sum(ca[i,j,Tmin]*y[i,j] for j=1:Nj) for i=1:Ni)
               +sum(z[j] for j=1:Nj)*p
               +sum(v[i] for i=1:Ni)*q
                );
@@ -120,7 +120,7 @@ function define_models_FAD()
     #Then we define the a model for every stage and Markovian state state 
     for k=1:K, t=1:Tmin
         # define use the function non_terminal_stage_single_period_problem
-        model[t,k], x[t,k], f[t,k], theta[t,k], FB1[t,k], FB2[t,k] = non_terminal_stage_single_period_problem(t);
+        model[t,k], x[t,k], f[t,k], theta[t,k], FB1[t,k], FB2[t,k] = non_terminal_stage_single_period_problem_FAD(t);
     end
 
 	model_final = Array{Any,1}(undef,K);
@@ -130,10 +130,10 @@ function define_models_FAD()
 
 	#To accomodate deterministic landfall model for a random landfall time, need to define a "final" stage problem
 	for k=1:K
-		model_final[k], FB_final[k], dCons_final[k], y_final[k] = final_stage_problem_FAD();
+		model_final[k], FB_final[k], dCons_final[k], y_final[k] = terminal_stage_single_period_problem_FAD();
 	end
 
-    return model, x, f, theta, y, z, FB1, FB2, dCons, model_final, FB_final, dCons_final, y_final
+    return model, x, f, theta, FB1, FB2, model_final, FB_final, dCons_final, y_final
 end
 
 ###############################################################
@@ -299,7 +299,7 @@ function FOSDDP_backward_pass_oneSP_iteration_FAD(lb,xval,thetaval,in_sample)
 						for tt=1:Tmin
 							scen[n,tt] = in_sample[tt];
 						end
-						for tt=Tmin+1:T
+						for tt=(Tmin+1):T
 							scen[n,tt] = MC_sample(scen[n,tt-1]);
 						end
 					end
@@ -405,7 +405,7 @@ function train_models_offline_FAD()
     while true
         iter+=1;
         #forward pass
-        xval, thetaval, lb, in_sample = FOSDDP_forward_pass_oneSP_iteration(lb,xval,thetaval);
+        xval, thetaval, lb, in_sample = FOSDDP_forward_pass_oneSP_iteration_FAD(lb,xval,thetaval);
         push!(LB,lb);
 		#println("LB = ", lb)
         #termination check
@@ -416,7 +416,7 @@ function train_models_offline_FAD()
         end
 
         #backward pass (if not terminated)
-        cutviolFlag = FOSDDP_backward_pass_oneSP_iteration(lb,xval,thetaval,in_sample);
+        cutviolFlag = FOSDDP_backward_pass_oneSP_iteration_FAD(lb,xval,thetaval,in_sample);
         if cutviolFlag == 1
             cutviol_iter = 0;
         else
@@ -447,7 +447,11 @@ function FOSDDP_eval_offline_FAD()
 
             if k_t ∉ absorbing_states
                 if t > 1
-                    MSP_fa_update_RHS(k_t,t,xval);
+					#update the RHS
+					for i=1:Ni
+						set_normalized_rhs(FB1Cons_fa[t,k_t][i], xval[i,t-1]);
+						set_normalized_rhs(FB2Cons_fa[t,k_t][i], xval[i,t-1]);
+					end
                 end
                 #solve the model
                 optimize!(m_fa[t,k_t]);
@@ -467,6 +471,7 @@ function FOSDDP_eval_offline_FAD()
 		k_t = OS_paths[s,Tmin+1];
 		if k_t in absorbing_states
 			continue
+		end
 		if S[k_t][3] == Nc-1
 			# made landfall -> deterministic realization
 			for i = 1:Ni
