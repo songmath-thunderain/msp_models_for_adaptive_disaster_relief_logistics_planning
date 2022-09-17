@@ -1,7 +1,7 @@
 
 #Fully adaptive with deterministic landfall 
 #Defne the model 
-m_fa, x_fa, f_fa, ϴ_fa, FB1Cons_fa, FB2Cons_fa, m_final, FB_final, dCons_final, y_final = define_models_FAD();
+m_fa, x_fa, f_fa, ϴ_fa, FB1Cons_fa, FB2Cons_fa, model_final, FB_final, dCons_final, y_final = define_models_FAD();
 
 
 #train the model

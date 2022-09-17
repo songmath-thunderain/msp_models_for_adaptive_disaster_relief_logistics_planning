@@ -251,37 +251,36 @@ function FOSDDP_backward_pass_oneSP_iteration_FAD(lb,xval,thetaval,in_sample)
 		else
 			# This is the tricky part, need to consider the demand realization/landfall
 			if sample_n in absorbing_states
-				Q[sample_n] = 0;
 				continue
 			else
 				if S[sample_n][3] == Nc-1
 					# made landfall -> deterministic realization
 					for i = 1:Ni
-						set_normalized_rhs(FB_final[i], xval[i,t-1]);
+						set_normalized_rhs(FB_final[sample_n][i], xval[i,t-1]);
 			   		end
 					for j = 1:Nj
-						set_normalized_rhs(dCons_final[j], SCEN[sample_n][j]);
+						set_normalized_rhs(dCons_final[sample_n][j], SCEN[sample_n][j]);
 					end
 					for i=1:Ni
 						for j=1:Nj
-							set_objective_coefficient(model_final, y_final[i,j], ca[i,j,Tmin]);
+							set_objective_coefficient(model_final[sample_n], y_final[sample_n][i,j], ca[i,j,Tmin]);
 						end
 					end
 					#solve the model
-					optimize!(model_final);
+					optimize!(model_final[sample_n]);
 
 					#check the status 
-					status = termination_status(model_final);
+					status = termination_status(model_final[sample_n]);
 					if status != MOI.OPTIMAL
 						println("Error in Backward Pass, final step");
 						println("Model in stage =", t, " and state = ", sample_n, ", in backward pass is ", status);
 						exit(0);
 					else
 						#collect values
-						lastQ = objective_value(model_final);
+						lastQ = objective_value(model_final[sample_n]);
 						lastpi = zeros(Ni); 
 						for i=1:Ni
-							lastpi[i] = shadow_price(FB_final[i]);
+							lastpi[i] = shadow_price(FB_final[sample_n][i]);
 						end
 						if (lastQ-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ
 							@constraint(m_fa[t-1,sample_n],
@@ -316,38 +315,38 @@ function FOSDDP_backward_pass_oneSP_iteration_FAD(lb,xval,thetaval,in_sample)
 						if τ === nothing     
 							absorbingT = findfirst(x -> S[x][1] == 1, scen[n,:]);
 							for i = 1:Ni
-								set_normalized_rhs(FB_final[i], xval[i,t-1]);
+								set_normalized_rhs(FB_final[sample_n][i], xval[i,t-1]);
 							end
 							for j = 1:Nj
-								set_normalized_rhs(dCons_final[j], 0);
+								set_normalized_rhs(dCons_final[sample_n][j], 0);
 							end
 							for i=1:Ni
 								for j=1:Nj
-									set_objective_coefficient(model_final, y_final[i,j], ca[i,j,absorbingT]);
+									set_objective_coefficient(model_final[sample_n], y_final[sample_n][i,j], ca[i,j,absorbingT]);
 								end
 							end
 							for tt=(Tmin+1):absorbingT
-								lastQ[n] += sum(ch[i,tt]*xvals[i,t-1] for i=1:Ni);
+								lastQ[n] += sum(ch[i,tt]*xval[i,t-1] for i=1:Ni);
 							end
 						else
 							for i = 1:Ni
-								set_normalized_rhs(FB_final[i], xval[i,t-1]);
+								set_normalized_rhs(FB_final[sample_n][i], xval[i,t-1]);
 							end
 							for j = 1:Nj
-								set_normalized_rhs(dCons_final[j], SCEN[scen[n,τ]][j]);
+								set_normalized_rhs(dCons_final[sample_n][j], SCEN[scen[n,τ]][j]);
 							end
 							for i=1:Ni
 								for j=1:Nj
-									set_objective_coefficient(model_final, y_final[i,j], ca[i,j,τ]);
+									set_objective_coefficient(model_final[sample_n], y_final[sample_n][i,j], ca[i,j,τ]);
 								end
 							end
 							for tt=(Tmin+1):τ 
-								lastQ[n] += sum(ch[i,tt]*xvals[i,t-1] for i=1:Ni);
+								lastQ[n] += sum(ch[i,tt]*xval[i,t-1] for i=1:Ni);
 							end
 						end
 						#solve the subproblem and store the dual information
-						optimize!(model_final) #solve the model
-						status_subproblem = termination_status(model_final); #check the status 
+						optimize!(model_final[sample_n]) #solve the model
+						status_subproblem = termination_status(model_final[sample_n]); #check the status 
 						pitemp = zeros(Ni);
 						if status_subproblem != MOI.OPTIMAL
 							println("Error in Backward Pass, final step");
@@ -355,10 +354,10 @@ function FOSDDP_backward_pass_oneSP_iteration_FAD(lb,xval,thetaval,in_sample)
 							exit(0);
 						else
 							#update the values
-							lastQ[n] += objective_value(model_final);
+							lastQ[n] += objective_value(model_final[sample_n]);
 							#need to include the inventory cost
 							for i=1:Ni
-								pitemp[i] = shadow_price(FB_final[i]);
+								pitemp[i] = shadow_price(FB_final[sample_n][i]);
 							end
 							lastpi[n] = pitemp;
 						end
@@ -368,9 +367,9 @@ function FOSDDP_backward_pass_oneSP_iteration_FAD(lb,xval,thetaval,in_sample)
 					if (lastQbar-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ
 						@constraint(m_fa[t-1,sample_n],
 								ϴ_fa[t-1,sample_n]
-								-sum(qprob[n]*sum(lastpi[n][i]*x_fa[t-1,sample_n][i] for i=1:Ni) for n=1:nscen)
+								-sum(qprob[n]*sum(lastpi[n][i]*x_fa[t-1,sample_n][i] for i=1:Ni) for n=1:nbscen)
 								>=
-								lastQbar-sum(qprob[n]*sum(lastpi[n][i]*xval[i,t-1] for i=1:Ni) for n=1:nscen)
+								lastQbar-sum(qprob[n]*sum(lastpi[n][i]*xval[i,t-1] for i=1:Ni) for n=1:nbscen)
 						);
 					end
 				end
@@ -475,27 +474,27 @@ function FOSDDP_eval_offline_FAD()
 		if S[k_t][3] == Nc-1
 			# made landfall -> deterministic realization
 			for i = 1:Ni
-				set_normalized_rhs(FB_final[i], xval[i,Tmin]);
+				set_normalized_rhs(FB_final[k_t][i], xval[i,Tmin]);
 			end
 			for j = 1:Nj
-				set_normalized_rhs(dCons_final[j], SCEN[k_t][j]);
+				set_normalized_rhs(dCons_final[k_t][j], SCEN[k_t][j]);
 			end
 			for i=1:Ni
 				for j=1:Nj
-					set_objective_coefficient(model_final, y_final[i,j], ca[i,j,Tmin]);
+					set_objective_coefficient(model_final[k_t], y_final[k_t][i,j], ca[i,j,Tmin]);
 				end
 			end
 			#solve the model
-			optimize!(model_final);
+			optimize!(model_final[k_t]);
 
 			#check the status 
-			status = termination_status(model_final);
+			status = termination_status(model_final[k_t]);
 			if status != MOI.OPTIMAL
 				println("Error in evaluation, final step");
 				exit(0);
 			else
 				#collect values
-				objs_fa[s,Tmin+1] = objective_value(model_final);
+				objs_fa[s,Tmin+1] = objective_value(model_final[k_t]);
 			end
 		else
 			absorbingT = -1;
@@ -508,45 +507,45 @@ function FOSDDP_eval_offline_FAD()
 				if τ === nothing     
 					absorbingT = findfirst(x -> S[x][1] == 1, OS_paths[s,:]);
 					for i = 1:Ni
-						set_normalized_rhs(FB_final[i], xval[i,Tmin]);
+						set_normalized_rhs(FB_final[k_t][i], xval[i,Tmin]);
 					end
 					for j = 1:Nj
-						set_normalized_rhs(dCons_final[j], 0);
+						set_normalized_rhs(dCons_final[k_t][j], 0);
 					end
 					for i=1:Ni
 						for j=1:Nj
-							set_objective_coefficient(model_final, y_final[i,j], ca[i,j,absorbingT]);
+							set_objective_coefficient(model_final[k_t], y_final[k_t][i,j], ca[i,j,absorbingT]);
 						end
 					end
 					for tt = (Tmin+1):absorbingT 
-						objs_fa[s,Tmin+1] += sum(ch[i,tt]*xvals[i,Tmin] for i=1:Ni);
+						objs_fa[s,Tmin+1] += sum(ch[i,tt]*xval[i,Tmin] for i=1:Ni);
 					end
 				else
 					for i = 1:Ni
-						set_normalized_rhs(FB_final[i], xval[i,Tmin]);
+						set_normalized_rhs(FB_final[k_t][i], xval[i,Tmin]);
 					end
 					for j = 1:Nj
-						set_normalized_rhs(dCons_final[j], SCEN[OS_paths[s,τ]][j]);
+						set_normalized_rhs(dCons_final[k_t][j], SCEN[OS_paths[s,τ]][j]);
 					end
 					for i=1:Ni
 						for j=1:Nj
-							set_objective_coefficient(model_final, y_final[i,j], ca[i,j,τ]);
+							set_objective_coefficient(model_final[k_t], y_final[k_t][i,j], ca[i,j,τ]);
 						end
 					end
 					for tt = (Tmin+1):τ 
-						objs_fa[s,Tmin+1] += sum(ch[i,tt]*xvals[i,Tmin] for i=1:Ni);
+						objs_fa[s,Tmin+1] += sum(ch[i,tt]*xval[i,Tmin] for i=1:Ni);
 					end
 				end
 				#solve the subproblem and store the dual information
-				optimize!(model_final) #solve the model
-				status_subproblem = termination_status(model_final); #check the status 
+				optimize!(model_final[k_t]) #solve the model
+				status_subproblem = termination_status(model_final[k_t]); #check the status 
 				if status_subproblem != MOI.OPTIMAL
 					println("Error in Backward Pass, final step");
 					println("Model in stage =", t, " and state = ", sample_n, ", in backward pass is ", status);
 					exit(0);
 				else
 					#update the values
-					objs_fa[s,Tmin+1] += objective_value(model_final);
+					objs_fa[s,Tmin+1] += objective_value(model_final[k_t]);
 				end
 			end
 		end
@@ -555,7 +554,7 @@ function FOSDDP_eval_offline_FAD()
     fa_std = std(sum(objs_fa[:,t] for t=1:(Tmin+1)));
     fa_low = fa_bar-1.96*fa_std/sqrt(nbOS);
     fa_high = fa_bar+1.96*fa_std/sqrt(nbOS);
-	println("FA...");
+	println("deterministic FA...");
     println("μ ± 1.96*σ/√NS = ", fa_bar, " ± ", [fa_low,fa_high]);
     elapsed = time() - start;
     return objs_fa, fa_bar, fa_low, fa_high, elapsed
