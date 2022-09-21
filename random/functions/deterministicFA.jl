@@ -123,15 +123,8 @@ function define_models_FAD()
         model[t,k], x[t,k], f[t,k], theta[t,k], FB1[t,k], FB2[t,k] = non_terminal_stage_single_period_problem_FAD(t);
     end
 
-	model_final = Array{Any,1}(undef,K);
-	y_final = Array{Any,1}(undef,K);
-    FB_final = Array{Any,1}(undef,K);
-	dCons_final = Array{Any,1}(undef,K);
-
 	#To accomodate deterministic landfall model for a random landfall time, need to define a "final" stage problem
-	for k=1:K
-		model_final[k], FB_final[k], dCons_final[k], y_final[k] = terminal_stage_single_period_problem_FAD();
-	end
+	model_final, FB_final, dCons_final, y_final = terminal_stage_single_period_problem_FAD();
 
     return model, x, f, theta, FB1, FB2, model_final, FB_final, dCons_final, y_final
 end
@@ -251,7 +244,6 @@ function FOSDDP_backward_pass_oneSP_iteration_FAD(lb,xval,thetaval,in_sample)
 		else
 			# This is the tricky part, need to consider the demand realization/landfall
 			if sample_n in absorbing_states
-				Q[sample_n] = 0;
 				continue
 			else
 				if S[sample_n][3] == Nc-1
@@ -268,7 +260,7 @@ function FOSDDP_backward_pass_oneSP_iteration_FAD(lb,xval,thetaval,in_sample)
 						end
 					end
 					#solve the model
-					optimize!(model_final);
+					optimize!(model_final[sample_n]);
 
 					#check the status 
 					status = termination_status(model_final);
@@ -327,7 +319,7 @@ function FOSDDP_backward_pass_oneSP_iteration_FAD(lb,xval,thetaval,in_sample)
 								end
 							end
 							for tt=(Tmin+1):absorbingT
-								lastQ[n] += sum(ch[i,tt]*xvals[i,t-1] for i=1:Ni);
+								lastQ[n] += sum(ch[i,tt]*xval[i,t-1] for i=1:Ni);
 							end
 						else
 							for i = 1:Ni
@@ -342,7 +334,7 @@ function FOSDDP_backward_pass_oneSP_iteration_FAD(lb,xval,thetaval,in_sample)
 								end
 							end
 							for tt=(Tmin+1):τ 
-								lastQ[n] += sum(ch[i,tt]*xvals[i,t-1] for i=1:Ni);
+								lastQ[n] += sum(ch[i,tt]*xval[i,t-1] for i=1:Ni);
 							end
 						end
 						#solve the subproblem and store the dual information
@@ -368,9 +360,9 @@ function FOSDDP_backward_pass_oneSP_iteration_FAD(lb,xval,thetaval,in_sample)
 					if (lastQbar-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ
 						@constraint(m_fa[t-1,sample_n],
 								ϴ_fa[t-1,sample_n]
-								-sum(qprob[n]*sum(lastpi[n][i]*x_fa[t-1,sample_n][i] for i=1:Ni) for n=1:nscen)
+								-sum(qprob[n]*sum(lastpi[n][i]*x_fa[t-1,sample_n][i] for i=1:Ni) for n=1:nbscen)
 								>=
-								lastQbar-sum(qprob[n]*sum(lastpi[n][i]*xval[i,t-1] for i=1:Ni) for n=1:nscen)
+								lastQbar-sum(qprob[n]*sum(lastpi[n][i]*xval[i,t-1] for i=1:Ni) for n=1:nbscen)
 						);
 					end
 				end
@@ -519,7 +511,7 @@ function FOSDDP_eval_offline_FAD()
 						end
 					end
 					for tt = (Tmin+1):absorbingT 
-						objs_fa[s,Tmin+1] += sum(ch[i,tt]*xvals[i,Tmin] for i=1:Ni);
+						objs_fa[s,Tmin+1] += sum(ch[i,tt]*xval[i,Tmin] for i=1:Ni);
 					end
 				else
 					for i = 1:Ni
@@ -534,7 +526,7 @@ function FOSDDP_eval_offline_FAD()
 						end
 					end
 					for tt = (Tmin+1):τ 
-						objs_fa[s,Tmin+1] += sum(ch[i,tt]*xvals[i,Tmin] for i=1:Ni);
+						objs_fa[s,Tmin+1] += sum(ch[i,tt]*xval[i,Tmin] for i=1:Ni);
 					end
 				end
 				#solve the subproblem and store the dual information
@@ -555,7 +547,7 @@ function FOSDDP_eval_offline_FAD()
     fa_std = std(sum(objs_fa[:,t] for t=1:(Tmin+1)));
     fa_low = fa_bar-1.96*fa_std/sqrt(nbOS);
     fa_high = fa_bar+1.96*fa_std/sqrt(nbOS);
-	println("FA...");
+	println("deterministic FA...");
     println("μ ± 1.96*σ/√NS = ", fa_bar, " ± ", [fa_low,fa_high]);
     elapsed = time() - start;
     return objs_fa, fa_bar, fa_low, fa_high, elapsed
