@@ -457,6 +457,7 @@ function FOSDDP_eval_offline_FAD()
                 else
                     #collect values
                     objs_fa[s,t] = objective_value(m_fa[t,k_t])- value(ϴ_fa[t,k_t]);
+					xval[:,t] = value.(x_fa[t,k_t]);
                 end
             end
         end     
@@ -543,6 +544,12 @@ function FOSDDP_eval_offline_FAD()
 			end
 		end
     end
+
+	for s=1:nbOS
+		print("s = ", s);
+		println(" ; ", objs_fa[s,:])
+	end
+
     fa_bar = mean(sum(objs_fa[:,t] for t=1:(Tmin+1)));
     fa_std = std(sum(objs_fa[:,t] for t=1:(Tmin+1)));
     fa_low = fa_bar-1.96*fa_std/sqrt(nbOS);
