@@ -11,6 +11,7 @@ function non_terminal_stage_single_period_problem_FAD(t)
             begin
                0 <= x[i=1:Ni] <= x_cap[i];
                0 <= f[i=1:N0,ii=1:Ni] <= f_cap[i,ii]; 
+			   0 <= v1[i=1:Ni]; # allow salvage in non_terminal stage, too -- absorbing due to dissipation
                0 <= ϴ;
             end
           );
@@ -22,6 +23,7 @@ function non_terminal_stage_single_period_problem_FAD(t)
                sum(sum(cb[i,ii,t]*f[i,ii] for ii=1:Ni) for i=1:N0)
               +sum(ch[i,t]*x[i] for i=1:Ni)
               +sum(f[N0,i] for i=1:Ni)*h[t]
+			  +sum(v1[i] for i=1:Ni)*q
               +ϴ
                );
 
@@ -39,6 +41,7 @@ function non_terminal_stage_single_period_problem_FAD(t)
                              x[i]
                             +sum(f[i,j] for j=1:Ni if j != i)
                             -sum(f[j,i] for j=1:N0 if j != i)
+							+v1[i]
                             == 0
                             );
         FB2[i] = @constraint(m, 
@@ -111,17 +114,20 @@ end
 # This function defines all the models for the MSP with deterministic landfall
 function define_models_FAD()
     # first we initialize the list where we store all the models
-    model = Array{Any,2}(undef,T,K); # list to store all the models for every stage and Markovian state
-    x = Array{Any,2}(undef,T,K); # list to store all the x variables for every stage and Markovian state
-    f = Array{Any,2}(undef,T,K); # ..............
-    theta = Array{Any,2}(undef,T,K); # ..............
-    FB1 = Array{Any,2}(undef,T,K);
-    FB2 = Array{Any,2}(undef,T,K);
+    model = Array{Any,2}(undef,Tmin,K); # list to store all the models for every stage and Markovian state
+    x = Array{Any,2}(undef,Tmin,K); # list to store all the x variables for every stage and Markovian state
+    f = Array{Any,2}(undef,Tmin,K); # ..............
+    theta = Array{Any,2}(undef,Tmin,K); # ..............
+    FB1 = Array{Any,2}(undef,Tmin,K);
+    FB2 = Array{Any,2}(undef,Tmin,K);
     
     #Then we define the a model for every stage and Markovian state state 
     for k=1:K, t=1:Tmin
         # define use the function non_terminal_stage_single_period_problem
         model[t,k], x[t,k], f[t,k], theta[t,k], FB1[t,k], FB2[t,k] = non_terminal_stage_single_period_problem_FAD(t);
+		if k in absorbing_states
+			@constraint(model[t,k],theta[t,k] == 0);
+		end
     end
 
 	#To accomodate deterministic landfall model for a random landfall time, need to define a "final" stage problem
@@ -143,10 +149,6 @@ function FOSDDP_forward_pass_oneSP_iteration_FAD(lb,xval,thetaval)
             #sample a new state k
             k_t = MC_sample(in_sample[t-1]);
             push!(in_sample,k_t);
-            # if k_t is absorbing no need to do any computation
-            if k_t in absorbing_states
-                continue; 
-            end
             #update the RHS
 			for i=1:Ni
 				set_normalized_rhs(FB1Cons_fa[t,k_t][i], xval[i,t-1]);
@@ -191,42 +193,37 @@ function FOSDDP_backward_pass_oneSP_iteration_FAD(lb,xval,thetaval,in_sample)
 			pi1 = zeros(K,Ni); 
 			pi2 = zeros(K,Ni);
 			for k=1:K
-				if k in absorbing_states
-					Q[k] = 0;
-					continue
-				else
-					# Here we just update xval
-					for i=1:Ni
-						set_normalized_rhs(FB1Cons_fa[t,k][i], xval[i,t-1]);
-      	 		 		set_normalized_rhs(FB2Cons_fa[t,k][i], xval[i,t-1]);
-					end
-					#solve the model
-					optimize!(m_fa[t,k]);
-
-					#check the status 
-					status = termination_status(m_fa[t,k]);
-					if status != MOI.OPTIMAL
-						println("Error in Backward Pass");
-						println("Model in stage =", t, " and state = ", k, ", in backward pass is ", status);
-						exit(0);
-					else
-						#collect values
-						Q[k] = objective_value(m_fa[t,k]);
-						for i=1:Ni
-							pi1[k,i] = shadow_price(FB1Cons_fa[t,k][i]);
-							pi2[k,i] = shadow_price(FB2Cons_fa[t,k][i]);
-						end
-					end                 
+				# Here we just update xval
+				for i=1:Ni
+					set_normalized_rhs(FB1Cons_fa[t,k][i], xval[i,t-1]);
+					set_normalized_rhs(FB2Cons_fa[t,k][i], xval[i,t-1]);
 				end
-			end
+				#solve the model
+				optimize!(m_fa[t,k]);
 
+				#check the status 
+				status = termination_status(m_fa[t,k]);
+				if status != MOI.OPTIMAL
+					println("Error in Backward Pass");
+					println("Model in stage =", t, " and state = ", k, ", in backward pass is ", status);
+					exit(0);
+				else
+					#collect values
+					Q[k] = objective_value(m_fa[t,k]);
+					for i=1:Ni
+						pi1[k,i] = shadow_price(FB1Cons_fa[t,k][i]);
+						pi2[k,i] = shadow_price(FB2Cons_fa[t,k][i]);
+					end
+				end                 
+			end
+			# Now generating cuts to improve the value function approx
 			for n = 1:K
-				if  n ∉ absorbing_states
+				if  n ∉ absorbing_states # if absorbed, no need to generate any optimality cuts -- no cost-to-go
 					if t-1 == 1 && n != k_init
 						continue
 					end
 					#what is the expected cost value 
-					Qvalue = sum(Q[k]*P_joint[n,k]  for k=1:K);
+					Qvalue = sum(Q[k]*P_joint[n,k] for k=1:K);
 
 					# check if cut is violated at the sample path encountered in the forward pass
 					if n == sample_n && (Qvalue-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ
@@ -245,7 +242,7 @@ function FOSDDP_backward_pass_oneSP_iteration_FAD(lb,xval,thetaval,in_sample)
 		else
 			# This is the tricky part, need to consider the demand realization/landfall
 			if sample_n in absorbing_states
-				continue
+				continue # no need to generate any optimality cuts -- no cost-to-go
 			else
 				if S[sample_n][3] == Nc-1
 					# made landfall -> deterministic realization
@@ -320,7 +317,7 @@ function FOSDDP_backward_pass_oneSP_iteration_FAD(lb,xval,thetaval,in_sample)
 								end
 							end
 							for tt=(Tmin+1):absorbingT
-								lastQ[n] += sum(ch[i,tt]*xval[i,t-1] for i=1:Ni);
+								lastQ[n] += sum(ch[i,tt]*xval[i,t-1] for i=1:Ni); # Just add up the inventory costs until absorption
 							end
 						else
 							for i = 1:Ni
@@ -335,7 +332,7 @@ function FOSDDP_backward_pass_oneSP_iteration_FAD(lb,xval,thetaval,in_sample)
 								end
 							end
 							for tt=(Tmin+1):τ 
-								lastQ[n] += sum(ch[i,tt]*xval[i,t-1] for i=1:Ni);
+								lastQ[n] += sum(ch[i,tt]*xval[i,t-1] for i=1:Ni); # Just add up the inventory costs until landfall
 							end
 						end
 						#solve the subproblem and store the dual information
@@ -357,7 +354,6 @@ function FOSDDP_backward_pass_oneSP_iteration_FAD(lb,xval,thetaval,in_sample)
 						end
 					end
 					lastQbar = sum(lastQ[n]*qprob[n] for n=1:nbscen);
-					
 					if (lastQbar-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ
 						@constraint(m_fa[t-1,sample_n],
 								ϴ_fa[t-1,sample_n]
@@ -430,44 +426,41 @@ function FOSDDP_eval_offline_FAD()
 	#OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS
     objs_fa = zeros(nbOS,Tmin+1);
     
+	println("testing....");
+
     for s=1:nbOS
+		println("s = ", s);
         xval = zeros(Ni,Tmin);
         for t=1:Tmin
             #the state is known in the first stage; if not sample a new state k 
             k_t = OS_paths[s,t];
             # we do not have this second layer now [REVISION]
 			#m = OS_M[s]; # realization from OS path corresponding to layer 2
+			if t > 1
+				#update the RHS
+				for i=1:Ni
+					set_normalized_rhs(FB1Cons_fa[t,k_t][i], xval[i,t-1]);
+					set_normalized_rhs(FB2Cons_fa[t,k_t][i], xval[i,t-1]);
+				end
+			end
+			#solve the model
+			optimize!(m_fa[t,k_t]);
 
-            if k_t ∉ absorbing_states
-                if t > 1
-					#update the RHS
-					for i=1:Ni
-						set_normalized_rhs(FB1Cons_fa[t,k_t][i], xval[i,t-1]);
-						set_normalized_rhs(FB2Cons_fa[t,k_t][i], xval[i,t-1]);
-					end
-                end
-                #solve the model
-                optimize!(m_fa[t,k_t]);
-
-                #check the status 
-                status = termination_status(m_fa[t,k_t]);
-                if status != MOI.OPTIMAL
-                    println(" in evaluation");
-                    println("Model in stage =", t, " and state = ", k_t, ", in forward pass is ", status);
-                    exit(0);
-                else
-                    #collect values
-                    objs_fa[s,t] = objective_value(m_fa[t,k_t])- value(ϴ_fa[t,k_t]);
-					xval[:,t] = value.(x_fa[t,k_t]);
-                end
-            end
+			#check the status 
+			status = termination_status(m_fa[t,k_t]);
+			if status != MOI.OPTIMAL
+				println(" in evaluation");
+				println("Model in stage =", t, " and state = ", k_t, ", in forward pass is ", status);
+				exit(0);
+			else
+				#collect values
+				objs_fa[s,t] = objective_value(m_fa[t,k_t])- value(ϴ_fa[t,k_t]);
+				xval[:,t] = value.(x_fa[t,k_t]);
+			end
         end     
 		k_t = OS_paths[s,Tmin+1];
-		if k_t in absorbing_states
-			continue
-		end
-		if S[k_t][3] == Nc-1
-			# made landfall -> deterministic realization
+		if S[k_t][3] == Nc-1 || k_t in absorbing_states
+			# made landfall or being absorbed -> deterministic realization
 			for i = 1:Ni
 				set_normalized_rhs(FB_final[i], xval[i,Tmin]);
 			end
@@ -493,14 +486,17 @@ function FOSDDP_eval_offline_FAD()
 			end
 		else
 			absorbingT = -1;
-			τ = nothing
+			#identify the period when the hurricane makes landfall 
+			τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, OS_paths[s,:]);
+			if τ === nothing     
+				absorbingT = findfirst(x -> S[x][1] == 1, OS_paths[s,:]);
+				println("absorbingT = ", absorbingT);
+			else
+				println("τ = ", τ);
+			end
 			for n=1:nbscen
-				#identify the period when the hurricane makes landfall 
-				τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, OS_paths[s,:]);
-				
 				#update the RHS
 				if τ === nothing     
-					absorbingT = findfirst(x -> S[x][1] == 1, OS_paths[s,:]);
 					for i = 1:Ni
 						set_normalized_rhs(FB_final[i], xval[i,Tmin]);
 					end
@@ -544,12 +540,8 @@ function FOSDDP_eval_offline_FAD()
 				end
 			end
 		end
+		println(" ; ", objs_fa[s,:]);
     end
-
-	for s=1:nbOS
-		print("s = ", s);
-		println(" ; ", objs_fa[s,:])
-	end
 
     fa_bar = mean(sum(objs_fa[:,t] for t=1:(Tmin+1)));
     fa_std = std(sum(objs_fa[:,t] for t=1:(Tmin+1)));
