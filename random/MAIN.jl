@@ -42,7 +42,7 @@ const GRB_ENV = Gurobi.Env();
 #include("./policy/hurricane_CV.jl");
 
 #Fully adaptive model
-include("./policy/hurricane_FA.jl");
+#include("./policy/hurricane_FA.jl");
  
 #Rolling-horizon 2SSP
 #include("./policy/hurricane_rolling_twostage.jl")

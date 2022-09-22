@@ -47,10 +47,11 @@ function non_terminal_stage_single_period_problem_FAD(t)
                             );
     end
 
-	if t == Tmin	
+	# We are unsure if this constraint should be imposed....QUESTION
+	#if t == Tmin	
 		# this constraint ensures that items cannot be shipped directly from the MDC to SP
-  		@constraint(m, sum(f[N0,i] for i=1:Ni) == 0);
-	end
+	#	@constraint(m, sum(f[N0,i] for i=1:Ni) == 0);
+	#end
 
     return m, x, f, ϴ, FB1, FB2
 end

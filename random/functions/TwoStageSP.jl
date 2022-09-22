@@ -134,7 +134,7 @@ function initialize(s,t_roll)
                 scen[n,t] = allscen[s,t];
             end
             
-            for t=t_roll+1:T
+            for t=(t_roll+1):T
                 scen[n,t] = MC_sample(scen[n,t-1]);
             end
         end

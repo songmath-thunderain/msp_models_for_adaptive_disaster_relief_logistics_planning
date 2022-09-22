@@ -37,22 +37,16 @@ df = CSV.read(fname,DataFrame);
 results_fa = Matrix(df);
 
 results_fa[inst,1] = LB[end]
-println("error storing LB")
 
 results_fa[inst,2] = fa_bar
-println("error storing fa_bar")
 
 results_fa[inst,3] = fa_bar-fa_low
-println("error storing CI")
 
 results_fa[inst,4] = train_time
-println("error storing train_time")
 
 results_fa[inst,5] = elapsed_fa
-println("error storing elapsed_fa")
 
 results_fa[inst,6] = iter
-println("error storing iter")
 
 updf = DataFrame(results_fa, :auto);
 CSV.write(fname,updf)
