@@ -426,10 +426,7 @@ function FOSDDP_eval_offline_FAD()
 	#OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS
     objs_fa = zeros(nbOS,Tmin+1);
     
-	println("testing....");
-
     for s=1:nbOS
-		println("s = ", s);
         xval = zeros(Ni,Tmin);
         for t=1:Tmin
             #the state is known in the first stage; if not sample a new state k 
@@ -490,57 +487,48 @@ function FOSDDP_eval_offline_FAD()
 			τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, OS_paths[s,:]);
 			if τ === nothing     
 				absorbingT = findfirst(x -> S[x][1] == 1, OS_paths[s,:]);
-				println("absorbingT = ", absorbingT);
+				for i = 1:Ni
+						set_normalized_rhs(FB_final[i], xval[i,Tmin]);
+				end
+				for j = 1:Nj
+					set_normalized_rhs(dCons_final[j], 0);
+				end
+				for i=1:Ni
+					for j=1:Nj
+						set_objective_coefficient(model_final, y_final[i,j], ca[i,j,absorbingT]);
+					end
+				end
+				for tt = (Tmin+1):absorbingT 
+					objs_fa[s,Tmin+1] += sum(ch[i,tt]*xval[i,Tmin] for i=1:Ni);
+				end
 			else
-				println("τ = ", τ);
+				for i = 1:Ni
+					set_normalized_rhs(FB_final[i], xval[i,Tmin]);
+				end
+				for j = 1:Nj
+					set_normalized_rhs(dCons_final[j], SCEN[OS_paths[s,τ]][j]);
+				end
+				for i=1:Ni
+					for j=1:Nj
+						set_objective_coefficient(model_final, y_final[i,j], ca[i,j,τ]);
+					end
+				end
+				for tt = (Tmin+1):τ 
+					objs_fa[s,Tmin+1] += sum(ch[i,tt]*xval[i,Tmin] for i=1:Ni);
+				end
 			end
-			for n=1:nbscen
-				#update the RHS
-				if τ === nothing     
-					for i = 1:Ni
-						set_normalized_rhs(FB_final[i], xval[i,Tmin]);
-					end
-					for j = 1:Nj
-						set_normalized_rhs(dCons_final[j], 0);
-					end
-					for i=1:Ni
-						for j=1:Nj
-							set_objective_coefficient(model_final, y_final[i,j], ca[i,j,absorbingT]);
-						end
-					end
-					for tt = (Tmin+1):absorbingT 
-						objs_fa[s,Tmin+1] += sum(ch[i,tt]*xval[i,Tmin] for i=1:Ni);
-					end
-				else
-					for i = 1:Ni
-						set_normalized_rhs(FB_final[i], xval[i,Tmin]);
-					end
-					for j = 1:Nj
-						set_normalized_rhs(dCons_final[j], SCEN[OS_paths[s,τ]][j]);
-					end
-					for i=1:Ni
-						for j=1:Nj
-							set_objective_coefficient(model_final, y_final[i,j], ca[i,j,τ]);
-						end
-					end
-					for tt = (Tmin+1):τ 
-						objs_fa[s,Tmin+1] += sum(ch[i,tt]*xval[i,Tmin] for i=1:Ni);
-					end
-				end
-				#solve the subproblem and store the dual information
-				optimize!(model_final) #solve the model
-				status_subproblem = termination_status(model_final); #check the status 
-				if status_subproblem != MOI.OPTIMAL
-					println("Error in Backward Pass, final step");
-					println("Model in stage =", t, " and state = ", sample_n, ", in backward pass is ", status);
-					exit(0);
-				else
-					#update the values
-					objs_fa[s,Tmin+1] += objective_value(model_final);
-				end
+			#solve the subproblem and store the dual information
+			optimize!(model_final) #solve the model
+			status_subproblem = termination_status(model_final); #check the status 
+			if status_subproblem != MOI.OPTIMAL
+				println("Error in Backward Pass, final step");
+				println("Model in stage =", t, " and state = ", sample_n, ", in backward pass is ", status);
+				exit(0);
+			else
+				#update the values
+				objs_fa[s,Tmin+1] += objective_value(model_final);
 			end
 		end
-		println(" ; ", objs_fa[s,:]);
     end
 
     fa_bar = mean(sum(objs_fa[:,t] for t=1:(Tmin+1)));
