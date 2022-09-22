@@ -300,10 +300,6 @@ function FOSDDP_eval_offline()
             end
         end        
     end
-	for s=1:nbOS
-		print("s = ", s);
-		println(" ; ", objs_fa[s,:])
-	end
     fa_bar = mean(sum(objs_fa[:,t] for t=1:T));
     fa_std = std(sum(objs_fa[:,t] for t=1:T));
     fa_low = fa_bar-1.96*fa_std/sqrt(nbOS);

@@ -488,7 +488,7 @@ function FOSDDP_eval_offline_FAD()
 			if τ === nothing     
 				absorbingT = findfirst(x -> S[x][1] == 1, OS_paths[s,:]);
 				for i = 1:Ni
-						set_normalized_rhs(FB_final[i], xval[i,Tmin]);
+					set_normalized_rhs(FB_final[i], xval[i,Tmin]);
 				end
 				for j = 1:Nj
 					set_normalized_rhs(dCons_final[j], 0);

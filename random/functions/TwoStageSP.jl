@@ -166,8 +166,6 @@ function RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y,xCons,dCons,rCon
             break;
         end
     end
-	println("LB = ", LB);
-	println("UB = ", UB);
     return LB, UB, xval, fval, θval
 end
 
