@@ -383,7 +383,7 @@ function terminal_stage_cut(model,x,f,theta,y,z,FB1,FB2,dCons,T,xval,thetaval,in
         Qvalue = sum(Q[k]*P_joint[n,k] for k=1:K);    
         
         # check if cut is violated at the sample path encountered in the forward pass
-        if n == sample_n && (Qvalue-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ
+        if n == sample_n && (Qvalue-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ && abs(Qvalue-thetaval[t-1]) > ϵ
             returnval = 1;
         end
         
@@ -436,7 +436,7 @@ function non_terminal_stage_cut(model,x,f,theta,FB1,FB2,T,xval,thetaval,in_sampl
         Qvalue = sum(Q[k]*P_joint[n,k]  for k=1:K);
 
         # check if cut is violated at the sample path encountered in the forward pass
-        if n == sample_n && (Qvalue-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ
+        if n == sample_n && (Qvalue-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ && abs(Qvalue-thetaval[t-1]) > ϵ 
             returnval = 1;
         end
         
@@ -910,7 +910,7 @@ function rolling_twostage_eval_online(T,nbOS,x0)
     fval_all1 = value.(f1)[:,:,1];
     for s=1:nbOS
         # starting the rolling horizon procedure one for each sample path
-		#println("Start sample path #", s); 
+		println("Start sample path #", s); 
         
         cx = imm_amount1;
         costs[s,1] = cx;
@@ -929,6 +929,7 @@ function rolling_twostage_eval_online(T,nbOS,x0)
             k_t = OS_paths[s,t];
             # create a two-stage SP model for each stage t
             m_roll, x_roll, theta_roll, x_prev, f_roll = rolling_twostage_first_model(t);
+			
             #update the RHS
             for i=1:Ni
                 fix(x_prev[i], xvals[i,t-1]; force=true);
@@ -1117,9 +1118,10 @@ function terminal_stage_cut_two_stage(model,x,theta,model_sub,FB1,FB2,dCons,t,T,
 		end                    
     end
     Qvalue = sum(Q[k]*P_terminals[t][init_k,k] for k=1:K);    
-
+	#print("Qvalue = ", Qvalue);
+	#println(", thetaval = ", thetaval);
     # check if cut is violated at the sample path encountered in the forward pass
-    if (Qvalue-thetaval)/max(1e-10,abs(thetaval)) > ϵ
+    if (Qvalue-thetaval)/max(1e-10,abs(thetaval)) > ϵ && abs(Qvalue-thetaval) > ϵ 
         #add a cut if any needed
         @constraint(model,
         theta
