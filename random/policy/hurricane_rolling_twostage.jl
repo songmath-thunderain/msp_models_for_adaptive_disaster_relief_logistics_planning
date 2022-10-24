@@ -27,6 +27,7 @@ for s=1:nbOS
 end
 
 for s=1:nbOS
+	println("Started evaluating sample path = ", s);
 	τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, OS_paths[s,1:T]);
 	x_init = deepcopy(xval_1stRoll[:,1]);
 	if τ === nothing
@@ -109,6 +110,7 @@ for s=1:nbOS
 			end
 		end
 	end
+	println("Finished evaluating sample path = ", s);
 end
 
 elapsed_RH2SSP = time() - start;

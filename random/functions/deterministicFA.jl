@@ -226,7 +226,7 @@ function FOSDDP_backward_pass_oneSP_iteration_FAD(lb,xval,thetaval,in_sample)
 					Qvalue = sum(Q[k]*P_joint[n,k] for k=1:K);
 
 					# check if cut is violated at the sample path encountered in the forward pass
-					if n == sample_n && (Qvalue-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ
+					if n == sample_n && (Qvalue-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ && abs(Qvalue-thetaval[t-1]) > ϵ
 						cutviolFlag = 1;
 					end
 
@@ -273,7 +273,7 @@ function FOSDDP_backward_pass_oneSP_iteration_FAD(lb,xval,thetaval,in_sample)
 						for i=1:Ni
 							lastpi[i] = shadow_price(FB_final[i]);
 						end
-						if (lastQ-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ
+						if (lastQ-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ && abs(lastQ-thetaval[t-1]) > ϵ
 							@constraint(m_fa[t-1,sample_n],
 								ϴ_fa[t-1,sample_n]
 								-sum(lastpi[i]*x_fa[t-1,sample_n][i] for i=1:Ni)
@@ -354,7 +354,7 @@ function FOSDDP_backward_pass_oneSP_iteration_FAD(lb,xval,thetaval,in_sample)
 						end
 					end
 					lastQbar = sum(lastQ[n]*qprob[n] for n=1:nbscen);
-					if (lastQbar-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ
+					if (lastQbar-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ && abs(lastQbar-thetaval[t-1]) > ϵ
 						@constraint(m_fa[t-1,sample_n],
 								ϴ_fa[t-1,sample_n]
 								-sum(qprob[n]*sum(lastpi[n][i]*x_fa[t-1,sample_n][i] for i=1:Ni) for n=1:nbscen)
@@ -427,6 +427,7 @@ function FOSDDP_eval_offline_FAD()
     objs_fa = zeros(nbOS,Tmin+1);
     
     for s=1:nbOS
+		println("Started evaluating sample path = ",s);
         xval = zeros(Ni,Tmin);
         for t=1:Tmin
             #the state is known in the first stage; if not sample a new state k 
@@ -529,6 +530,7 @@ function FOSDDP_eval_offline_FAD()
 				objs_fa[s,Tmin+1] += objective_value(model_final);
 			end
 		end
+		println("Finished evaluating sample path = ",s);
     end
 
     fa_bar = mean(sum(objs_fa[:,t] for t=1:(Tmin+1)));

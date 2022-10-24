@@ -186,7 +186,7 @@ function FOSDDP_backward_pass_oneSP_iteration(lb,xval,thetaval,in_sample)
                 Qvalue = sum(Q[k]*P_joint[n,k]  for k=1:K);
 
                 # check if cut is violated at the sample path encountered in the forward pass
-                if n == sample_n && (Qvalue-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ
+                if n == sample_n && (Qvalue-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ && abs(Qvalue-thetaval[t-1]) > ϵ
                     cutviolFlag = 1;
                 end
 

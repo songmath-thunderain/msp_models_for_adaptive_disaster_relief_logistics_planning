@@ -152,8 +152,10 @@ function RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y,xCons,dCons,rCon
 # Assumption coming into this function: t_roll must be before the landfall stage of sample path s in the out-of-sample test
     nbstages1 = T-t_roll+1;
     LB, UB, xval, fval, θval, scen, qprob = initialize(s,t_roll);
-    while (UB-LB)*1.0/max(1e-10,abs(LB)) > ϵ 
+	solveIter = 0;
+    while (UB-LB)*1.0/max(1e-10,abs(LB)) > ϵ && abs(UB-LB) > ϵ && solveIter < 100 # WARNING: Temporary fix here!
         # solve first stage
+		solveIter = solveIter + 1;
         LB, xval, fval, θval = solve_first_stage(LB,xval,fval,θval,master,x,f,θ);
         if t_roll < T
             # solve second stage 
@@ -227,8 +229,7 @@ function solve_second_stage(t_roll,xval,fval,θval,scen,qprob,master,subproblem,
 		end
     end
 	Qbar = sum(Q[n]*qprob[n] for n=1:nbscen);
-	
-	if (Qbar-θval)/max(1e-10,abs(Qbar)) > ϵ
+	if (Qbar-θval)/max(1e-10,abs(Qbar)) > ϵ && abs(Qbar-θval) > ϵ
 		tt = -1;
 		if τ === nothing
 			tt = absorbingT;
