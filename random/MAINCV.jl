@@ -43,12 +43,13 @@ const GRB_ENV = Gurobi.Env();
 
 #Fully adaptive model
 #include("./policy/hurricane_FA.jl");
+
+#Static 2SSP
+include("./policy/hurricane_static_twostage.jl");
  
 #Rolling-horizon 2SSP
 include("./policy/hurricane_rolling_twostage.jl")
 
-#Static 2SSP
-#include("./policy/hurricane_static_twostage.jl");
 
 #Deterministic FA 
 #include("./policy/hurricane_deterministicFA.jl");

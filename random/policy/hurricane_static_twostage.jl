@@ -10,7 +10,7 @@ start=time();
 LB_st2SSP, UB_st2SSP, xval_st2SSP, fval_st2SSP, θval_st2SSP = RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
 elapsed = time() - start;
 
-f1cost = LB_st2SSP-θval_st2SSP;
+f1cost = LB_st2SSP-sum(θval_st2SSP[n]*1.0/nbscen for n = 1:nbscen);
 
 println("training UB = ", UB_st2SSP);
 
