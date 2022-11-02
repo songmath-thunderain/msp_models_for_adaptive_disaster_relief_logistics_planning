@@ -8,7 +8,7 @@ command = []
 
 instanceAttr1 = [" 3 ", " 6 ", " 9 "];
 instanceAttr2 = [" 10 ", " 20 ", " 30 "];
-instanceAttr3 = [" 0.005 ", " 0.05 ", " 0.5 ", " 5 "];
+instanceAttr3 = [" 0.005 "];
 
 for k1 in range(len(instanceAttr3)):
     counter = 10*k1;
