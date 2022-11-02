@@ -15,12 +15,6 @@ OS_paths = Matrix(CSV.read("./data/OOS.csv",DataFrame)); #read the out-of-sample
 
 objs_RH2SSP = zeros(nbOS,T);
 
-println("first roll!");
-for t=1:T
-	print("xval[", t);
-	println("] = ", xval_1stRoll[:,t]);
-end
-
 for s=1:nbOS
 	for i = 1:N0
 		for ii = 1:Ni
@@ -38,19 +32,19 @@ for s=1:nbOS
 	if τ === nothing
 		absorbingT = findfirst(x -> S[x][1] == 1, OS_paths[s,1:T]);
 		# This rolling procedure will go all the way until the hurricane gets into the absorbing state of dissipating 
-		println("absorbingT = ", absorbingT);
 		for t_roll=2:(absorbingT-1)
 			# roll up to t = absorbingT-1
 			#define the the model.
 			master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_roll,x_init);
 			#solve the model.
 			LB_Roll, UB_Roll, xval_Roll, fval_Roll, θval_Roll = RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
+#=
 			println("roll #", t_roll);
 			for t=1:(T-t_roll+1)
 				print("xval[", t);
 				println("] = ", xval_Roll[:,t]);
 			end
-			println("θval_Roll = ", θval_Roll);
+=#
 			#implement xₜ, pay cost, and pass xₜ to new t+1.
 			x_init = deepcopy(xval_Roll[:,1]);
 			objs_RH2SSP[s,t_roll] = 0;
@@ -67,26 +61,34 @@ for s=1:nbOS
 				t_roll = t_roll + 1;
 				# Just salvage all the x_init
 				objs_RH2SSP[s,t_roll] = 0;
+				for i = 1:N0
+					for ii = 1:Ni
+						objs_RH2SSP[s,t_roll] += cb[i,ii,t_roll]*fval_Roll[i,ii,2];
+					end
+				end
+				for i = 1:Ni
+					objs_RH2SSP[s,t_roll] += (ch[i,t_roll]*xval_Roll[i,2] + h[t_roll]*fval_Roll[N0,i,2]);
+				end
 				for i=1:Ni
-					objs_RH2SSP[s,t_roll] += x_init[i]*q;
+					objs_RH2SSP[s,t_roll] += xval_Roll[i,2]*q;
 				end
 			end
 		end
 	else
 		# This rolling procedure will stop at t = τ
-		println("landfall time = ", τ);
 		for t_roll=2:(τ-1)
 			# roll up to t = τ-1
 			#define the the model.
 			master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_roll,x_init);
 			#solve the model.
 			LB_Roll, UB_Roll, xval_Roll, fval_Roll, θval_Roll = RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
+#=
 			println("roll #", t_roll);
 			for t=1:(T-t_roll+1)
 				print("xval[", t);
 				println("] = ", xval_Roll[:,t]);
 			end
-			println("θval_Roll = ", θval_Roll);
+=#
 			#implement xₜ, pay cost, and pass xₜ to new t+1.
 			x_init = deepcopy(xval_Roll[:,1]);
 			# note that we should only store the cost incurred at the current period: the first-stage cost includes other periods!
@@ -103,8 +105,17 @@ for s=1:nbOS
 			if t_roll == (τ-1)
 				# Now we get the realization, do the recourse now and finish the rolling procedure
 				t_roll = t_roll + 1;
+				objs_RH2SSP[s,t_roll] = 0;
+				for i = 1:N0
+					for ii = 1:Ni
+						objs_RH2SSP[s,t_roll] += cb[i,ii,t_roll]*fval_Roll[i,ii,2];
+					end
+				end
+				for i = 1:Ni
+					objs_RH2SSP[s,t_roll] += (ch[i,t_roll]*xval_Roll[i,2] + h[t_roll]*fval_Roll[N0,i,2]);
+				end
 				for i=1:Ni
-					set_normalized_rhs(xCons[i],xval_Roll[i,1]); # xval_Roll[i,1] gets carried over to period τ
+					set_normalized_rhs(xCons[i],xval_Roll[i,2]); # xval_Roll[i,2] gets carried over to period τ 
 				end
 				k_t = OS_paths[s,t_roll];
 				for j=1:Nj
@@ -124,8 +135,8 @@ for s=1:nbOS
 					end
 				end
 				optimize!(subproblem); 
-      			objs_RH2SSP[s,t_roll] = objective_value(subproblem);
-				println("last roll value = ", objs_RH2SSP[s,t_roll]);
+      			objs_RH2SSP[s,t_roll] += objective_value(subproblem);
+				#println("last roll value = ", objs_RH2SSP[s,t_roll]);
 			end
 		end
 	end
