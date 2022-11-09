@@ -31,10 +31,11 @@ for s=1:nbOS
     for t=1:T
         #the state is known in the first stage; if not sample a new state k 
         k_t = OS_paths[s,t];
-        m = OS_M[s]; # realization from OS path corresponding to layer 2
+		# we do not have this second layer now [REVISION]
+		#m = OS_M[s]; # realization from OS path corresponding to layer 2
         if k_t ∉ absorbing_states
             if t > 1
-                MSP_fa_update_RHS(k_t,t,xval,m);
+                MSP_fa_update_RHS(k_t,t,xval);
             end
             #solve the model
             optimize!(m_fa[t,k_t])
