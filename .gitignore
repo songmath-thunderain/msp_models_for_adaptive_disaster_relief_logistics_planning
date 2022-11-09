@@ -2,3 +2,7 @@
 *.csv
 *.swp
 *.csv
+*.out
+*.csv
+*.csv
+deterministic/.DS_Store
