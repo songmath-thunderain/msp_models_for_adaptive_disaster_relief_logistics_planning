@@ -9,8 +9,8 @@ master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_
 
 #solve the model.
 LB_1stRoll, UB_1stRoll, xval_1stRoll, fval_1stRoll, θval_1stRoll = RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
-
-OS_paths = Matrix(CSV.read("./data/OOS.csv",DataFrame)); #read the out-of-sample file
+osfname = "./data/OOS"*string(k_init)*".csv";
+OS_paths = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
 #OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS [REVISION: no need anymore]
 
 objs_RH2SSP = zeros(nbOS,T);

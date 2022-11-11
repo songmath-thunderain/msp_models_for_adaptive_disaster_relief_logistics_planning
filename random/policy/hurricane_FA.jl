@@ -18,20 +18,6 @@ println("number of iterations = ", iter)
 #evaluate the model 
 objs_fa, fa_bar, fa_low, fa_high, elapsed_fa = FOSDDP_eval_offline();
 
-if inst == 12
-    sleep(60)
-elseif inst == 13
-    sleep(60*2)
-elseif inst == 16
-    sleep(60*3)
-elseif inst == 20
-    sleep(60*4)
-elseif inst == 23
-    sleep(60*5)
-elseif inst == 24
-    sleep(60*6)
-end
-
 fname = "./output/benchmark/FAresults.csv"
 df = CSV.read(fname,DataFrame);
 results_fa = Matrix(df);

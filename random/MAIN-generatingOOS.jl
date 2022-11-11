@@ -35,26 +35,7 @@ println("Nb = ", Nb);
 println("Nc = ", Nc);
 
 
-#create gurobi environment
-const GRB_ENV = Gurobi.Env();
-
-#Clairvoyance solution 
-include("./policy/hurricane_CV.jl");
-
-#Fully adaptive model
-include("./policy/hurricane_FA.jl");
- 
-#Rolling-horizon 2SSP
-include("./policy/hurricane_rolling_twostage.jl")
-
-#Static 2SSP
-include("./policy/hurricane_static_twostage.jl");
-
-#Deterministic FA 
-include("./policy/hurricane_deterministicFA.jl");
-
-#sensitivity analysis
-#include("SENS.jl");
+create_OSpaths(k_init);
 
 
 #tg_sendtext("Julia: $instname is DONE!"); #comment this line if don't have bots setup

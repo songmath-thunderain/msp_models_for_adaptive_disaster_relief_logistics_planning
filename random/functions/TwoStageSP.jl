@@ -122,8 +122,8 @@ function initialize(s,t_roll)
     xval = zeros(Ni,nbstages1);
 	fval = zeros(N0,Ni,nbstages1);
 	# Do sampling to create (in-sample) scenarios 
-    allscen = Matrix(CSV.read("./data/OOS.csv",DataFrame));
-
+	osfname = "./data/OOS"*string(k_init)*"_main.csv";
+    allscen = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
 	# In the first roll, always choose the nbscen scenarios out of the total of 10000 OOS once every 10000/nbscen 
     scen = allscen[collect(1:convert(Int,10000/nbscen):10000),1:T]; # note that this is just an initialization for scen
 

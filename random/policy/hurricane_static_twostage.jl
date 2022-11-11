@@ -17,7 +17,9 @@ println("training UB = ", UB_st2SSP);
 #eval the model.
 start=time();
 
-OS_paths = Matrix(CSV.read("./data/OOS.csv",DataFrame)); #read the out-of-sample file
+osfname = "./data/OOS"*string(k_init)*".csv";
+OS_paths = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
+
 #OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS [REVISION: no need any more]
     
 objs_st2SSP = fill(f1cost,nbOS);

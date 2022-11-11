@@ -421,7 +421,8 @@ end
 #evaluate model
 function FOSDDP_eval_offline_FAD()
     start=time();
-    OS_paths = Matrix(CSV.read("./data/OOS.csv",DataFrame)); #read the out-of-sample file
+	osfname = "./data/OOS"*string(k_init)*".csv";
+    OS_paths = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
 	# we do not have this second layer now [REVISION]
 	#OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS
     objs_fa = zeros(nbOS,Tmin+1);

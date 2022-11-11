@@ -6,8 +6,6 @@ m_cv, x_cv, f_cv, y_cv, z_cv, v_cv, dCons_cv = deterministic_model();
 #evaluate the clairvoyant solution
 objs_cv, cv_bar, cv_low, cv_high, elapsed_cv = clairvoyant_eval();
 
-sleep(30*inst)
-
 fname = "./output/benchmark/CVresults.csv"
 df = CSV.read(fname,DataFrame);
 results_cv = Matrix(df);

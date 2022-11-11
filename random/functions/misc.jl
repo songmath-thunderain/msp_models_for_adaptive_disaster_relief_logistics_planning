@@ -36,7 +36,8 @@ end
 
 # function to create an out-of-sample for given initial state k_init
 function create_OSpaths(k_init)
-    OS_paths = Matrix(CSV.read("./data/OOS.csv",DataFrame)); #read the out-of-sample file
+	osfname = "./data/OOS"*string(k_init)*"_main.csv";
+    OS_paths = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
     rr = size(OS_paths)[1];
     cc = size(OS_paths)[2];
     OS_paths = fill(k_init,rr,cc);
@@ -46,7 +47,7 @@ function create_OSpaths(k_init)
         end
     end
     df = DataFrame(OS_paths, :auto);
-    CSV.write("./data/OOS.csv",df)
+    CSV.write(osfname,df)
 end
 
 #function to save lp files
