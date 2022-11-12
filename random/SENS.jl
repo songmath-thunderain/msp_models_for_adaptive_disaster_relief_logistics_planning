@@ -1,8 +1,3 @@
-osfname = "./data/OOS"*PARAMS[6]*".csv"
-temp = CSV.read(osfname,DataFrame);
-CSV.write("./data/OOS.csv",temp);
-
-
 #Fully adaptive
 #Defne the model 
 m_fa, x_fa, f_fa, y_fa, z_fa, v_fa, ϴ_fa, dCons_fa, FB1Cons_fa, FB2Cons_fa = define_models();
@@ -20,7 +15,8 @@ println("number of iterations = ", iter)
 
 #evaluate the model 
 start=time();
-OS_paths = Matrix(CSV.read("./data/OOS.csv",DataFrame)); #read the out-of-sample file
+osfname = "./data/OOS"*string(k_init)*".csv";
+OS_paths = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
 #OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS
 objs_fa = zeros(nbOS,T);
 xval_fa = Array{Any,2}(undef,nbOS,T); fval_fa = Array{Any,2}(undef,nbOS,T);
@@ -60,8 +56,6 @@ for s=1:nbOS
         end
     end        
 end
-
-sleep(inst*20)
 
 fname = "./output/sensitivity.csv"
 df = CSV.read(fname,DataFrame);
