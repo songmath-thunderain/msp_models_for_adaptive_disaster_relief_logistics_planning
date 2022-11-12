@@ -23,7 +23,7 @@ Ni = parse(Int, PARAMS[2]); #number of supply points
 Nj = parse(Int, PARAMS[3]); #number of demand points
 factor = parse(Float64, PARAMS[4]); #cost scaling factor
 nbOS = parse(Int, PARAMS[5]); #number of scenarios in the out-of-sample
-k_init = parse(Int, PARAMS[6]); #cost scaling factor
+k_init = parse(Int, PARAMS[6]); #initial state
 nbscen = parse(Int, PARAMS[7]); #number of sample paths when solving two-stage
 
 include("packages.jl");
@@ -39,19 +39,19 @@ println("Nc = ", Nc);
 const GRB_ENV = Gurobi.Env();
 
 #Clairvoyance solution 
-include("./policy/hurricane_CV.jl");
+#include("./policy/hurricane_CV.jl");
 
 #Fully adaptive model
-include("./policy/hurricane_FA.jl");
+#include("./policy/hurricane_FA.jl");
  
 #Rolling-horizon 2SSP
-include("./policy/hurricane_rolling_twostage.jl")
+#include("./policy/hurricane_rolling_twostage.jl")
 
 #Static 2SSP
 include("./policy/hurricane_static_twostage.jl");
 
 #Deterministic FA 
-include("./policy/hurricane_deterministicFA.jl");
+#include("./policy/hurricane_deterministicFA.jl");
 
 #sensitivity analysis
 #include("SENS.jl");

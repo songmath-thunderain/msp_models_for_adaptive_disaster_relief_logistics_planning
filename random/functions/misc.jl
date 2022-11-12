@@ -36,7 +36,7 @@ end
 
 # function to create an out-of-sample for given initial state k_init
 function create_OSpaths(k_init)
-	osfname = "./data/OOS"*string(k_init)*"_main.csv";
+	osfname = "./data/OOS"*string(k_init)*".csv";
     OS_paths = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
     rr = size(OS_paths)[1];
     cc = size(OS_paths)[2];

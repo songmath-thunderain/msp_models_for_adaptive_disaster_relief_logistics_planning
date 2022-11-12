@@ -122,7 +122,7 @@ function initialize(s,t_roll)
     xval = zeros(Ni,nbstages1);
 	fval = zeros(N0,Ni,nbstages1);
 	# Do sampling to create (in-sample) scenarios 
-	osfname = "./data/OOS"*string(k_init)*"_main.csv";
+	osfname = "./data/OOS"*string(k_init)*".csv";
     allscen = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
 	# In the first roll, always choose the nbscen scenarios out of the total of 10000 OOS once every 10000/nbscen 
     scen = allscen[collect(1:convert(Int,10000/nbscen):10000),1:T]; # note that this is just an initialization for scen
@@ -229,6 +229,9 @@ function solve_second_stage(t_roll,xval,fval,θval,scen,qprob,master,subproblem,
         #update the RHS
         if τ === nothing     
 			absorbingT = findfirst(x -> S[x][1] == 1, scen[n,:]);
+			print("n = ", n);
+			print(", τ = ", τ);
+			println(", absorbingT = ", absorbingT);
             RH_2SSP_update_RHS(absorbingT,scen[n,absorbingT],subproblem,xCons,dCons,rCons,xval,fval,y,t_roll);
         else
 			absorbingT = -1;
