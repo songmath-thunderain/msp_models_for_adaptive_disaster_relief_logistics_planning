@@ -10,3 +10,15 @@ deterministic/.DS_Store
 *.csv
 *.csv
 *.csv
+deterministic/output/cost_factor_analysis.csv
+deterministic/.DS_Store
+deterministic/output/.DS_Store
+random/.DS_Store
+random/functions/.DS_Store
+random/output/.DS_Store
+random/.DS_Store
+random/output/costFactors/.DS_Store
+random/output/costFactors/cv_cost_factor/.DS_Store
+random/output/costFactors/fa_cost_factor/.DS_Store
+random/.DS_Store
+random/output/.DS_Store
