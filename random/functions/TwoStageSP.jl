@@ -208,70 +208,59 @@ end
 #solves the second-stage problem
 function solve_second_stage(t_roll,xval,fval,θval,scen,qprob,master,subproblem,x,f,θ,y,xCons,dCons,rCons)
     flag = 0;
-	nbstages1 = T-t_roll+1;
+    nbstages1 = T-t_roll+1;
     Q = zeros(nbscen); #list for all the optimal values
     pi1 = Array{Any,1}(undef,nbscen); #list for all the dual multiplies of the first set of constraints
     pi2 = Array{Any,1}(undef,nbscen); #list for all the dual multiplies of the second set of constraints
-	pi3 = zeros(nbscen); # dual multipliers of the third set of constraints
+    pi3 = zeros(nbscen); # dual multipliers of the third set of constraints
     Qbar = 0;
-	absorbingT = -1;
+    absorbingT = -1;
     τ = nothing
-#=
-	for t=1:T
-		print("xval[", t);
-		println("] = ", xval[:,t]);
-	end
-=#
+
     for n=1:nbscen
         #identify the period when the hurricane makes landfall 
         τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, scen[n,:]);
         
         #update the RHS
         if τ === nothing     
-			absorbingT = findfirst(x -> S[x][1] == 1, scen[n,:]);
-			print("n = ", n);
-			print(", τ = ", τ);
-			println(", absorbingT = ", absorbingT);
+	    absorbingT = findfirst(x -> S[x][1] == 1, scen[n,:]);
+	    print("n = ", n);
+	    print(", τ = ", τ);
+	    println(", absorbingT = ", absorbingT);
             RH_2SSP_update_RHS(absorbingT,scen[n,absorbingT],subproblem,xCons,dCons,rCons,xval,fval,y,t_roll);
         else
-			absorbingT = -1;
+	    absorbingT = -1;
             RH_2SSP_update_RHS(τ,scen[n,τ],subproblem,xCons,dCons,rCons,xval,fval,y,t_roll);
         end
         
         #solve the subproblem and store the dual information
         Q[n], pi1[n], pi2[n], pi3[n], flag = solve_scen_subproblem(subproblem,xCons,dCons,rCons);
-#=
-		print("n = ", n);
-		print(", τ = ", τ);
-		println(", absorbingT = ", absorbingT);
-		println("Q[n] = ", Q[n]);
-		println("pi3[n] = ", pi3[n]);
-=#
-		if flag == -1
-        	println("subproblem status is infeasible?!");
-        	exit(0);
-		end
-    end
-	Qbar = sum(Q[n]*qprob[n] for n=1:nbscen);
 
-	# cut generation: multi-cut version
-	for n=1:nbscen
-		if (Q[n]-θval[n])/max(1e-10,abs(Q[n])) > ϵ && abs(Q[n]-θval[n]) > ϵ
-			τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, scen[n,:]);
-			tt = -1;
-			if τ === nothing
-				tt = findfirst(x -> S[x][1] == 1, scen[n,:]);
-			else
-				tt = τ;
-			end
-			@constraint(master,
-				θ[n]-sum(pi1[n][i]*x[i,tt-t_roll+1] for i=1:Ni)-pi3[n]*(-sum((sum(sum(cb[i,ii,t_roll+t-1]*f[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*x[i,t] for i=1:Ni)+sum(f[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (tt+2-t_roll):nbstages1)) 
+	if flag == -1
+            println("subproblem status is infeasible?!");
+            exit(0);
+	end
+    end
+    Qbar = sum(Q[n]*qprob[n] for n=1:nbscen);
+
+    # cut generation: multi-cut version
+    for n=1:nbscen
+	    if (Q[n]-θval[n])/max(1e-10,abs(Q[n])) > ϵ && abs(Q[n]-θval[n]) > ϵ
+		τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, scen[n,:]);
+		tt = -1;
+		if τ === nothing
+		    tt = findfirst(x -> S[x][1] == 1, scen[n,:]);
+		else
+		    tt = τ;
+		end
+		@constraint(master,
+			θ[n]-sum(pi1[n][i]*x[i,tt-t_roll+1] for i=1:Ni)-pi3[n]*(-sum((sum(sum(cb[i,ii,t_roll+t-1]*f[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*x[i,t] for i=1:Ni)+sum(f[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (tt+2-t_roll):nbstages1)) 
 				>= 
 			 Q[n]-sum(pi1[n][i]*xval[i,tt-t_roll+1] for i=1:Ni)-pi3[n]*(-sum((sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)+sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (tt+2-t_roll):nbstages1))
 				);
-			flag = 1;
-		end
-	end
+		flag = 1;
+	    end
+    end
     return flag, Qbar
 end
 
@@ -283,10 +272,10 @@ function solve_scen_subproblem(subproblem,xCons,dCons,rCons)
     flag = 0
     optimize!(subproblem) #solve the model
     status_subproblem = termination_status(subproblem); #check the status 
-	Qtemp = 0;
-	pi1temp = zeros(Ni);
-	pi2temp = zeros(Nj);
-	pi3temp = 0;
+    Qtemp = 0;
+    pi1temp = zeros(Ni);
+    pi2temp = zeros(Nj);
+    pi3temp = 0;
     if status_subproblem != MOI.OPTIMAL
         if status_subproblem == MOI.INFEASIBLE
             flag = -1;
@@ -294,15 +283,15 @@ function solve_scen_subproblem(subproblem,xCons,dCons,rCons)
     else
         #update the values
         Qtemp = objective_value(subproblem);
-		pi1temp = zeros(Ni);
+	pi1temp = zeros(Ni);
         pi2temp = zeros(Nj);
         for i=1:Ni
             pi1temp[i] = shadow_price(xCons[i]);
         end
-		for j=1:Nj
+	for j=1:Nj
             pi2temp[j] = shadow_price(dCons[j]);            
         end
-		pi3temp = shadow_price(rCons);
+	pi3temp = shadow_price(rCons);
     end
     return Qtemp, pi1temp, pi2temp, pi3temp, flag
 end
@@ -315,40 +304,40 @@ function RH_2SSP_update_RHS(τ,k_t,subproblem,xCons,dCons,rCons,xval,fval,y,t_ro
 	# Note that the assumption coming into this function is that τ > t_roll if τ is not nothing
 	nbstages1 = T-t_roll+1;
 	for i=1:Ni
-		if τ === nothing
-			println("We shouldn't come here any more!");
-			exit(0);
-			#set_normalized_rhs(xCons[i],xval[i,T-t_roll+1]);
-		else
-			set_normalized_rhs(xCons[i],xval[i,τ-t_roll+1]);
-		end
+	    if τ === nothing
+		println("We shouldn't come here any more!");
+		exit(0);
+		#set_normalized_rhs(xCons[i],xval[i,T-t_roll+1]);
+	    else
+		set_normalized_rhs(xCons[i],xval[i,τ-t_roll+1]);
+	    end
 	end
 
 	for j=1:Nj
-		if k_t ∉ absorbing_states           
-            set_normalized_rhs(dCons[j], SCEN[k_t][j]);
-        else
-            set_normalized_rhs(dCons[j], 0);
-        end
+	    if k_t ∉ absorbing_states           
+                set_normalized_rhs(dCons[j], SCEN[k_t][j]);
+            else
+                set_normalized_rhs(dCons[j], 0);
+            end
 	end
 
 	if τ === nothing 
-		# nothing to reimburse here
-		println("We shouldn't come here any more!");
-		exit(0);
-		#set_normalized_rhs(rCons, 0)
-    else
-		updatedRHS = -sum((sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)
+	    # nothing to reimburse here
+            println("We shouldn't come here any more!");
+	    exit(0);
+	    #set_normalized_rhs(rCons, 0)
+        else
+	    updatedRHS = -sum((sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)
                     +sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)  
                     +sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (τ+2-t_roll):nbstages1); 
-		set_normalized_rhs(rCons,updatedRHS);
-		# Also need to update the coefficients of y[i,j] variables in the 2nd stage
-		for i=1:Ni
-			for j=1:Nj
-				set_objective_coefficient(subproblem, y[i,j], ca[i,j,τ]);
-			end
+	    set_normalized_rhs(rCons,updatedRHS);
+	    # Also need to update the coefficients of y[i,j] variables in the 2nd stage
+	    for i=1:Ni
+	        for j=1:Nj
+		    set_objective_coefficient(subproblem, y[i,j], ca[i,j,τ]);
 		end
-    end
+	    end
+        end
 end
 
 ###############################################################
