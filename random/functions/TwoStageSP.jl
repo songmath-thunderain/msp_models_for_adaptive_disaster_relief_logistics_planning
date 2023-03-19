@@ -148,6 +148,43 @@ end
 ###############################################################
 ###############################################################
 
+#initialize parameter for two-stage model
+function initialize2(kk,t_roll)
+# kk is the starting state for the two-stage SP model    
+	nbstages1 = T-t_roll+1;
+	LB = -1e10; 
+	UB = 1e10; 
+	θval = zeros(nbscen);
+    xval = zeros(Ni,nbstages1);
+	fval = zeros(N0,Ni,nbstages1);
+	# Do sampling to create (in-sample) scenarios 
+	osfname = "./data/OOS"*string(k_init)*".csv";
+    allscen = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
+	# In the first roll, always choose the nbscen scenarios out of the total of 10000 OOS once every 10000/nbscen 
+    scen = allscen[collect(1:convert(Int,10000/nbscen):10000),1:T]; # note that this is just an initialization for scen
+
+	# when t_roll = 1, i.e., the first roll, it will always be the evenly selected scenarios from allscen
+
+	# In later rolls, create in-sample scenarios by sampling
+    if t_roll > 1
+        for n=1:nbscen
+            for t=2:t_roll
+                scen[n,t] = allscen[1,1]; # prior to t_roll, just choose arbitrarily 
+            end
+            scen[n,t_roll] = kk;
+            for t=(t_roll+1):T
+                scen[n,t] = MC_sample(scen[n,t-1]);
+            end
+        end
+    end
+    qprob = fill(1/nbscen,nbscen);
+	return LB, UB, xval, fval, θval, scen, qprob
+end
+
+###############################################################
+###############################################################
+
+
 #solves the two-stage SP model
 function RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y,xCons,dCons,rCons)
 # s is the index for the sample path in the out-of-sample test 
@@ -181,7 +218,43 @@ end
 
 
 ###############################################################
+###############################################################\
+
+#solves the two-stage SP model
+function RH_2SSP_solve_roll2(kk,t_roll,master,subproblem,x,f,θ,y,xCons,dCons,rCons)
+# kk is the starting state for the two-stage SP model
+# Assumption coming into this function: t_roll must be before the landfall stage of sample path s in the out-of-sample test
+    nbstages1 = T-t_roll+1;
+    LB, UB, xval, fval, θval, scen, qprob = initialize2(kk,t_roll);
+	solveIter = 0;
+    while (UB-LB)*1.0/max(1e-10,abs(LB)) > ϵ && abs(UB-LB) > ϵ && solveIter < 100 # WARNING: Temporary fix here!
+        # solve first stage
+		solveIter = solveIter + 1;
+        LB, xval, fval, θval = solve_first_stage(LB,xval,fval,θval,master,x,f,θ);
+		firstCost = LB - sum(θval[n]*qprob[n] for n=1:nbscen);
+        if t_roll < T
+            # solve second stage 
+            flag, Qbar = solve_second_stage(t_roll,xval,fval,θval,scen,qprob,master,subproblem,x,f,θ,y,xCons,dCons,rCons);
+            if flag != -1
+                UB = min(firstCost+Qbar,UB);
+            end
+        else
+            println("exiting here");
+            break;
+        end
+    end
+	if solveIter == 100
+		println("# iterations is maxed out!");
+		print("LB = ", LB);
+		println(", UB = ", UB);
+	end
+    return LB, UB, xval, fval, θval
+end
+
+
 ###############################################################
+###############################################################
+
 
 #solves the first-stage problem
 function solve_first_stage(LB,xval,fval,θval,master,x,f,θ)
@@ -223,42 +296,55 @@ function solve_second_stage(t_roll,xval,fval,θval,scen,qprob,master,subproblem,
         
         #update the RHS
         if τ === nothing     
-	    absorbingT = findfirst(x -> S[x][1] == 1, scen[n,:]);
-	    print("n = ", n);
-	    print(", τ = ", τ);
-	    println(", absorbingT = ", absorbingT);
+	    	absorbingT = findfirst(x -> S[x][1] == 1, scen[n,:]);
+			print("n = ", n);
+			print(", τ = ", τ);
+			print(", absorbingT = ", absorbingT);
+			println(", t_roll = ", t_roll);
+			#if absorbingT < t_roll
+			#	absorbingT = t_roll; # WARNING: temporary fix!
+			#end
             RH_2SSP_update_RHS(absorbingT,scen[n,absorbingT],subproblem,xCons,dCons,rCons,xval,fval,y,t_roll);
         else
-	    absorbingT = -1;
+			print("n = ", n);
+			print(", τ = ", τ);
+			println(", t_roll = ", t_roll);
+	    	absorbingT = -1;
+			#if τ < t_roll
+			#	τ = t_roll; # WARNING: temporary fix!
+			#end
             RH_2SSP_update_RHS(τ,scen[n,τ],subproblem,xCons,dCons,rCons,xval,fval,y,t_roll);
         end
         
         #solve the subproblem and store the dual information
         Q[n], pi1[n], pi2[n], pi3[n], flag = solve_scen_subproblem(subproblem,xCons,dCons,rCons);
 
-	if flag == -1
+		if flag == -1
             println("subproblem status is infeasible?!");
             exit(0);
-	end
+		end
     end
     Qbar = sum(Q[n]*qprob[n] for n=1:nbscen);
 
     # cut generation: multi-cut version
     for n=1:nbscen
 	    if (Q[n]-θval[n])/max(1e-10,abs(Q[n])) > ϵ && abs(Q[n]-θval[n]) > ϵ
-		τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, scen[n,:]);
-		tt = -1;
-		if τ === nothing
-		    tt = findfirst(x -> S[x][1] == 1, scen[n,:]);
-		else
-		    tt = τ;
-		end
-		@constraint(master,
+			τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, scen[n,:]);
+			tt = -1;
+			if τ === nothing
+		    	tt = findfirst(x -> S[x][1] == 1, scen[n,:]);
+			else
+		    	tt = τ;
+			end
+			if tt < t_roll
+				tt = t_roll; # WARNING: temporary fix!
+			end	
+			@constraint(master,
 			θ[n]-sum(pi1[n][i]*x[i,tt-t_roll+1] for i=1:Ni)-pi3[n]*(-sum((sum(sum(cb[i,ii,t_roll+t-1]*f[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*x[i,t] for i=1:Ni)+sum(f[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (tt+2-t_roll):nbstages1)) 
 				>= 
 			 Q[n]-sum(pi1[n][i]*xval[i,tt-t_roll+1] for i=1:Ni)-pi3[n]*(-sum((sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)+sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (tt+2-t_roll):nbstages1))
 				);
-		flag = 1;
+			flag = 1;
 	    end
     end
     return flag, Qbar
@@ -283,15 +369,15 @@ function solve_scen_subproblem(subproblem,xCons,dCons,rCons)
     else
         #update the values
         Qtemp = objective_value(subproblem);
-	pi1temp = zeros(Ni);
+		pi1temp = zeros(Ni);
         pi2temp = zeros(Nj);
         for i=1:Ni
             pi1temp[i] = shadow_price(xCons[i]);
         end
-	for j=1:Nj
+		for j=1:Nj
             pi2temp[j] = shadow_price(dCons[j]);            
         end
-	pi3temp = shadow_price(rCons);
+		pi3temp = shadow_price(rCons);
     end
     return Qtemp, pi1temp, pi2temp, pi3temp, flag
 end
@@ -305,28 +391,28 @@ function RH_2SSP_update_RHS(τ,k_t,subproblem,xCons,dCons,rCons,xval,fval,y,t_ro
 	nbstages1 = T-t_roll+1;
 	for i=1:Ni
 	    if τ === nothing
-		println("We shouldn't come here any more!");
-		exit(0);
-		#set_normalized_rhs(xCons[i],xval[i,T-t_roll+1]);
+			println("We shouldn't come here any more!");
+			exit(0);
+			#set_normalized_rhs(xCons[i],xval[i,T-t_roll+1]);
 	    else
-		set_normalized_rhs(xCons[i],xval[i,τ-t_roll+1]);
+			set_normalized_rhs(xCons[i],xval[i,τ-t_roll+1]);
 	    end
 	end
 
 	for j=1:Nj
 	    if k_t ∉ absorbing_states           
-                set_normalized_rhs(dCons[j], SCEN[k_t][j]);
-            else
-                set_normalized_rhs(dCons[j], 0);
-            end
+        	set_normalized_rhs(dCons[j], SCEN[k_t][j]);
+        else
+            set_normalized_rhs(dCons[j], 0);
+        end
 	end
 
 	if τ === nothing 
 	    # nothing to reimburse here
-            println("We shouldn't come here any more!");
+        println("We shouldn't come here any more!");
 	    exit(0);
 	    #set_normalized_rhs(rCons, 0)
-        else
+    else
 	    updatedRHS = -sum((sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)
                     +sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)  
                     +sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (τ+2-t_roll):nbstages1); 
@@ -334,10 +420,10 @@ function RH_2SSP_update_RHS(τ,k_t,subproblem,xCons,dCons,rCons,xval,fval,y,t_ro
 	    # Also need to update the coefficients of y[i,j] variables in the 2nd stage
 	    for i=1:Ni
 	        for j=1:Nj
-		    set_objective_coefficient(subproblem, y[i,j], ca[i,j,τ]);
-		end
+			    set_objective_coefficient(subproblem, y[i,j], ca[i,j,τ]);
+			end
 	    end
-        end
+    end
 end
 
 ###############################################################
