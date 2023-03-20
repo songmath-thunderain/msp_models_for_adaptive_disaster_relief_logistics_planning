@@ -297,18 +297,18 @@ function solve_second_stage(t_roll,xval,fval,θval,scen,qprob,master,subproblem,
         #update the RHS
         if τ === nothing     
 	    	absorbingT = findfirst(x -> S[x][1] == 1, scen[n,:]);
-			print("n = ", n);
-			print(", τ = ", τ);
-			print(", absorbingT = ", absorbingT);
-			println(", t_roll = ", t_roll);
+			#print("n = ", n);
+			#print(", τ = ", τ);
+			#print(", absorbingT = ", absorbingT);
+			#println(", t_roll = ", t_roll);
 			#if absorbingT < t_roll
 			#	absorbingT = t_roll; # WARNING: temporary fix!
 			#end
             RH_2SSP_update_RHS(absorbingT,scen[n,absorbingT],subproblem,xCons,dCons,rCons,xval,fval,y,t_roll);
         else
-			print("n = ", n);
-			print(", τ = ", τ);
-			println(", t_roll = ", t_roll);
+			#print("n = ", n);
+			#print(", τ = ", τ);
+			#println(", t_roll = ", t_roll);
 	    	absorbingT = -1;
 			#if τ < t_roll
 			#	τ = t_roll; # WARNING: temporary fix!
