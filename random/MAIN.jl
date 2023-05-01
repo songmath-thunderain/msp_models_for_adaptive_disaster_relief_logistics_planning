@@ -34,6 +34,13 @@ println("Na = ", Na);
 println("Nb = ", Nb);
 println("Nc = ", Nc);
 
+nodeLists = createNodes(k_init);
+
+println("len(nodeLists) = ", size(nodeLists));
+
+create_OSpaths(k_init)
+
+exit(0);
 
 #create gurobi environment
 const GRB_ENV = Gurobi.Env();

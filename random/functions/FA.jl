@@ -324,7 +324,7 @@ function MSP_fa_update_RHS(k_t,t,xval)
         set_normalized_rhs(FB2Cons_fa[t,k_t][i], xval[i,t-1]);
     end 
     for j=1:Nj
-        if S[k_t][3] == Nc-1 && k_t ∉ absorbing_states
+        if S[k_t][3] == Nc && S[k_t][1] != 1
             set_normalized_rhs(dCons_fa[t,k_t][j], SCEN[k_t][j]);
         else
             set_normalized_rhs(dCons_fa[t,k_t][j], 0);

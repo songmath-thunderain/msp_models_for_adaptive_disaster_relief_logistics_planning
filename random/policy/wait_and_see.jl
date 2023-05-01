@@ -38,8 +38,6 @@ if Go == true
 end
 	
 OS_paths = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
-#OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS [REVISION: no need anymore]
-
 objs_OOS = zeros(nbOS);
 
 for s=1:nbOS

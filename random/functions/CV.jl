@@ -87,7 +87,7 @@ function clairvoyant_eval()
 
     for s=1:nbOS
         #find the period when the hurricane made landfall && intensity != 1
-        τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, OS_paths[s,1:T]);
+        τ = findfirst(x -> S[x][3] == Nc-1 && x -> S[x][1] != 1, OS_paths[s,1:T]);
         if τ === nothing
             continue;
         else

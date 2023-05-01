@@ -63,3 +63,30 @@ function save_csv(m_data, m_colname, f_dir, m_fname)
     df = DataFrame(m_data, m_colname);
     CSV.write(fname,df)
 end
+
+# function that create a complete set of reachable nodes over time, starting from the initial state k_init
+function createNodes(k_init)
+	nodeLists = Array{Int}[];
+	push!(nodeLists,[k_init]);
+	stopFlag = false;
+	tIter = 1;
+	while stopFlag == false
+		tempList = [];
+		stopFlag = true; # if there is at least one state that is absorbing, turn the stopFlag back to false
+		for k=1:K
+			for kk in last(nodeLists)
+				#@printf("kk = %d, k = %d, P_joint = %f, smallestTransProb = %f", kk, k, P_joint[kk,k],smallestTransProb);
+				if (kk in absorbing_states) == false && P_joint[kk,k] > smallestTransProb
+					push!(tempList,k);
+					if (k in absorbing_states) == false
+						stopFlag = false;
+					end
+					break;
+				end
+			end
+		end
+		println("tempList = ", tempList);
+		push!(nodeLists,tempList);			
+	end
+	return nodeLists;
+end

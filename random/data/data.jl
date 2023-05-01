@@ -29,8 +29,7 @@ Tmin = 2; # for now we just hard code it
 K = Na*Nb*Nc; #number of state in the joint MC
 P_joint = zeros(K,K); #initialize the joint probability distribution MC
 S = Array{Any,1}(undef,K); #list with elements [intensity,location]
-absorbing_states = []; # list of absorbing states
-
+absorbing_states = []; # list of absorbing states: when intensity = 0 or Loc_y = 7: landfall signifies the last stage (absorbing)
 k1 = 0; #counter for the number of states
 for k=1:Na, l=1:Nb, f=1:Nc
     global k1 +=1
@@ -41,8 +40,23 @@ for k=1:Na, l=1:Nb, f=1:Nc
     end
     S[k1] = [k,l,f]; 
     if k == 1 || f == Nc
-        push!(absorbing_states,k1)
+        push!(absorbing_states,k1);
     end
+
+#=
+	if k == 2 && l == 2 && f == 1
+		println("k1 = ", k1);
+	end
+
+	if k == 4 && l == 2 && f == 1
+		println("k2 = ", k1);
+	end
+
+	if k == 6 && l == 2 && f == 1
+		println("k3 = ", k1);
+	end
+=#
+
 end
     
 # Create the transition probability from stage 1 to stage T (applying the C-K equation)
@@ -62,6 +76,9 @@ P_temp = deepcopy(P_joint);
 for k=1:K, kk=1:K
     P_joint[k,kk] = P_temp[k,kk]/sum(P_temp[k,:]);
 end
+
+
+smallestTransProb = findmin(filter!(x -> x!= 0, vec(P_joint)))[1]*1.0/2;
 
 ########################################################################################
 
@@ -200,7 +217,7 @@ for k=1:K
     #what are the coordinates of where the hurricane made landfall [xx,yy]
     #note that yy=0 since the huricane makes landfall in the cost by assumption
 	predicted = 0.5*(L[l][1]+L[l][2]); #this is the predicted x_coordinates for the landfall location: for simplicity, just use the center of the interval	
-	xx_coord = max(x_low,min(predicted,x_up)); #we already now x in can't be smaller than x_low and bigger than x_up; 
+	xx_coord = max(x_low,min(predicted,x_up)); #we already know x in can't be smaller than x_low and bigger than x_up; 
 	landfall = [xx_coord,0]
 	#now lets calculate the demand from each DP to the m location 
 	for j=1:Nj

@@ -150,7 +150,7 @@ end
 
 #initialize parameter for two-stage model
 function initialize2(kk,t_roll)
-# kk is the starting state for the two-stage SP model    
+# kk is the starting state for the two-stage SP model: this is to accommodate the wait-and-see heuristic approach    
 	nbstages1 = T-t_roll+1;
 	LB = -1e10; 
 	UB = 1e10; 
@@ -222,7 +222,7 @@ end
 
 #solves the two-stage SP model
 function RH_2SSP_solve_roll2(kk,t_roll,master,subproblem,x,f,θ,y,xCons,dCons,rCons)
-# kk is the starting state for the two-stage SP model
+# kk is the starting state for the two-stage SP model: this is to accommodate the wait-and-see heuristic approach 
 # Assumption coming into this function: t_roll must be before the landfall stage of sample path s in the out-of-sample test
     nbstages1 = T-t_roll+1;
     LB, UB, xval, fval, θval, scen, qprob = initialize2(kk,t_roll);
@@ -292,7 +292,7 @@ function solve_second_stage(t_roll,xval,fval,θval,scen,qprob,master,subproblem,
 
     for n=1:nbscen
         #identify the period when the hurricane makes landfall 
-        τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, scen[n,:]);
+        τ = findfirst(x -> S[x][3] == Nc && x -> S[x][1] != 1, scen[n,:]);
         
         #update the RHS
         if τ === nothing     
@@ -329,7 +329,7 @@ function solve_second_stage(t_roll,xval,fval,θval,scen,qprob,master,subproblem,
     # cut generation: multi-cut version
     for n=1:nbscen
 	    if (Q[n]-θval[n])/max(1e-10,abs(Q[n])) > ϵ && abs(Q[n]-θval[n]) > ϵ
-			τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, scen[n,:]);
+			τ = findfirst(x -> S[x][3] == Nc && x -> S[x][1] != 1, scen[n,:]);
 			tt = -1;
 			if τ === nothing
 		    	tt = findfirst(x -> S[x][1] == 1, scen[n,:]);
@@ -400,7 +400,7 @@ function RH_2SSP_update_RHS(τ,k_t,subproblem,xCons,dCons,rCons,xval,fval,y,t_ro
 	end
 
 	for j=1:Nj
-	    if k_t ∉ absorbing_states           
+	    if S[k_t][1] != 1           
         	set_normalized_rhs(dCons[j], SCEN[k_t][j]);
         else
             set_normalized_rhs(dCons[j], 0);

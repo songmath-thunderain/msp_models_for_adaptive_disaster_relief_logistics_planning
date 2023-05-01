@@ -30,7 +30,7 @@ pi3 = zeros(nbOS);
 
 for s=1:nbOS
 	#identify the period where the hurricane makes landfall 
-	τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, OS_paths[s,1:T]);
+	τ = findfirst(x -> S[x][3] == Nc && x -> S[x][1] != 1, OS_paths[s,1:T]);
 	
 	#update the RHS
 	if τ === nothing

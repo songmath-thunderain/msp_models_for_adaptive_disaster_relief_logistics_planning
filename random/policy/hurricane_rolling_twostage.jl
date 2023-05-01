@@ -27,7 +27,7 @@ for s=1:nbOS
 end
 
 for s=1:nbOS
-	τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, OS_paths[s,1:T]);
+	τ = findfirst(x -> S[x][3] == Nc-1 && x -> S[x][1] != 1, OS_paths[s,1:T]);
 	x_init = deepcopy(xval_1stRoll[:,1]);
 	if τ === nothing
 		absorbingT = findfirst(x -> S[x][1] == 1, OS_paths[s,1:T]);
@@ -119,7 +119,7 @@ for s=1:nbOS
 				end
 				k_t = OS_paths[s,t_roll];
 				for j=1:Nj
-					if k_t ∉ absorbing_states           
+					if S[k_t][1] != 1           
 						set_normalized_rhs(dCons[j], SCEN[k_t][j]);
 					else
 						set_normalized_rhs(dCons[j], 0);
