@@ -102,6 +102,7 @@ end
 ###############################################################
 # Start evaluating policies on the decision tree
 
+osfname = "./data/OOS"*string(k_init)*".csv";
 OS_paths = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
 objs_OOS = zeros(nbOS);
 
