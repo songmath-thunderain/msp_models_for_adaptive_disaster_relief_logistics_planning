@@ -82,12 +82,12 @@ function define_models()
             ϴ[t,k_init], dCons[t,k_init], FB1Cons[t,k_init], FB2Cons[t,k_init] = stage_t_state_k_problem(t);
         else
 			for k=1:K
-            	if k in absorbing_states
-                	continue 
-            	else
+				#if k in absorbing_states
+				#	continue 
+				#else
                 	m[t,k], x[t,k], f[t,k], y[t,k], z[t,k], v[t,k],
                 	ϴ[t,k], dCons[t,k], FB1Cons[t,k], FB2Cons[t,k] = stage_t_state_k_problem(t);
-            	end
+            	#end
 			end			
         end
     end    
@@ -108,9 +108,9 @@ function FOSDDP_forward_pass_oneSP_iteration(lb,xval,thetaval)
             k_t = MC_sample(in_sample[t-1]);
             push!(in_sample,k_t);
             # if k_t is absorbing no need to do any computation
-            if k_t in absorbing_states
-                continue; 
-            end
+			#if k_t in absorbing_states
+			#    continue; 
+			#end
             #update the RHS
 			#MSP_fa_update_RHS(k_t,t,xval,rand(1:M)); # we do not have this second layer now [REVISION]
 			MSP_fa_update_RHS(k_t,t,xval);
@@ -133,6 +133,10 @@ function FOSDDP_forward_pass_oneSP_iteration(lb,xval,thetaval)
                 lb = objective_value(m_fa[t,k_t]);
             end
         end
+		# if k_t is absorbing, terminate the forward pass
+		if k_t in absorbing_states
+			break;
+		end
     end
     return xval, thetaval, lb, in_sample
 end
