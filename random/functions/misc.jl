@@ -85,7 +85,7 @@ function createNodes(k_init)
 				end
 			end
 		end
-		println("tempList = ", tempList);
+		#println("tempList = ", tempList);
 		push!(nodeLists,tempList);			
 	end
 	return nodeLists;

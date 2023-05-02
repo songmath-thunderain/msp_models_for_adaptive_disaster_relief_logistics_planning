@@ -34,13 +34,9 @@ println("Na = ", Na);
 println("Nb = ", Nb);
 println("Nc = ", Nc);
 
-nodeLists = createNodes(k_init);
+nodeLists = createNodes(k_init); # List of MC states in each stage
 
-println("len(nodeLists) = ", size(nodeLists));
-
-create_OSpaths(k_init)
-
-exit(0);
+#create_OSpaths(k_init)
 
 #create gurobi environment
 const GRB_ENV = Gurobi.Env();

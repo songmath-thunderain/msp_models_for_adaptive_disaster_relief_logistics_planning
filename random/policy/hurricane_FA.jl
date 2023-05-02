@@ -1,6 +1,12 @@
 
 #Fully adaptive
 #Defne the model 
+
+for i=1:length(nodeLists)
+	@printf("nodeLists[%d]'s total # of nodes = %d\n", i, length(nodeLists[i]));
+	println(nodeLists[i]);
+end
+
 m_fa, x_fa, f_fa, y_fa, z_fa, v_fa, ϴ_fa, dCons_fa, FB1Cons_fa, FB2Cons_fa = define_models();
 
 

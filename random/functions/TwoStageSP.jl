@@ -292,7 +292,7 @@ function solve_second_stage(t_roll,xval,fval,θval,scen,qprob,master,subproblem,
 
     for n=1:nbscen
         #identify the period when the hurricane makes landfall 
-        τ = findfirst(x -> S[x][3] == Nc && x -> S[x][1] != 1, scen[n,:]);
+        τ = findfirst(x -> (S[x][3] == Nc && S[x][1] != 1), scen[n,:]);
         
         #update the RHS
         if τ === nothing     
@@ -329,7 +329,7 @@ function solve_second_stage(t_roll,xval,fval,θval,scen,qprob,master,subproblem,
     # cut generation: multi-cut version
     for n=1:nbscen
 	    if (Q[n]-θval[n])/max(1e-10,abs(Q[n])) > ϵ && abs(Q[n]-θval[n]) > ϵ
-			τ = findfirst(x -> S[x][3] == Nc && x -> S[x][1] != 1, scen[n,:]);
+			τ = findfirst(x -> (S[x][3] == Nc && S[x][1] != 1), scen[n,:]);
 			tt = -1;
 			if τ === nothing
 		    	tt = findfirst(x -> S[x][1] == 1, scen[n,:]);
@@ -413,10 +413,15 @@ function RH_2SSP_update_RHS(τ,k_t,subproblem,xCons,dCons,rCons,xval,fval,y,t_ro
 	    exit(0);
 	    #set_normalized_rhs(rCons, 0)
     else
-	    updatedRHS = -sum((sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)
-                    +sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)  
-                    +sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (τ+2-t_roll):nbstages1); 
-	    set_normalized_rhs(rCons,updatedRHS);
+		if τ == T
+			# Plan exactly until the landfall time -- no reimbursement occurred!
+			set_normalized_rhs(rCons,0);
+		else
+			updatedRHS = -sum((sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)
+						+sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)  
+						+sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (τ+2-t_roll):nbstages1); 
+			set_normalized_rhs(rCons,updatedRHS);
+		end
 	    # Also need to update the coefficients of y[i,j] variables in the 2nd stage
 	    for i=1:Ni
 	        for j=1:Nj

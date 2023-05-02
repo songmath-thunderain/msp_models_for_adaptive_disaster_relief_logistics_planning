@@ -77,19 +77,22 @@ function define_models()
     m = Dict(); x = Dict(); f = Dict(); y = Dict(); z = Dict(); v = Dict(); 
     ϴ = Dict(); dCons = Dict(); FB1Cons = Dict(); FB2Cons = Dict(); 
     for t=1:T
-        if t == 1
-            m[t,k_init], x[t,k_init], f[t,k_init], y[t,k_init], z[t,k_init], v[t,k_init],
-            ϴ[t,k_init], dCons[t,k_init], FB1Cons[t,k_init], FB2Cons[t,k_init] = stage_t_state_k_problem(t);
-        else
-			for k=1:K
+		#if t == 1
+		#    m[t,k_init], x[t,k_init], f[t,k_init], y[t,k_init], z[t,k_init], v[t,k_init],
+		#    ϴ[t,k_init], dCons[t,k_init], FB1Cons[t,k_init], FB2Cons[t,k_init] = stage_t_state_k_problem(t);
+		#else
+			for k=1:length(nodeLists[t])
 				#if k in absorbing_states
 				#	continue 
 				#else
-                	m[t,k], x[t,k], f[t,k], y[t,k], z[t,k], v[t,k],
-                	ϴ[t,k], dCons[t,k], FB1Cons[t,k], FB2Cons[t,k] = stage_t_state_k_problem(t);
+				ind = nodeLists[t][k];
+                m[t,ind], x[t,ind], f[t,ind], y[t,ind], z[t,ind], v[t,ind], ϴ[t,ind], dCons[t,ind], FB1Cons[t,ind], FB2Cons[t,ind] = stage_t_state_k_problem(t);
+				if ind in absorbing_states
+					@constraint(m[t,ind], ϴ[t,ind] == 0);
+				end
             	#end
 			end			
-        end
+		#end
     end    
     return m, x, f, y, z, v, ϴ, dCons, FB1Cons, FB2Cons
 end
@@ -146,61 +149,84 @@ end
 
 #Train model: backward pass: new version, without two-layer uncertainty
 function FOSDDP_backward_pass_oneSP_iteration(lb,xval,thetaval,in_sample)
+	# This implements the full cut-sharing scheme
     cutviolFlag = 0;
-    for t=T:-1:2
+    for t=length(in_sample):-1:2
+		########################################
+		# Solving all stage-t problems
+		########################################
         #initialize
         Q = zeros(K); #list for all the optimal values
          #list for all the dual multiplies of the first and second set of constraints
         pi1 = zeros(K,Ni); 
 		pi2 = zeros(K,Ni); 
         sample_n = in_sample[t-1]; #the states observed at time t-1
-        for k=1:K
-            if k in absorbing_states
-                Q[k] = 0;
-                continue
-            else
+        for k=1:length(nodeLists[t])
+			#if k in absorbing_states
+			#    Q[k] = 0;
+			#    continue
+			#else
                 # Here we just update xval
-                MSP_fa_update_RHS(k,t,xval);
+                MSP_fa_update_RHS(nodeLists[t][k],t,xval);
                 #solve the model
-                optimize!(m_fa[t,k]);
+                optimize!(m_fa[t,nodeLists[t][k]]);
 
                 #check the status 
-                status = termination_status(m_fa[t,k]);
+                status = termination_status(m_fa[t,nodeLists[t][k]]);
                 if status != MOI.OPTIMAL
                     println("Error in Backward Pass");
-                    println("Model in stage =", t, " and state = ", k, ", in forward pass is ", status);
+                    println("Model in stage =", t, " and state = ", nodeLists[t][k], ", in forward pass is ", status);
                     exit(0);
                 else
                     #collect values
-                    Q[k] = objective_value(m_fa[t,k]);
+                    Q[nodeLists[t][k]] = objective_value(m_fa[t,nodeLists[t][k]]);
                     for i=1:Ni
-                        pi1[k,i] = shadow_price(FB1Cons_fa[t,k][i]);
-                        pi2[k,i] = shadow_price(FB2Cons_fa[t,k][i]);
+                        pi1[nodeLists[t][k],i] = shadow_price(FB1Cons_fa[t,nodeLists[t][k]][i]);
+                        pi2[nodeLists[t][k],i] = shadow_price(FB2Cons_fa[t,nodeLists[t][k]][i]);
                     end
                 end                 
-            end
+			#end
         end
-
-        for n = 1:K
-            if  n ∉ absorbing_states
-                if t-1 == 1 && n != k_init
-                    continue
-                end
+		########################################
+		# Solving all stage-(t-1) problems and generate cuts/valid inequalities
+		########################################
+        for n = 1:length(nodeLists[t-1])
+            if  nodeLists[t-1][n] ∉ absorbing_states
                 #what is the expected cost value 
-                Qvalue = sum(Q[k]*P_joint[n,k]  for k=1:K);
-
+                Qvalue = 0;
+				#tempProb = 0;
+				for k=1:length(nodeLists[t])
+					if P_joint[nodeLists[t-1][n],nodeLists[t][k]] > smallestTransProb
+						Qvalue = Qvalue + Q[nodeLists[t][k]]*P_joint[nodeLists[t-1][n],nodeLists[t][k]];
+						#tempProb = tempProb + P_joint[nodeLists[t-1][n],nodeLists[t][k]];
+					end
+				end
+				#if abs(tempProb-1) > 1e-7
+				#	@printf("tempProb = %f\n", tempProb);
+				#	@printf("node = %d, \n", nodeLists[t-1][n]);
+				#	println("S[node] = ", S[nodeLists[t-1][n]]);
+				#	println("P_joint[", nodeLists[t-1][n], "] = ", P_joint[nodeLists[t-1][n],:]);
+				#	exit(0);
+				#end	
                 # check if cut is violated at the sample path encountered in the forward pass
-                if n == sample_n && (Qvalue-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ && abs(Qvalue-thetaval[t-1]) > ϵ
+                if nodeLists[t-1][n] == sample_n && (Qvalue-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ && abs(Qvalue-thetaval[t-1]) > ϵ
                     cutviolFlag = 1;
                 end
 
                 # we are doing cut sharing so we will add the cut regardless
-                @constraint(m_fa[t-1,n],
-                ϴ_fa[t-1,n]
-                -sum(sum((pi1[k,i]+pi2[k,i])*x_fa[t-1,n][i] for i=1:Ni)*P_joint[n,k] for k=1:K)
-                >=
-                Qvalue-sum(sum((pi1[k,i]+pi2[k,i])*xval[i,t-1] for i=1:Ni)*P_joint[n,k] for k=1:K)
-                );
+				cutcoef = zeros(Ni);
+				cutrhs_xval = 0;
+				for k=1:length(nodeLists[t])
+					if P_joint[nodeLists[t-1][n],nodeLists[t][k]] > smallestTransProb
+						for i=1:Ni
+							tempval = (pi1[nodeLists[t][k],i]+pi2[nodeLists[t][k],i])*P_joint[nodeLists[t-1][n],nodeLists[t][k]];
+							cutcoef[i] = cutcoef[i] + tempval;
+							cutrhs_xval = cutrhs_xval + tempval*xval[i,t-1];
+						end
+					end
+				end
+                @constraint(m_fa[t-1,nodeLists[t-1][n]],
+                ϴ_fa[t-1,nodeLists[t-1][n]]-sum(cutcoef[i]*x_fa[t-1,nodeLists[t-1][n]][i] for i=1:Ni) >= Qvalue-cutrhs_xval);
             end
         end
     end
@@ -277,31 +303,31 @@ function FOSDDP_eval_offline()
             k_t = OS_paths[s,t];
             # we do not have this second layer now [REVISION]
 			#m = OS_M[s]; # realization from OS path corresponding to layer 2
+			if t > 1
+				MSP_fa_update_RHS(k_t,t,xval);
+			end
+			#solve the model
+			optimize!(m_fa[t,k_t]);
 
-            if k_t ∉ absorbing_states
-                if t > 1
-                    MSP_fa_update_RHS(k_t,t,xval);
-                end
-                #solve the model
-                optimize!(m_fa[t,k_t]);
-
-                #check the status 
-                status = termination_status(m_fa[t,k_t]);
-                if status != MOI.OPTIMAL
-                    println(" in evaluation");
-                    println("Model in stage =", t, " and state = ", k_t, ", in forward pass is ", status);
-                    exit(0);
-                else
-                    #collect values
-                    xval_fa[s,t] = value.(x_fa[t,k_t]); xval[:,t] = xval_fa[s,t];
-                    fval_fa[s,t] = value.(f_fa[t,k_t]);                 
-                    yval_fa[s,t] = value.(y_fa[t,k_t]);
-                    zval_fa[s,t] = value.(z_fa[t,k_t]);
-                    vval_fa[s,t] = value.(v_fa[t,k_t]);
-                    objs_fa[s,t] = objective_value(m_fa[t,k_t])- value(ϴ_fa[t,k_t]);
-                    
-                    procurmnt_amount[t] += (sum(fval_fa[s,t][N0,i] for i=1:Ni))/nbOS;
-                end
+			#check the status 
+			status = termination_status(m_fa[t,k_t]);
+			if status != MOI.OPTIMAL
+				println(" in evaluation");
+				println("Model in stage =", t, " and state = ", k_t, ", in forward pass is ", status);
+				exit(0);
+			else
+				#collect values
+				xval_fa[s,t] = value.(x_fa[t,k_t]); xval[:,t] = xval_fa[s,t];
+				fval_fa[s,t] = value.(f_fa[t,k_t]);                 
+				yval_fa[s,t] = value.(y_fa[t,k_t]);
+				zval_fa[s,t] = value.(z_fa[t,k_t]);
+				vval_fa[s,t] = value.(v_fa[t,k_t]);
+				objs_fa[s,t] = objective_value(m_fa[t,k_t])- value(ϴ_fa[t,k_t]);
+				
+				procurmnt_amount[t] += (sum(fval_fa[s,t][N0,i] for i=1:Ni))/nbOS;
+			end
+			if k_t in absorbing_states
+				break;
             end
         end        
     end

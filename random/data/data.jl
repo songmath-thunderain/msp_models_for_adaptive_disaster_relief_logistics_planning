@@ -77,8 +77,9 @@ for k=1:K, kk=1:K
     P_joint[k,kk] = P_temp[k,kk]/sum(P_temp[k,:]);
 end
 
-
-smallestTransProb = findmin(filter!(x -> x!= 0, vec(P_joint)))[1]*1.0/2;
+P_jointVec = deepcopy(P_joint);
+# Get the smallest transition probability that is nonzero to give us a correct threshold to filter out impossible transitions
+smallestTransProb = findmin(filter!(x -> x!= 0, vec(P_jointVec)))[1]*1.0/2; # JULIA WARNING: vec(P_joint) directly will change what P_joint looks like!!!!
 
 ########################################################################################
 
