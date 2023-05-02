@@ -1,138 +1,166 @@
-s = 1;
-t_roll = 1;
-x_init = x_0;
+for i=1:length(nodeLists)
+	@printf("nodeLists[%d]'s total # of nodes = %d\n", i, length(nodeLists[i]));
+	println(nodeLists[i]);
+end
 
 start = time();
 
-#define the model.
-master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_roll,x_init);
+###############################################################
+###############################################################
+# Offline policy construction: for each node in the nodeLists, going backwards in time, choose Go/No-go and record the best (better) expected objective value
+# The expected objective value of No-go nodes: a simple calculation for an absorbing state, and an expectation over all reachable nodes for a transient state
 
-#solve the model.
-LB_1stRoll, UB_1stRoll, xval_1stRoll, fval_1stRoll, θval_1stRoll = RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
-objGo = UB_1stRoll; # objGo: expected objval if implementing a two-stage plan now
-Go = false;
+# initialize -- just a placeholder
+decisionNodes = deepcopy(nodeLists);
+objvalNodes = Array{Float64}[];
+for t = 1:T
+	push!(objvalNodes,zeros(length(nodeLists[t])));
+end	
+solutionNodes = Dict();
 
-# Do sampling to create (in-sample) scenarios 
-osfname = "./data/OOS"*string(k_init)*".csv";
-allscen = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
+for t_roll = 1:T
+	for k = 1:length(nodeLists[t_roll])
+		if (nodeLists[t_roll][k] in absorbing_states) == false
+			# transient state: solving a 2SSP
+			x_init = deepcopy(x_0);
+			decisionNodes[t_roll][k] = 1; # This is only temporary, need to do a round of backward cleanup
+			#define the model.
+			master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_roll,x_init);
+			#solve the model.
+			LB_Roll, UB_Roll, xval_Roll, fval_Roll, θval_Roll = RH_2SSP_solve_roll2(nodeLists[t_roll][k],t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
+			objvalNodes[t_roll][k] = UB_Roll; # objGo: expected objval if implementing a two-stage plan now. This is also only temporary, need to do a round of backward cleanup
+			solutionNodes[t_roll,k] = [xval_Roll, fval_Roll];
+		else
+			# absorbing state, we can determine pretty easily if it is Go vs. No-Go
+			if S[nodeLists[t_roll][k]][1] == 1
+				# Hurricane dissipates
+				objvalNodes[t_roll][k] = 0;
+				decisionNodes[t_roll][k] = 0;
+			else
+				# Hurricane makes landfall with intensity, need to decide to do nothing or do some last-minute operation (although perhaps costly)
+				costNoGo = p*sum(SCEN[nodeLists[t_roll][k]][j] for j = 1:Nj);
+				#define second stage (subproblem) optimality model
+   				subproblem, y, xCons, dCons, rCons = RH_2SSP_second_stage();
+				for i=1:Ni
+					set_normalized_rhs(xCons[i],0);
+				end
 
-let objNoGo = 0.0; # objNoGo: expected obj if wait to implement a two-stage plan in the next stage
-	curr_state = allscen[s,t_roll];
-	# sample all the next-stage states and see the corresponding expected objval if implementing a two-stage plan then 
-	for kk = 1:K
-		if P_joint[curr_state, kk] > 1e-8
-			# plan with starting state of kk, initial condition of x_init, and t_roll
-			master_nextState, x_nextState, f_nextState, θ_nextState, subproblem_nextState, y2_nextState, xCons_nextState, dCons_nextState, rCons_nextState = RH_2SSP_define_models(t_roll+1,x_init);
-			LB_nextState, UB_nextState, xval_nextState, fval_nextState, θval_nextState = RH_2SSP_solve_roll2(kk,t_roll+1,master_nextState,subproblem_nextState,x_nextState,f_nextState,θ_nextState,y2_nextState,xCons_nextState,dCons_nextState,rCons_nextState);
-			objNoGo += P_joint[curr_state,kk]*UB_nextState;
+				for j=1:Nj
+					set_normalized_rhs(dCons[j], SCEN[nodeLists[t_roll][k]][j]);
+				end
+
+				for i=1:Ni
+					for j=1:Nj
+						set_objective_coefficient(subproblem, y[i,j], ca[i,j,t_roll]);
+					end
+				end
+
+				optimize!(subproblem) #solve the model
+   				status_subproblem = termination_status(subproblem); #check the status 
+				costGo = 0;
+   		 		if status_subproblem != MOI.OPTIMAL
+					println("status_subproblem = ", status_subproblem);
+    			else
+        			costGo = objective_value(subproblem);
+				end
+				if costNoGo < costGo
+					objvalNodes[t_roll][k] = costNoGo;
+					decisionNodes[t_roll][k] = 0;
+				else
+					objvalNodes[t_roll][k] = costGo;
+					decisionNodes[t_roll][k] = 1;
+				end
+			end
 		end
 	end
-	if objGo < objNoGo
-		Go = true;
+end
+
+
+###############################################################
+###############################################################
+# Now let's do a round of backward correction!
+for t=(T-1):-1:1
+	# Starting from T-1
+	for k = 1:length(nodeLists[t])
+		if (nodeLists[t][k] in absorbing_states) == false
+			# we've computed the Go version for these nodes above, now let's see the no-go version
+			costNoGo = 0;
+			for kk = 1:length(nodeLists[t+1])
+				if P_joint[nodeLists[t][k],nodeLists[t+1][kk]] > smallestTransProb
+					costNoGo = costNoGo + P_joint[nodeLists[t][k],nodeLists[t+1][kk]]*objvalNodes[t+1][kk];
+				end
+			end
+			if costNoGo < objvalNodes[t][k]
+				decisionNodes[t][k] = 0;
+				objvalNodes[t][k] = costNoGo;
+			end
+		end
 	end
 end
 
-if Go == true
-	println("same as the static two-stage!");
-	exit(0);
-end
-	
+###############################################################
+###############################################################
+# Start evaluating policies on the decision tree
+
 OS_paths = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
 objs_OOS = zeros(nbOS);
 
 for s=1:nbOS
-	τ = findfirst(x -> S[x][3] == Nc-1 && x ∉ absorbing_states, OS_paths[s,1:T]);
-	if τ === nothing
-		absorbingT = findfirst(x -> S[x][1] == 1, OS_paths[s,1:T]);
-		# This rolling procedure will go all the way until the hurricane gets into the absorbing state of dissipating 
-		for t_roll=2:(absorbingT-1)
-			# roll up to t = absorbingT-1
-			master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_roll,x_init);
-			LB_Roll, UB_Roll, xval_Roll, fval_Roll, θval_Roll = RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
-			objGo = UB_Roll;
-			let objNoGo = 0.0; # objNoGo: expected obj if wait to implement a two-stage plan in the next stage
-				curr_state = allscen[s,t_roll];
-				# sample all the next-stage states and see the corresponding expected objval if implementing a two-stage plan then 
-				for kk = 1:K
-					if P_joint[curr_state, kk] > 1e-8
-						# plan with starting state of kk, initial condition of x_init, and t_roll
-						master_nextState, x_nextState, f_nextState, θ_nextState, subproblem_nextState, y2_nextState, xCons_nextState, dCons_nextState, rCons_nextState = RH_2SSP_define_models(t_roll+1,x_init);
-						LB_nextState, UB_nextState, xval_nextState, fval_nextState, θval_nextState = RH_2SSP_solve_roll2(kk,t_roll+1,master_nextState,subproblem_nextState,x_nextState,f_nextState,θ_nextState,y2_nextState,xCons_nextState,dCons_nextState,rCons_nextState);
-						objNoGo += P_joint[curr_state,kk]*UB_nextState;
-					end
-				end
-				if objGo < objNoGo
-					Go = true;
-				end
-			end
-			if Go == true
-				RH_2SSP_update_RHS(absorbingT,OS_paths[s,absorbingT],subproblem,xCons,dCons,rCons,xval_Roll,fval_Roll,y2,t_roll);
-				Qtemp, pi1temp, pi2temp, pi3temp, flagtemp = solve_scen_subproblem(subproblem,xCons,dCons,rCons);
-				objs_OOS[s] = LB_Roll-sum(θval_Roll[n]*1.0/nbscen for n = 1:nbscen)+Qtemp;
-				break;
-			else
+	for t = 1:T
+		ind = findfirst(x->x==OS_paths[s,t], nodeLists[t]);
+		if OS_paths[s,t] in absorbing_states
+			# if absorbing, just take whatever that is the best, which has been computed above
+			objs_OOS[s] = objvalNodes[t][ind];
+			break;
+		else
+			if decisionNodes[t][ind] == 0
+				# Decision is No-go!
 				continue;
-			end
-		end
-	else
-		# This rolling procedure will stop at t = τ
-		for t_roll=2:(τ-1)
-			# roll up to t = τ-1
-			print("t_roll = ", t_roll);
-			println(", τ = ", τ);
-			master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_roll,x_init);
-			LB_Roll, UB_Roll, xval_Roll, fval_Roll, θval_Roll = RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
-			objGo = UB_Roll;
-			let objNoGo = 0.0; # objNoGo: expected obj if wait to implement a two-stage plan in the next stage
-				curr_state = allscen[s,t_roll];
-				# sample all the next-stage states and see the corresponding expected objval if implementing a two-stage plan then 
-				for kk = 1:K
-					if P_joint[curr_state, kk] > 1e-8
-						# plan with starting state of kk, initial condition of x_init, and t_roll
-						master_nextState, x_nextState, f_nextState, θ_nextState, subproblem_nextState, y2_nextState, xCons_nextState, dCons_nextState, rCons_nextState = RH_2SSP_define_models(t_roll+1,x_init);
-						LB_nextState, UB_nextState, xval_nextState, fval_nextState, θval_nextState = RH_2SSP_solve_roll2(kk,t_roll+1,master_nextState,subproblem_nextState,x_nextState,f_nextState,θ_nextState,y2_nextState,xCons_nextState,dCons_nextState,rCons_nextState);
-						objNoGo += P_joint[curr_state,kk]*UB_nextState;
-					end
-				end
-				if objGo < objNoGo
-					Go = true;
-				end
-			end
-			if Go == true
-				RH_2SSP_update_RHS(τ,OS_paths[s,τ],subproblem,xCons,dCons,rCons,xval_Roll,fval_Roll,y2,t_roll);
-				Qtemp, pi1temp, pi2temp, pi3temp, flagtemp = solve_scen_subproblem(subproblem,xCons,dCons,rCons);
-				objs_OOS[s] = LB_Roll-sum(θval_Roll[n]*1.0/nbscen for n = 1:nbscen)+Qtemp;
-				break;
 			else
-				if t_roll < (τ-1)
-					continue;
-				else
-					# Will head into the terminal stage with no preparation!
-					for i=1:Ni
-						set_normalized_rhs(xCons[i],x_init[i]); # xval_Roll[i,2] gets carried over to period τ 
-					end
-					k_t = OS_paths[s,t_roll+1];
-					for j=1:Nj
-						if k_t ∉ absorbing_states           
-							set_normalized_rhs(dCons[j], SCEN[k_t][j]);
-						else
-							set_normalized_rhs(dCons[j], 0);
-						end
-					end
-
-					set_normalized_rhs(rCons,0); #This is 0 since the cost in the future has not been paid yet -- this is rolling horizon
-
-					# Also need to update the coefficients of y2[i,j] variables in the 2nd stage
-					for i=1:Ni
-						for j=1:Nj
-							set_objective_coefficient(subproblem, y2[i,j], ca[i,j,τ]);
-						end
-					end
-					optimize!(subproblem); 
-					objs_OOS[s] += objective_value(subproblem);
+				# Decision is Go!
+				absorbingT = findfirst(x -> (S[x][3] == Nc || S[x][1] == 1), OS_paths[s,:]);
+				#define second stage (subproblem) optimality model
+   				subproblem, y, xCons, dCons, rCons = RH_2SSP_second_stage();
+				for i=1:Ni
+					set_normalized_rhs(xCons[i],solutionNodes[t,ind][1][i,absorbingT-t+1]);
 				end
+
+				for j=1:Nj
+					if S[OS_paths[s,absorbingT]][1] != 1
+						set_normalized_rhs(dCons[j], SCEN[OS_paths[s,absorbingT]][j]);
+					else
+						set_normalized_rhs(dCons[j], 0);
+					end
+				end
+
+				if absorbingT == T
+					# Plan exactly until the landfall time -- no reimbursement occurred!
+					set_normalized_rhs(rCons,0);
+				else
+					updatedRHS = -sum((sum(sum(cb[i,ii,t+tt-1]*solutionNodes[t,ind][2][i,ii,tt] for ii=1:Ni) for i=1:N0)
+								+sum(ch[i,t+tt-1]*solutionNodes[t,ind][1][i,tt] for i=1:Ni)  
+								+sum(solutionNodes[t,ind][2][N0,i,tt] for i=1:Ni)*h[t+tt-1]) for tt = (absorbingT+2-t):(T-t+1)); 
+					set_normalized_rhs(rCons,updatedRHS);
+				end
+
+
+				for i=1:Ni
+					for j=1:Nj
+						set_objective_coefficient(subproblem, y[i,j], ca[i,j,absorbingT]);
+					end
+				end
+
+				optimize!(subproblem) #solve the model
+   				status_subproblem = termination_status(subproblem); #check the status 
+   		 		if status_subproblem != MOI.OPTIMAL
+					println("status_subproblem = ", status_subproblem);
+    			else
+        			objs_OOS[s] = objective_value(subproblem);
+				end
+				break;
 			end
 		end
+
 	end
 	print("obj[", s);
 	println("] = ", objs_OOS[s]);
