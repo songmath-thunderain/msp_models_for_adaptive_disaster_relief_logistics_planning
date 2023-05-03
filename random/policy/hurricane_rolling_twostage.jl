@@ -59,8 +59,10 @@ for s=1:nbOS
 			if t_roll == (absorbingT-1)
 				# Now we get the realization, do the recourse now and finish the rolling procedure
 				t_roll = t_roll + 1;
-				# Just salvage all the x_init
 				objs_RH2SSP[s,t_roll] = 0;
+				# Just salvage all the x_init
+#=
+				# Approach #1: continue the planned operation for stage = absorbingT, and then salvage -> but since we have the adaptability in RH, we shouldn't do this!
 				for i = 1:N0
 					for ii = 1:Ni
 						objs_RH2SSP[s,t_roll] += cb[i,ii,t_roll]*fval_Roll[i,ii,2];
@@ -72,6 +74,9 @@ for s=1:nbOS
 				for i=1:Ni
 					objs_RH2SSP[s,t_roll] += xval_Roll[i,2]*q;
 				end
+=#
+				# Approach #2: do nothing, and just salvage xval_Roll[i,1]
+				objs_RH2SSP[s,t_roll] += xval_Roll[i,1]*q;
 			end
 		end
 	else
@@ -106,6 +111,8 @@ for s=1:nbOS
 				# Now we get the realization, do the recourse now and finish the rolling procedure
 				t_roll = t_roll + 1;
 				objs_RH2SSP[s,t_roll] = 0;
+#=
+				# Again, Approach #1: continue the planned operation for stage = τ
 				for i = 1:N0
 					for ii = 1:Ni
 						objs_RH2SSP[s,t_roll] += cb[i,ii,t_roll]*fval_Roll[i,ii,2];
@@ -136,6 +143,10 @@ for s=1:nbOS
 				end
 				optimize!(subproblem); 
       			objs_RH2SSP[s,t_roll] += objective_value(subproblem);
+=#
+				# Approach #2: based on xvals_Roll[:,1], optimize all the operations together with full information
+				
+
 				#println("last roll value = ", objs_RH2SSP[s,t_roll]);
 			end
 		end
