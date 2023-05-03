@@ -99,6 +99,8 @@ end
 ###############################################################
 # Start evaluating policies on the decision tree
 
+println("Construction is done....Now we do evaluation...");
+
 osfname = "./data/OOS"*string(k_init)*".csv";
 OS_paths = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
 objs_OOS = zeros(nbOS);
@@ -143,7 +145,7 @@ for s=1:nbOS
 					if absorbing_option == 0
 						updatedRHS = -sum((sum(sum(cb[i,ii,t+tt-1]*solutionNodes[t,ind][2][i,ii,tt] for ii=1:Ni) for i=1:N0)
 								+sum(ch[i,t+tt-1]*solutionNodes[t,ind][1][i,tt] for i=1:Ni)  
-								+sum(solutionNodes[t,ind][2][N0,i,tt] for i=1:Ni)*h[t+tt-1]) for tt = (absorbingT+1-t):(T-t+1)); 
+								+sum(solutionNodes[t,ind][2][N0,i,tt] for i=1:Ni)*h[t+tt-1]) for tt = (absorbingT+1-t):(T-t)); 
 						set_normalized_rhs(rCons,updatedRHS);
 					else
 						updatedRHS = -sum((sum(sum(cb[i,ii,t+tt-1]*solutionNodes[t,ind][2][i,ii,tt] for ii=1:Ni) for i=1:N0)
