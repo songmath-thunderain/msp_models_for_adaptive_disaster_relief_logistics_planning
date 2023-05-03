@@ -5,14 +5,14 @@ function deterministic_model()
  
     #######################
     #Define the model.
-    m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GRB_ENV), "OutputFlag" => 0));
+    m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GRB_ENV), "OutputFlag" => 0, "Presolve" => 0));
 
     #######################
     #Define the variables.
     @variables(m,
             begin
                0 <= x[i=1:Ni,t=1:T] <= x_cap[i]
-               0 <= f[i=1:N0,ii=1:Ni,t=1:T] <= f_cap[i,ii]
+               0 <= f[i=1:N0,ii=1:Ni,t=1:T]
                0 <= y[i=1:Ni,j=1:Nj,t=1:T]
                0 <= z[j=1:Nj,t=1:T]
                0 <= v[i=1:Ni,t=1:T]
@@ -67,66 +67,3 @@ function deterministic_model()
     return m, x, f, y, z, v, dCons
 end
 
-###############################################################
-###############################################################
-
-#evaluate the model
-function clairvoyant_eval()
-    start=time();
-    osfname = "./data/OOS"*string(k_init)*".csv";
-    OS_paths = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
-	# we do not have this second layer now [REVISION]
-	# OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS
-    objs_cv = zeros(nbOS);
-    
-    xval_cv = Array{Any,1}(undef,nbOS); 
-	fval_cv = Array{Any,1}(undef,nbOS);
-    yval_cv = Array{Any,1}(undef,nbOS); 
-	zval_cv = Array{Any,1}(undef,nbOS); 
-	vval_cv = Array{Any,1}(undef,nbOS);
-
-    for s=1:nbOS
-        #find the period when the hurricane made landfall && intensity != 1
-		println("OS_paths[", s, "] = ", OS_paths[s,1:T]);
-        τ = findfirst(x -> (S[x][3] == Nc && S[x][1] != 1), OS_paths[s,1:T]);
-        if τ === nothing
-            continue;
-        else
-            k_t = OS_paths[s,τ] # state corresponding to the landfall
-			# m = OS_M[s]; [REVISION]
-            for j=1:Nj, t=1:T
-                if t == τ
-					#set_normalized_rhs(dCons_cv[τ,j], SCEN[k_t][j,m]); #set the RHS of demand constraint [REVISION]
-					set_normalized_rhs(dCons_cv[τ,j], SCEN[k_t][j]); #set the RHS of demand constraint
-                else
-                    set_normalized_rhs(dCons_cv[t,j], 0); #set the RHS of demand constraint
-                end
-            end
-             
-            optimize!(m_cv); #solve the model        
-            status = termination_status(m_cv); #check the status 
-            if status != MOI.OPTIMAL
-                println(" Model in clairvoyant is ", status);
-                exit(0);
-            else
-                xval_cv[s] = value.(x_cv);
-                fval_cv[s] = value.(f_cv);                 
-                yval_cv[s] = value.(y_cv);
-                zval_cv[s] = value.(z_cv);
-                vval_cv[s] = value.(v_cv);
-                objs_cv[s] = objective_value(m_cv);
-            end
-        end
-    end
-
-    cv_bar = mean(objs_cv);
-    cv_std = std(objs_cv);
-    cv_low = cv_bar-1.96*cv_std/sqrt(nbOS);
-    cv_high = cv_bar+1.96*cv_std/sqrt(nbOS);
-	println("Clairvoyant....");
-    println("μ ± 1.96*σ/√NS = ", cv_bar, "±", [cv_low,cv_high]);
-    elapsed = time() - start;
-    vals = [xval_cv, fval_cv, yval_cv, zval_cv, vval_cv];
-
-    return objs_cv, cv_bar, cv_low, cv_high, elapsed#, vals
-end

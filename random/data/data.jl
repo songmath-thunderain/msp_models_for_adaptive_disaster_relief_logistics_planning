@@ -145,7 +145,7 @@ D_max = 400; #the maximum demand that can happen
 
 x_cap = Matrix(nodes)[1:Ni,5]*(Nj/Ni); #capacity of each SP
 x_0 = zeros(Ni); #initial items at different SPs
-f_cap = fill(Inf,N0,Ni);
+#f_cap = fill(Inf,N0,Ni);
 
 
 ########################################################################################

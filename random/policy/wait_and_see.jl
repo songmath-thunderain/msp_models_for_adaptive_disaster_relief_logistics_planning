@@ -39,36 +39,33 @@ for t_roll = 1:T
 			else
 				# Hurricane makes landfall with intensity, need to decide to do nothing or do some last-minute operation (although perhaps costly)
 				costNoGo = p*sum(SCEN[nodeLists[t_roll][k]][j] for j = 1:Nj);
-				#define second stage (subproblem) optimality model
-   				subproblem, y, xCons, dCons, rCons = RH_2SSP_second_stage();
-				for i=1:Ni
-					set_normalized_rhs(xCons[i],0);
-				end
-
-				for j=1:Nj
-					set_normalized_rhs(dCons[j], SCEN[nodeLists[t_roll][k]][j]);
-				end
-
-				for i=1:Ni
-					for j=1:Nj
-						set_objective_coefficient(subproblem, y[i,j], ca[i,j,t_roll]);
-					end
-				end
-
-				optimize!(subproblem) #solve the model
-   				status_subproblem = termination_status(subproblem); #check the status 
-				costGo = 0;
-   		 		if status_subproblem != MOI.OPTIMAL
-					println("status_subproblem = ", status_subproblem);
-    			else
-        			costGo = objective_value(subproblem);
-				end
-				if costNoGo < costGo
+				if absorbing_option == 0
 					objvalNodes[t_roll][k] = costNoGo;
 					decisionNodes[t_roll][k] = 0;
 				else
-					objvalNodes[t_roll][k] = costGo;
-					decisionNodes[t_roll][k] = 1;
+					#define terminal stage optimality model
+
+					m_term, x_term, f_term, y_term, z_term, v_term, dCons_term = terminal_model(t_roll,x_0);
+
+					for j=1:Nj
+						set_normalized_rhs(dCons_term[j], SCEN[nodeLists[t_roll][k]][j]);
+					end
+
+					optimize!(m_term) #solve the model
+					status_subproblem = termination_status(m_term); #check the status 
+					costGo = 0;
+					if status_subproblem != MOI.OPTIMAL
+						println("status_subproblem = ", status_subproblem);
+					else
+						costGo = objective_value(m_term);
+					end
+					if costNoGo < costGo
+						objvalNodes[t_roll][k] = costNoGo;
+						decisionNodes[t_roll][k] = 0;
+					else
+						objvalNodes[t_roll][k] = costGo;
+						decisionNodes[t_roll][k] = 1;
+					end
 				end
 			end
 		end
@@ -122,10 +119,15 @@ for s=1:nbOS
 				absorbingT = findfirst(x -> (S[x][3] == Nc || S[x][1] == 1), OS_paths[s,:]);
 				#define second stage (subproblem) optimality model
    				subproblem, y, xCons, dCons, rCons = RH_2SSP_second_stage();
-				for i=1:Ni
-					set_normalized_rhs(xCons[i],solutionNodes[t,ind][1][i,absorbingT-t+1]);
+				if absorbing_option == 0
+					for i=1:Ni
+						set_normalized_rhs(xCons[i],solutionNodes[t,ind][1][i,absorbingT-t]);
+					end
+				else	
+					for i=1:Ni
+						set_normalized_rhs(xCons[i],solutionNodes[t,ind][1][i,absorbingT-t+1]);
+					end
 				end
-
 				for j=1:Nj
 					if S[OS_paths[s,absorbingT]][1] != 1
 						set_normalized_rhs(dCons[j], SCEN[OS_paths[s,absorbingT]][j]);
@@ -134,17 +136,23 @@ for s=1:nbOS
 					end
 				end
 				
-#=
 				if absorbingT == T
 					# Plan exactly until the landfall time -- no reimbursement occurred!
 					set_normalized_rhs(rCons,0);
 				else
-					updatedRHS = -sum((sum(sum(cb[i,ii,t+tt-1]*solutionNodes[t,ind][2][i,ii,tt] for ii=1:Ni) for i=1:N0)
+					if absorbing_option == 0
+						updatedRHS = -sum((sum(sum(cb[i,ii,t+tt-1]*solutionNodes[t,ind][2][i,ii,tt] for ii=1:Ni) for i=1:N0)
+								+sum(ch[i,t+tt-1]*solutionNodes[t,ind][1][i,tt] for i=1:Ni)  
+								+sum(solutionNodes[t,ind][2][N0,i,tt] for i=1:Ni)*h[t+tt-1]) for tt = (absorbingT+1-t):(T-t+1)); 
+						set_normalized_rhs(rCons,updatedRHS);
+					else
+						updatedRHS = -sum((sum(sum(cb[i,ii,t+tt-1]*solutionNodes[t,ind][2][i,ii,tt] for ii=1:Ni) for i=1:N0)
 								+sum(ch[i,t+tt-1]*solutionNodes[t,ind][1][i,tt] for i=1:Ni)  
 								+sum(solutionNodes[t,ind][2][N0,i,tt] for i=1:Ni)*h[t+tt-1]) for tt = (absorbingT+2-t):(T-t+1)); 
-					set_normalized_rhs(rCons,updatedRHS);
+						set_normalized_rhs(rCons,updatedRHS);
+					end
 				end
-=#
+
 				for i=1:Ni
 					for j=1:Nj
 						set_objective_coefficient(subproblem, y[i,j], ca[i,j,absorbingT]);
@@ -158,10 +166,18 @@ for s=1:nbOS
 					exit(0);
     			else
         			objs_OOS[s] = objective_value(subproblem);
-					for tt = 1:(absorbingT+1-t)
-						objs_OOS[s] = objs_OOS[s] + sum(sum(cb[i,ii,t+tt-1]*solutionNodes[t,ind][2][i,ii,tt] for ii=1:Ni) for i=1:N0)
+					if absorbing_option == 0
+						for tt = 1:(absorbingT-t)
+							objs_OOS[s] = objs_OOS[s] + sum(sum(cb[i,ii,t+tt-1]*solutionNodes[t,ind][2][i,ii,tt] for ii=1:Ni) for i=1:N0)
 								+sum(ch[i,t+tt-1]*solutionNodes[t,ind][1][i,tt] for i=1:Ni)  
 								+sum(solutionNodes[t,ind][2][N0,i,tt] for i=1:Ni)*h[t+tt-1];
+						end
+					else
+						for tt = 1:(absorbingT+1-t)
+							objs_OOS[s] = objs_OOS[s] + sum(sum(cb[i,ii,t+tt-1]*solutionNodes[t,ind][2][i,ii,tt] for ii=1:Ni) for i=1:N0)
+								+sum(ch[i,t+tt-1]*solutionNodes[t,ind][1][i,tt] for i=1:Ni)  
+								+sum(solutionNodes[t,ind][2][N0,i,tt] for i=1:Ni)*h[t+tt-1];
+						end
 					end
 				end
 				break;

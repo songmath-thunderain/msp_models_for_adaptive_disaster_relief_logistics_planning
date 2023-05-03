@@ -1,7 +1,66 @@
+# Define the terminal-stage problem: only used when absorbing_option = 1, i.e., MDC/SP operation is allowed to occur
+function terminal_model(t_roll,x_init)
+ 
+    #######################
+    #Define the model.
+    m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GRB_ENV), "OutputFlag" => 0, "Presolve" => 0));
+
+    #######################
+    #Define the variables.
+    @variables(m,
+            begin
+               0 <= x[i=1:Ni] <= x_cap[i]
+               0 <= f[i=1:N0,ii=1:Ni]
+               0 <= y[i=1:Ni,j=1:Nj]
+               0 <= z[j=1:Nj]
+               0 <= v[i=1:Ni]
+            end
+          );
+
+    #######################
+    #Define the objective.
+    @objective(m,
+               Min,
+               sum(sum(cb[i,ii,t_roll]*f[i,ii] for ii=1:Ni) for i=1:N0)
+              +sum(ch[i,t_roll]*x[i] for i=1:Ni)
+              +sum(f[N0,i] for i=1:Ni)*h[t_roll]
+              +sum(sum(ca[i,j,t_roll]*y[i,j] for j=1:Nj) for i=1:Ni)
+              +sum(z[j] for j=1:Nj)*p
+              +sum(v[i] for i=1:Ni)*q       
+               );
+
+    #######################
+    #Define the constraints.
+    dCons = Dict(); #a dictonary to store all the demand constraint
+	for i=1:Ni
+		@constraint(m, 
+					x[i]
+				   +sum(f[i,j] for j=1:Ni if j != i)
+				   -sum(f[j,i] for j=1:N0 if j != i)
+				   +sum(y[i,j] for j=1:Nj)
+				   +v[i]
+				   == x_init[i]
+					);
+		@constraint(m, sum(f[i,j] for j=1:Ni if j != i) <= x_init[i]);
+	end
+	for j=1:Nj
+	   dCons[j] = @constraint(m, z[j]+sum(y[i,j] for i=1:Ni) >= 0);
+	end
+
+    return m, x, f, y, z, v, dCons
+end
+
+
+
+
 #Define first-stage master problem
 function RH_2SSP_first_stage(t_roll,x_init)
     #Note that the static 2SSP corresponds to the case when t_roll = 1 
 	nbstages1 = T-t_roll+1;
+	if absorbing_option == 0
+		# If no MDC/SP operation is allowed in the absorbing state, do not plan for stage T since we know for sure that all states are absorbing
+		nbstages1 = T-t_roll;
+	end
     m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GRB_ENV), "OutputFlag" => 0));
 
     #######################
@@ -9,7 +68,7 @@ function RH_2SSP_first_stage(t_roll,x_init)
     @variables(m,
                 begin
                    0 <= x[i=1:Ni,t=1:nbstages1] <= x_cap[i]
-                   0 <= f[i=1:N0,ii=1:Ni,t=1:nbstages1] <= f_cap[i,ii]
+                   0 <= f[i=1:N0,ii=1:Ni,t=1:nbstages1]
                -1e8 <= θ[n=1:nbscen] # multicut version! 
                 end
               );
@@ -116,6 +175,10 @@ end
 function initialize(s,t_roll)
 # s is the index for the sample path in the out-of-sample test 
     nbstages1 = T-t_roll+1;
+	if absorbing_option == 0
+		# If no MDC/SP operation is allowed in the absorbing state, do not plan for stage T since we know for sure that all states are absorbing
+		nbstages1 = T-t_roll;
+	end
 	LB = -1e10; 
 	UB = 1e10; 
 	θval = zeros(nbscen);
@@ -152,6 +215,10 @@ end
 function initialize2(kk,t_roll)
 # kk is the starting state for the two-stage SP model: this is to accommodate the wait-and-see heuristic approach    
 	nbstages1 = T-t_roll+1;
+	if absorbing_option == 0
+		# If no MDC/SP operation is allowed in the absorbing state, do not plan for stage T since we know for sure that all states are absorbing
+		nbstages1 = T-t_roll;
+	end
 	LB = -1e10; 
 	UB = 1e10; 
 	θval = zeros(nbscen);
@@ -189,7 +256,6 @@ end
 function RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y,xCons,dCons,rCons)
 # s is the index for the sample path in the out-of-sample test 
 # Assumption coming into this function: t_roll must be before the landfall stage of sample path s in the out-of-sample test
-    nbstages1 = T-t_roll+1;
     LB, UB, xval, fval, θval, scen, qprob = initialize(s,t_roll);
 	solveIter = 0;
     while (UB-LB)*1.0/max(1e-10,abs(LB)) > ϵ && abs(UB-LB) > ϵ && solveIter < 100 # WARNING: Temporary fix here!
@@ -224,7 +290,6 @@ end
 function RH_2SSP_solve_roll2(kk,t_roll,master,subproblem,x,f,θ,y,xCons,dCons,rCons)
 # kk is the starting state for the two-stage SP model: this is to accommodate the wait-and-see heuristic approach 
 # Assumption coming into this function: t_roll must be before the landfall stage of sample path s in the out-of-sample test
-    nbstages1 = T-t_roll+1;
     LB, UB, xval, fval, θval, scen, qprob = initialize2(kk,t_roll);
 	solveIter = 0;
     while (UB-LB)*1.0/max(1e-10,abs(LB)) > ϵ && abs(UB-LB) > ϵ && solveIter < 100 # WARNING: Temporary fix here!
@@ -282,6 +347,10 @@ end
 function solve_second_stage(t_roll,xval,fval,θval,scen,qprob,master,subproblem,x,f,θ,y,xCons,dCons,rCons)
     flag = 0;
     nbstages1 = T-t_roll+1;
+	if absorbing_option == 0
+		# If no MDC/SP operation is allowed in the absorbing state, do not plan for stage T since we know for sure that all states are absorbing
+		nbstages1 = T-t_roll;
+	end
     Q = zeros(nbscen); #list for all the optimal values
     pi1 = Array{Any,1}(undef,nbscen); #list for all the dual multiplies of the first set of constraints
     pi2 = Array{Any,1}(undef,nbscen); #list for all the dual multiplies of the second set of constraints
@@ -337,13 +406,24 @@ function solve_second_stage(t_roll,xval,fval,θval,scen,qprob,master,subproblem,
 		    	tt = τ;
 			end
 			if tt < t_roll
-				tt = t_roll; # WARNING: temporary fix!
+				#tt = t_roll; # WARNING: temporary fix!
+				println("tt < t_roll, how can this happen?!");
+				exit(0);
 			end	
-			@constraint(master,
-			θ[n]-sum(pi1[n][i]*x[i,tt-t_roll+1] for i=1:Ni)-pi3[n]*(-sum((sum(sum(cb[i,ii,t_roll+t-1]*f[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*x[i,t] for i=1:Ni)+sum(f[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (tt+2-t_roll):nbstages1)) 
-				>= 
-			 Q[n]-sum(pi1[n][i]*xval[i,tt-t_roll+1] for i=1:Ni)-pi3[n]*(-sum((sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)+sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (tt+2-t_roll):nbstages1))
-				);
+			# tt is the terminal stage
+			if absorbing_option == 0
+				@constraint(master,
+				θ[n]-sum(pi1[n][i]*x[i,tt-t_roll] for i=1:Ni)-pi3[n]*(-sum((sum(sum(cb[i,ii,t_roll+t-1]*f[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*x[i,t] for i=1:Ni)+sum(f[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (tt+1-t_roll):nbstages1)) 
+					>= 
+				 Q[n]-sum(pi1[n][i]*xval[i,tt-t_roll] for i=1:Ni)-pi3[n]*(-sum((sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)+sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (tt+1-t_roll):nbstages1))
+					);
+			else
+				@constraint(master,
+				θ[n]-sum(pi1[n][i]*x[i,tt-t_roll+1] for i=1:Ni)-pi3[n]*(-sum((sum(sum(cb[i,ii,t_roll+t-1]*f[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*x[i,t] for i=1:Ni)+sum(f[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (tt+2-t_roll):nbstages1)) 
+					>= 
+				 Q[n]-sum(pi1[n][i]*xval[i,tt-t_roll+1] for i=1:Ni)-pi3[n]*(-sum((sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)+sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (tt+2-t_roll):nbstages1))
+					);
+			end
 			flag = 1;
 	    end
     end
@@ -389,13 +469,22 @@ end
 function RH_2SSP_update_RHS(τ,k_t,subproblem,xCons,dCons,rCons,xval,fval,y,t_roll)
 	# Note that the assumption coming into this function is that τ > t_roll if τ is not nothing
 	nbstages1 = T-t_roll+1;
+	if absorbing_option == 0
+		# If no MDC/SP operation is allowed in the absorbing state, do not plan for stage T since we know for sure that all states are absorbing
+		nbstages1 = T-t_roll;
+	end
+
 	for i=1:Ni
 	    if τ === nothing
 			println("We shouldn't come here any more!");
 			exit(0);
 			#set_normalized_rhs(xCons[i],xval[i,T-t_roll+1]);
 	    else
-			set_normalized_rhs(xCons[i],xval[i,τ-t_roll+1]);
+			if absorbing_option == 0
+				set_normalized_rhs(xCons[i],xval[i,τ-t_roll]);	
+			else
+				set_normalized_rhs(xCons[i],xval[i,τ-t_roll+1]);
+			end
 	    end
 	end
 
@@ -417,9 +506,18 @@ function RH_2SSP_update_RHS(τ,k_t,subproblem,xCons,dCons,rCons,xval,fval,y,t_ro
 			# Plan exactly until the landfall time -- no reimbursement occurred!
 			set_normalized_rhs(rCons,0);
 		else
-			updatedRHS = -sum((sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)
+			updatedRHS = 0;
+			if absorbing_option == 0
+				# reimburse the operational cost starting from the terminal stage, since the terminal stage does not allow operation
+				updatedRHS = -sum((sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)
+						+sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)  
+						+sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (τ+1-t_roll):nbstages1);
+			else
+				# reimburse the operational cost if they occur after the terminal stage: starting from stage (τ+1)-t_roll+1
+				updatedRHS = -sum((sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)
 						+sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)  
 						+sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (τ+2-t_roll):nbstages1); 
+			end
 			set_normalized_rhs(rCons,updatedRHS);
 		end
 	    # Also need to update the coefficients of y[i,j] variables in the 2nd stage

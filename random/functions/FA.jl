@@ -12,7 +12,7 @@ function stage_t_state_k_problem(t)
     @variables(m,
             begin
                0 <= x[i=1:Ni] <= x_cap[i]
-               0 <= f[i=1:N0,ii=1:Ni] <= f_cap[i,ii]
+               0 <= f[i=1:N0,ii=1:Ni]
                0 <= y[i=1:Ni,j=1:Nj]
                0 <= z[j=1:Nj]
                0 <= v[i=1:Ni]
@@ -89,6 +89,21 @@ function define_models()
                 m[t,ind], x[t,ind], f[t,ind], y[t,ind], z[t,ind], v[t,ind], ϴ[t,ind], dCons[t,ind], FB1Cons[t,ind], FB2Cons[t,ind] = stage_t_state_k_problem(t);
 				if ind in absorbing_states
 					@constraint(m[t,ind], ϴ[t,ind] == 0);
+					if absorbing_option == 0
+						# not allowing MDC/SP operation at the absorbing state
+						for i=1:Ni
+							for j=1:Ni
+								if j!= i
+									@constraint(m[t,ind], f[t,ind][i,j] == 0);
+								end
+							end
+							for j=1:N0
+								if j!= i
+									@constraint(m[t,ind], f[t,ind][j,i] == 0);
+								end
+							end
+						end
+					end
 				end
             	#end
 			end			

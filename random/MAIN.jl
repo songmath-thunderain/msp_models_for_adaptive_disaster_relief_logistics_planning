@@ -25,6 +25,7 @@ factor = parse(Float64, PARAMS[4]); #cost scaling factor
 nbOS = parse(Int, PARAMS[5]); #number of scenarios in the out-of-sample
 k_init = parse(Int, PARAMS[6]); #initial state
 nbscen = parse(Int, PARAMS[7]); #number of sample paths when solving two-stage
+absorbing_option = parse(Int, PARAMS[8]); # whether or not we allow MDC/SP operation in the absorbing state
 
 include("packages.jl");
 include("./data/data.jl");
@@ -48,10 +49,10 @@ const GRB_ENV = Gurobi.Env();
 #include("./policy/hurricane_FA.jl");
  
 #Rolling-horizon 2SSP
-include("./policy/hurricane_rolling_twostage.jl");
+#include("./policy/hurricane_rolling_twostage.jl");
 
 #Wait-and-see
-#include("./policy/wait_and_see.jl");
+include("./policy/wait_and_see.jl");
 
 #Static 2SSP
 #include("./policy/hurricane_static_twostage.jl");

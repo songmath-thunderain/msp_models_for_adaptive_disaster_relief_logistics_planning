@@ -62,7 +62,7 @@ for s=1:nbOS
 				objs_RH2SSP[s,t_roll] = 0;
 				# Just salvage all the x_init
 #=
-				# Approach #1: continue the planned operation for stage = absorbingT, and then salvage -> but since we have the adaptability in RH, we shouldn't do this!
+				# Old approach: continue the planned operation for stage = absorbingT, and then salvage -> but since we have the adaptability in RH, we shouldn't do this!
 				for i = 1:N0
 					for ii = 1:Ni
 						objs_RH2SSP[s,t_roll] += cb[i,ii,t_roll]*fval_Roll[i,ii,2];
@@ -75,8 +75,10 @@ for s=1:nbOS
 					objs_RH2SSP[s,t_roll] += xval_Roll[i,2]*q;
 				end
 =#
-				# Approach #2: do nothing, and just salvage xval_Roll[i,1]
-				objs_RH2SSP[s,t_roll] += xval_Roll[i,1]*q;
+				# Regardless of what the absorbing_option is, we won't do anything but to salvage everything
+				for i=1:Ni
+					objs_RH2SSP[s,t_roll] += xval_Roll[i,1]*q;
+				end
 			end
 		end
 	else
@@ -112,7 +114,7 @@ for s=1:nbOS
 				t_roll = t_roll + 1;
 				objs_RH2SSP[s,t_roll] = 0;
 #=
-				# Again, Approach #1: continue the planned operation for stage = τ
+				# Again, old approach: continue the planned operation for stage = τ
 				for i = 1:N0
 					for ii = 1:Ni
 						objs_RH2SSP[s,t_roll] += cb[i,ii,t_roll]*fval_Roll[i,ii,2];
@@ -145,7 +147,54 @@ for s=1:nbOS
       			objs_RH2SSP[s,t_roll] += objective_value(subproblem);
 =#
 				# Approach #2: based on xvals_Roll[:,1], optimize all the operations together with full information
-				
+				if absorbing_option == 0
+					# do not allow additional MDP/SP operation
+					for i=1:Ni
+						set_normalized_rhs(xCons[i],xval_Roll[i,1]); 
+					end
+					k_t = OS_paths[s,t_roll];
+					for j=1:Nj
+						if S[k_t][1] != 1           
+							set_normalized_rhs(dCons[j], SCEN[k_t][j]);
+						else
+							set_normalized_rhs(dCons[j], 0);
+						end
+					end
+
+					set_normalized_rhs(rCons,0); #This is 0 since the cost in the future has not been paid yet -- this is rolling horizon
+
+					# Also need to update the coefficients of y2[i,j] variables in the 2nd stage
+					for i=1:Ni
+						for j=1:Nj
+							set_objective_coefficient(subproblem, y2[i,j], ca[i,j,τ]);
+						end
+					end
+					optimize!(subproblem); 
+       				if termination_status(subproblem) != MOI.OPTIMAL
+						println("status = ", termination_status(subproblem));
+						exit(0);
+					else
+						objs_RH2SSP[s,t_roll] += objective_value(subproblem);
+					end	
+				else
+					# Solve a terminal stage problem, just as the FA/MSP version
+					m_term, x_term, f_term, y_term, z_term, v_term, dCons_term = terminal_model(t_roll,xval_Roll[:,1]);
+					k_t = OS_paths[s,t_roll];
+					for j=1:Nj
+						if S[k_t][1] != 1           
+							set_normalized_rhs(dCons_term[j], SCEN[k_t][j]);
+						else
+							set_normalized_rhs(dCons_term[j], 0);
+						end
+					end
+					optimize!(m_term); 
+       				if termination_status(m_term) != MOI.OPTIMAL
+						println("status = ", termination_status(m_term));
+						exit(0);
+					else
+						objs_RH2SSP[s,t_roll] += objective_value(m_term);
+					end
+				end
 
 				#println("last roll value = ", objs_RH2SSP[s,t_roll]);
 			end
