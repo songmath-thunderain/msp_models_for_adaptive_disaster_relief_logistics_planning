@@ -133,7 +133,8 @@ for s=1:nbOS
 						set_normalized_rhs(dCons[j], 0);
 					end
 				end
-
+				
+#=
 				if absorbingT == T
 					# Plan exactly until the landfall time -- no reimbursement occurred!
 					set_normalized_rhs(rCons,0);
@@ -143,8 +144,7 @@ for s=1:nbOS
 								+sum(solutionNodes[t,ind][2][N0,i,tt] for i=1:Ni)*h[t+tt-1]) for tt = (absorbingT+2-t):(T-t+1)); 
 					set_normalized_rhs(rCons,updatedRHS);
 				end
-
-
+=#
 				for i=1:Ni
 					for j=1:Nj
 						set_objective_coefficient(subproblem, y[i,j], ca[i,j,absorbingT]);
@@ -155,8 +155,14 @@ for s=1:nbOS
    				status_subproblem = termination_status(subproblem); #check the status 
    		 		if status_subproblem != MOI.OPTIMAL
 					println("status_subproblem = ", status_subproblem);
+					exit(0);
     			else
         			objs_OOS[s] = objective_value(subproblem);
+					for tt = 1:(absorbingT+1-t)
+						objs_OOS[s] = objs_OOS[s] + sum(sum(cb[i,ii,t+tt-1]*solutionNodes[t,ind][2][i,ii,tt] for ii=1:Ni) for i=1:N0)
+								+sum(ch[i,t+tt-1]*solutionNodes[t,ind][1][i,tt] for i=1:Ni)  
+								+sum(solutionNodes[t,ind][2][N0,i,tt] for i=1:Ni)*h[t+tt-1];
+					end
 				end
 				break;
 			end
