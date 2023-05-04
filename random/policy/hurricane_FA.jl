@@ -19,6 +19,7 @@ println("number of iterations = ", iter)
 #evaluate the model 
 objs_fa, fa_bar, fa_low, fa_high, elapsed_fa = FOSDDP_eval_offline();
 
+#=
 fname = "./output/benchmark/FAresults.csv"
 df = CSV.read(fname,DataFrame);
 results_fa = Matrix(df);
@@ -37,3 +38,5 @@ results_fa[inst,6] = iter
 
 updf = DataFrame(results_fa, :auto);
 CSV.write(fname,updf)
+
+=#

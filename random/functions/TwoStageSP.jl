@@ -61,7 +61,7 @@ function RH_2SSP_first_stage(t_roll,x_init)
 		# If no MDC/SP operation is allowed in the absorbing state, do not plan for stage T since we know for sure that all states are absorbing
 		nbstages1 = T-t_roll;
 	end
-    m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GRB_ENV), "OutputFlag" => 0));
+    m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GRB_ENV), "OutputFlag" => 0, "Presolve" => 0));
 
     #######################
     #Define the variables, note that t is a relative index (to the current roll) going from 1 to nbstages1; from relative index to absolute index: t-> t_roll-1+t
@@ -361,6 +361,8 @@ function solve_second_stage(t_roll,xval,fval,θval,scen,qprob,master,subproblem,
 
     for n=1:nbscen
         #identify the period when the hurricane makes landfall 
+
+#=
         τ = findfirst(x -> (S[x][3] == Nc && S[x][1] != 1), scen[n,:]);
         
         #update the RHS
@@ -384,7 +386,9 @@ function solve_second_stage(t_roll,xval,fval,θval,scen,qprob,master,subproblem,
 			#end
             RH_2SSP_update_RHS(τ,scen[n,τ],subproblem,xCons,dCons,rCons,xval,fval,y,t_roll);
         end
-        
+=#
+		absorbingT = findfirst(x -> (S[x][3] == Nc || S[x][1] == 1), scen[n,:]);
+		RH_2SSP_update_RHS(absorbingT,scen[n,absorbingT],subproblem,xCons,dCons,rCons,xval,fval,y,t_roll);
         #solve the subproblem and store the dual information
         Q[n], pi1[n], pi2[n], pi3[n], flag = solve_scen_subproblem(subproblem,xCons,dCons,rCons);
 
@@ -398,6 +402,7 @@ function solve_second_stage(t_roll,xval,fval,θval,scen,qprob,master,subproblem,
     # cut generation: multi-cut version
     for n=1:nbscen
 	    if (Q[n]-θval[n])/max(1e-10,abs(Q[n])) > ϵ && abs(Q[n]-θval[n]) > ϵ
+#=
 			τ = findfirst(x -> (S[x][3] == Nc && S[x][1] != 1), scen[n,:]);
 			tt = -1;
 			if τ === nothing
@@ -405,6 +410,8 @@ function solve_second_stage(t_roll,xval,fval,θval,scen,qprob,master,subproblem,
 			else
 		    	tt = τ;
 			end
+=#
+			tt = findfirst(x -> (S[x][3] == Nc || S[x][1] == 1), scen[n,:]);
 			if tt < t_roll
 				#tt = t_roll; # WARNING: temporary fix!
 				println("tt < t_roll, how can this happen?!");
@@ -509,14 +516,10 @@ function RH_2SSP_update_RHS(τ,k_t,subproblem,xCons,dCons,rCons,xval,fval,y,t_ro
 			updatedRHS = 0;
 			if absorbing_option == 0
 				# reimburse the operational cost starting from the terminal stage, since the terminal stage does not allow operation
-				updatedRHS = -sum((sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)
-						+sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)  
-						+sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (τ+1-t_roll):nbstages1);
+				updatedRHS = -sum((sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)+sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (τ+1-t_roll):nbstages1);
 			else
 				# reimburse the operational cost if they occur after the terminal stage: starting from stage (τ+1)-t_roll+1
-				updatedRHS = -sum((sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)
-						+sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)  
-						+sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (τ+2-t_roll):nbstages1); 
+				updatedRHS = -sum((sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)+sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (τ+2-t_roll):nbstages1); 
 			end
 			set_normalized_rhs(rCons,updatedRHS);
 		end

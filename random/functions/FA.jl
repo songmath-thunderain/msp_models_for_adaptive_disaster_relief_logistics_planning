@@ -5,7 +5,7 @@ function stage_t_state_k_problem(t)
  
     #######################
     #Define the model.
-    m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GRB_ENV), "OutputFlag" => 0));
+    m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GRB_ENV), "OutputFlag" => 0, "Presolve" => 0));
 
     #######################
     #Define the variables.
@@ -312,6 +312,7 @@ function FOSDDP_eval_offline()
     procurmnt_amount = zeros(T); 
     
     for s=1:nbOS
+		print("OOS[", s, "] = (");
         xval = zeros(Ni,T);
         for t=1:T
             #the state is known in the first stage; if not sample a new state k 
@@ -332,7 +333,8 @@ function FOSDDP_eval_offline()
 				exit(0);
 			else
 				#collect values
-				xval_fa[s,t] = value.(x_fa[t,k_t]); xval[:,t] = xval_fa[s,t];
+				xval_fa[s,t] = value.(x_fa[t,k_t]);
+				xval[:,t] = xval_fa[s,t];
 				fval_fa[s,t] = value.(f_fa[t,k_t]);                 
 				yval_fa[s,t] = value.(y_fa[t,k_t]);
 				zval_fa[s,t] = value.(z_fa[t,k_t]);
@@ -340,11 +342,13 @@ function FOSDDP_eval_offline()
 				objs_fa[s,t] = objective_value(m_fa[t,k_t])- value(ϴ_fa[t,k_t]);
 				
 				procurmnt_amount[t] += (sum(fval_fa[s,t][N0,i] for i=1:Ni))/nbOS;
+				print(objs_fa[s,t], ", ");
 			end
 			if k_t in absorbing_states
 				break;
             end
         end        
+		print(")\n");
     end
     fa_bar = mean(sum(objs_fa[:,t] for t=1:T));
     fa_std = std(sum(objs_fa[:,t] for t=1:T));

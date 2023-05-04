@@ -97,9 +97,9 @@ for t=(T-1):-1:1
 end
 
 
-#for t = 1:T
-#	println("objvalNodes[", t, "] = ", objvalNodes[t]);
-#end
+for t = 1:T
+	println("objvalNodes[", t, "] = ", objvalNodes[t]);
+end
 
 ###############################################################
 ###############################################################
@@ -112,15 +112,19 @@ OS_paths = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
 objs_OOS = zeros(nbOS);
 
 for s=1:nbOS
+	print("OOS[", s, "] = (");
 	for t = 1:T
+		print("t = ", t, ":");
 		ind = findfirst(x->x==OS_paths[s,t], nodeLists[t]);
 		if OS_paths[s,t] in absorbing_states
 			# if absorbing, just take whatever that is the best, which has been computed above
 			objs_OOS[s] = objvalNodes[t][ind];
+			print("absorbed! obj = ", objs_OOS[s], "\n");
 			break;
 		else
 			if decisionNodes[t][ind] == 0
 				# Decision is No-go!
+				print("No-go! ");
 				continue;
 			else
 				# Decision is Go!
@@ -176,19 +180,15 @@ for s=1:nbOS
         			objs_OOS[s] = objective_value(subproblem);
 					if absorbing_option == 0
 						for tt = 1:(absorbingT-t)
-							objs_OOS[s] = objs_OOS[s] + sum(sum(cb[i,ii,t+tt-1]*solutionNodes[t,ind][2][i,ii,tt] for ii=1:Ni) for i=1:N0)
-								+sum(ch[i,t+tt-1]*solutionNodes[t,ind][1][i,tt] for i=1:Ni)  
-								+sum(solutionNodes[t,ind][2][N0,i,tt] for i=1:Ni)*h[t+tt-1];
+							objs_OOS[s] = objs_OOS[s] + (sum(sum(cb[i,ii,t+tt-1]*solutionNodes[t,ind][2][i,ii,tt] for ii=1:Ni) for i=1:N0)+sum(ch[i,t+tt-1]*solutionNodes[t,ind][1][i,tt] for i=1:Ni)+sum(solutionNodes[t,ind][2][N0,i,tt] for i=1:Ni)*h[t+tt-1]);
 						end
 					else
 						for tt = 1:(absorbingT+1-t)
-							objs_OOS[s] = objs_OOS[s] + sum(sum(cb[i,ii,t+tt-1]*solutionNodes[t,ind][2][i,ii,tt] for ii=1:Ni) for i=1:N0)
-								+sum(ch[i,t+tt-1]*solutionNodes[t,ind][1][i,tt] for i=1:Ni)  
-								+sum(solutionNodes[t,ind][2][N0,i,tt] for i=1:Ni)*h[t+tt-1];
+							objs_OOS[s] = objs_OOS[s] + (sum(sum(cb[i,ii,t+tt-1]*solutionNodes[t,ind][2][i,ii,tt] for ii=1:Ni) for i=1:N0)+sum(ch[i,t+tt-1]*solutionNodes[t,ind][1][i,tt] for i=1:Ni)+sum(solutionNodes[t,ind][2][N0,i,tt] for i=1:Ni)*h[t+tt-1]);
 						end
 					end
 				end
-
+				print("Go! obj = ", objs_OOS[s], "\n");
 				break;
 			end
 		end
@@ -197,6 +197,7 @@ for s=1:nbOS
 	print("obj[", s);
 	println("] = ", objs_OOS[s]);
 end
+
 
 elapsed_WS = time() - start;
 
@@ -207,7 +208,7 @@ WS_high = WS_bar+1.96*WS_std/sqrt(nbOS);
 println("WS....");
 println("μ ± 1.96*σ/√NS = ", WS_bar, " ± ", [WS_low,WS_high]);
 
-
+#=
 fname = "./output/benchmark/wait-and-see.csv";
 df = CSV.read(fname,DataFrame);
 
@@ -221,7 +222,7 @@ results_WS[inst,6] = 0;
 
 updf = DataFrame(results_WS, :auto);
 CSV.write(fname,updf);
-
+=#
 
 println("############################################################");
 println("############################################################");
