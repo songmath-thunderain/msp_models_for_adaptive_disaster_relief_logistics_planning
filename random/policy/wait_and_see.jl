@@ -97,9 +97,9 @@ for t=(T-1):-1:1
 end
 
 
-for t = 1:T
-	println("objvalNodes[", t, "] = ", objvalNodes[t]);
-end
+#for t = 1:T
+#	println("objvalNodes[", t, "] = ", objvalNodes[t]);
+#end
 
 ###############################################################
 ###############################################################
