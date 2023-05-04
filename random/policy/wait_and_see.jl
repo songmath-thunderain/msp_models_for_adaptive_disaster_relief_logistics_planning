@@ -56,6 +56,7 @@ for t_roll = 1:T
 					costGo = 0;
 					if status_subproblem != MOI.OPTIMAL
 						println("status_subproblem = ", status_subproblem);
+						exit(0);
 					else
 						costGo = objective_value(m_term);
 					end
@@ -94,6 +95,11 @@ for t=(T-1):-1:1
 		end
 	end
 end
+
+
+#for t = 1:T
+#	println("objvalNodes[", t, "] = ", objvalNodes[t]);
+#end
 
 ###############################################################
 ###############################################################
@@ -137,7 +143,7 @@ for s=1:nbOS
 						set_normalized_rhs(dCons[j], 0);
 					end
 				end
-				
+#=
 				if absorbingT == T
 					# Plan exactly until the landfall time -- no reimbursement occurred!
 					set_normalized_rhs(rCons,0);
@@ -154,7 +160,7 @@ for s=1:nbOS
 						set_normalized_rhs(rCons,updatedRHS);
 					end
 				end
-
+=#
 				for i=1:Ni
 					for j=1:Nj
 						set_objective_coefficient(subproblem, y[i,j], ca[i,j,absorbingT]);
@@ -182,6 +188,7 @@ for s=1:nbOS
 						end
 					end
 				end
+
 				break;
 			end
 		end
