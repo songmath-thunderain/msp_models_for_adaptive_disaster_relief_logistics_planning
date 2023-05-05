@@ -4,15 +4,19 @@ resultpath = "output/benchmark/"
 
 command = []
 
+instanceAttr1 = [" 3 ", " 6 ", " 9 "];
+instanceAttr2 = [" 10 ", " 20 ", " 30 "];
+instanceAttr3 = [" 0.05 ", " 0.5 ", " 5 "];
+option = [" 0 ", " 1 "];
 
-instanceAttr1 = [" 177 ", " 289 "];
-instanceAttr3 = [" 0.05 ", " 0.1 ", " 0.15 ", "0.2", " 0.25 ", " 0.3 ", " 0.35 ", "0.4", " 0.45 ", " 0.5 "];
-
-for k1 in range(len(instanceAttr1)):
-    counter = 12*(k1+1);
-    for k3 in range(len(instanceAttr3)):
-            counter = counter + 1;
-            command = command + ["julia MAIN.jl " + str(counter) + " 3 " + " 10 " + instanceAttr3[k3] + " 1000 " + instanceAttr1[k1] + " 100 "];			
+for k4 in range(len(option)):
+    for k1 in range(len(instanceAttr3)):
+        counter = 10*k1+100*k4;
+        for k2 in range(len(instanceAttr1)):
+            for k3 in range(len(instanceAttr2)):
+                counter = counter + 1;
+                command = command + ["julia MAIN.jl " + str(counter) + instanceAttr1[k2] + instanceAttr2[k3] + instanceAttr3[k1] + " 1000 57 100 " + option[k4]];	
+	
 
 for i in range(len(command)):
     print(command[i]);

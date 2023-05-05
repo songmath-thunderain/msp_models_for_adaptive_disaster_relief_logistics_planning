@@ -208,7 +208,6 @@ WS_high = WS_bar+1.96*WS_std/sqrt(nbOS);
 println("WS....");
 println("μ ± 1.96*σ/√NS = ", WS_bar, " ± ", [WS_low,WS_high]);
 
-#=
 fname = "./output/benchmark/wait-and-see.csv";
 df = CSV.read(fname,DataFrame);
 
@@ -222,7 +221,6 @@ results_WS[inst,6] = 0;
 
 updf = DataFrame(results_WS, :auto);
 CSV.write(fname,updf);
-=#
 
 println("############################################################");
 println("############################################################");

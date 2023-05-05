@@ -43,19 +43,19 @@ nodeLists = createNodes(k_init); # List of MC states in each stage
 const GRB_ENV = Gurobi.Env();
 
 #Clairvoyance solution 
-#include("./policy/hurricane_CV.jl");
+include("./policy/hurricane_CV.jl");
 
 #Fully adaptive model
 include("./policy/hurricane_FA.jl");
  
 #Rolling-horizon 2SSP
-#include("./policy/hurricane_rolling_twostage.jl");
+include("./policy/hurricane_rolling_twostage.jl");
 
 #Wait-and-see
 include("./policy/wait_and_see.jl");
 
 #Static 2SSP
-#include("./policy/hurricane_static_twostage.jl");
+include("./policy/hurricane_static_twostage.jl");
 
 #Deterministic FA 
 #include("./policy/hurricane_deterministicFA.jl");

@@ -50,7 +50,6 @@ println("μ ± 1.96*σ/√NS = ", st2SSP_bar, " ± ", [st2SSP_low,st2SSP_high]);
 
 elapsed2 = time() - start;
 
-#=
 fname = "./output/benchmark/static2SPresults.csv"
 df = CSV.read(fname,DataFrame);
 
@@ -64,4 +63,3 @@ results_st2SSP[inst,6] = 0;
 
 updf = DataFrame(results_st2SSP, :auto);
 CSV.write(fname,updf);
-=#

@@ -15,7 +15,7 @@ vval_cv = Array{Any,1}(undef,nbOS);
 
 for s=1:nbOS
 	#find the period when the hurricane made landfall && intensity != 1
-	println("OS_paths[", s, "] = ", OS_paths[s,1:T]);
+	#println("OS_paths[", s, "] = ", OS_paths[s,1:T]);
 	τ = findfirst(x -> (S[x][3] == Nc && S[x][1] != 1), OS_paths[s,1:T]);
 	if τ === nothing
 		# we knew nothing is going to happen, so cost would be 0
@@ -63,7 +63,7 @@ cv_low = cv_bar-1.96*cv_std/sqrt(nbOS);
 cv_high = cv_bar+1.96*cv_std/sqrt(nbOS);
 println("Clairvoyant....");
 println("μ ± 1.96*σ/√NS = ", cv_bar, "±", [cv_low,cv_high]);
-elapsed = time() - start;
+elapsed_cv = time() - start;
 vals = [xval_cv, fval_cv, yval_cv, zval_cv, vval_cv];
 
 
