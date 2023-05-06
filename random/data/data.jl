@@ -59,18 +59,6 @@ for k=1:Na, l=1:Nb, f=1:Nc
 
 end
     
-# Create the transition probability from stage 1 to stage T (applying the C-K equation)
-P_terminals = Matrix{Float64}[]
-for t = 1:T  
-    P_terminal = P_joint^(T-t);
-    P_terminal_c = deepcopy(P_terminal);
-    #normalize the probabilities
-    for k=1:K, kk=1:K
-       P_terminal[k,kk] = P_terminal_c[k,kk]/sum(P_terminal_c[k,:])
-    end
-    push!(P_terminals, P_terminal);
-end    
-
 #normalize the probabilities
 P_temp = deepcopy(P_joint);
 for k=1:K, kk=1:K

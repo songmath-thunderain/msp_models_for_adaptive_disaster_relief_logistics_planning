@@ -361,37 +361,10 @@ function solve_second_stage(t_roll,xval,fval,θval,scen,qprob,master,subproblem,
 
     for n=1:nbscen
         #identify the period when the hurricane makes landfall 
-
-#=
-        τ = findfirst(x -> (S[x][3] == Nc && S[x][1] != 1), scen[n,:]);
-        
-        #update the RHS
-        if τ === nothing     
-	    	absorbingT = findfirst(x -> S[x][1] == 1, scen[n,:]);
-			#print("n = ", n);
-			#print(", τ = ", τ);
-			#print(", absorbingT = ", absorbingT);
-			#println(", t_roll = ", t_roll);
-			#if absorbingT < t_roll
-			#	absorbingT = t_roll; # WARNING: temporary fix!
-			#end
-            RH_2SSP_update_RHS(absorbingT,scen[n,absorbingT],subproblem,xCons,dCons,rCons,xval,fval,y,t_roll);
-        else
-			#print("n = ", n);
-			#print(", τ = ", τ);
-			#println(", t_roll = ", t_roll);
-	    	absorbingT = -1;
-			#if τ < t_roll
-			#	τ = t_roll; # WARNING: temporary fix!
-			#end
-            RH_2SSP_update_RHS(τ,scen[n,τ],subproblem,xCons,dCons,rCons,xval,fval,y,t_roll);
-        end
-=#
 		absorbingT = findfirst(x -> (S[x][3] == Nc || S[x][1] == 1), scen[n,:]);
 		RH_2SSP_update_RHS(absorbingT,scen[n,absorbingT],subproblem,xCons,dCons,rCons,xval,fval,y,t_roll);
         #solve the subproblem and store the dual information
         Q[n], pi1[n], pi2[n], pi3[n], flag = solve_scen_subproblem(subproblem,xCons,dCons,rCons);
-
 		if flag == -1
             println("subproblem status is infeasible?!");
             exit(0);
@@ -402,15 +375,6 @@ function solve_second_stage(t_roll,xval,fval,θval,scen,qprob,master,subproblem,
     # cut generation: multi-cut version
     for n=1:nbscen
 	    if (Q[n]-θval[n])/max(1e-10,abs(Q[n])) > ϵ && abs(Q[n]-θval[n]) > ϵ
-#=
-			τ = findfirst(x -> (S[x][3] == Nc && S[x][1] != 1), scen[n,:]);
-			tt = -1;
-			if τ === nothing
-		    	tt = findfirst(x -> S[x][1] == 1, scen[n,:]);
-			else
-		    	tt = τ;
-			end
-=#
 			tt = findfirst(x -> (S[x][3] == Nc || S[x][1] == 1), scen[n,:]);
 			if tt < t_roll
 				#tt = t_roll; # WARNING: temporary fix!

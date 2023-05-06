@@ -90,3 +90,51 @@ function createNodes(k_init)
 	end
 	return nodeLists;
 end
+
+
+function createNodeScens(k_init, nodeLists)
+	nodeScenList = Dict();
+	nodeScenWeights = Dict();
+
+	for t = (T-1):-1:1
+		for k = 1:length(nodeLists[t])
+			if (nodeLists[t][k] in absorbing_states) == false
+				nodeScenList[nodeLists[t][k]] = [];
+				nodeScenWeights[nodeLists[t][k]] = [];
+				for kk = 1:length(nodeLists[t+1])
+					if P_joint[nodeLists[t][k],nodeLists[t+1][kk]] > smallestTransProb
+						if nodeLists[t+1][kk] in absorbing_states
+							# absorbing states, directly append 
+							push!(nodeScenList[nodeLists[t][k]],[t+1,nodeLists[t+1][kk]]);
+							push!(nodeScenWeights[nodeLists[t][k]], P_joint[nodeLists[t][k],nodeLists[t+1][kk]]);
+						else
+							# transient states, append the corresponding scenlist and weights
+							for j = 1:length(nodeScenList[nodeLists[t+1][kk]])
+								if (nodeScenList[nodeLists[t+1][kk]][j] in nodeScenList[nodeLists[t][k]]) == false
+									# Not in the scenario list, so go ahead and add it
+									push!(nodeScenList[nodeLists[t][k]],nodeScenList[nodeLists[t+1][kk]][j]);
+									push!(nodeScenWeights[nodeLists[t][k]],P_joint[nodeLists[t][k],nodeLists[t+1][kk]]*nodeScenWeights[nodeLists[t+1][kk]][j]);
+								else
+									# in the scenario list, increment the probability
+									ind = findfirst(x->x==nodeScenList[nodeLists[t+1][kk]][j],nodeScenList[nodeLists[t][k]]);
+									nodeScenWeights[nodeLists[t][k]][ind] += P_joint[nodeLists[t][k],nodeLists[t+1][kk]]*nodeScenWeights[nodeLists[t+1][kk]][j];
+								end
+							end
+						end
+					end
+				end	
+				if abs(sum(nodeScenWeights[nodeLists[t][k]])-1) > 1e-6
+					println("Wrong!");
+					exit(0);
+				end
+				#println("node[", nodeLists[t][k], "]'s scenario # = ", length(nodeScenList[nodeLists[t][k]]));
+				#if t == 1
+				#	println("scenlist = ", nodeScenList[nodeLists[t][k]]);
+				#	println("prob = ", nodeScenWeights[nodeLists[t][k]]);
+				#end
+			end
+		end
+	end
+
+	return nodeScenList, nodeScenWeights;
+end
