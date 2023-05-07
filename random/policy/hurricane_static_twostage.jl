@@ -37,8 +37,8 @@ for s=1:nbOS
 	#solve the subproblem and store the dual information
 	Q[s], pi1[s], pi2[s], pi3[s], flag = solve_scen_subproblem(subproblem,xCons,dCons,rCons);
 	objs_st2SSP[s] = objs_st2SSP[s] + Q[s];
-	print("obj[", s);
-	println("] = ", objs_st2SSP[s]);
+	#print("obj[", s);
+	#println("] = ", objs_st2SSP[s]);
 end
   
 st2SSP_bar = mean(objs_st2SSP);
