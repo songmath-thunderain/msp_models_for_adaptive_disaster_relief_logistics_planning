@@ -172,7 +172,7 @@ end
 ###############################################################
 
 #initialize parameter for two-stage model
-function initialize(s,t_roll)
+function initialize(k_t,t_roll)
 # s is the index for the sample path in the out-of-sample test 
     nbstages1 = T-t_roll+1;
 	if absorbing_option == 0
@@ -189,61 +189,32 @@ function initialize(s,t_roll)
     allscen = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
 	# In the first roll, always choose the nbscen scenarios out of the total of 10000 OOS once every 10000/nbscen 
     scen = allscen[collect(1:convert(Int,10000/nbscen):10000),1:T]; # note that this is just an initialization for scen
-
 	# when t_roll = 1, i.e., the first roll, it will always be the evenly selected scenarios from allscen
 
-	# In later rolls, create in-sample scenarios by sampling
-    if t_roll > 1
+	# But eventually, we just need two things from scen: absorbingT, and MC state
+	sceninfo = [];
+	if t_roll == 1
+		for n=1:nbscen
+			absorbingT = findfirst(x -> (S[x][3] == Nc || S[x][1] == 1), scen[n,:]);
+			state = scen[n,absorbingT];
+			push!(sceninfo,[absorbingT,state]);
+		end
+	else
+		# In later rolls, create in-sample scenarios by sampling
+		working_ind = k_t;
         for n=1:nbscen
-            for t=2:t_roll
-                scen[n,t] = allscen[s,t];
-            end
-            
             for t=(t_roll+1):T
-                scen[n,t] = MC_sample(scen[n,t-1]);
+                new_ind = MC_sample(working_ind);
+				if new_ind in absorbing_states
+					push!(sceninfo,[t,new_ind]);
+					break;
+				else
+					working_ind = new_ind;
+				end
             end
         end
     end
-	return LB, UB, xval, fval, θval, scen
-end
-
-###############################################################
-###############################################################
-
-#initialize parameter for two-stage model
-function initialize2(kk,t_roll)
-# kk is the starting state for the two-stage SP model: this is to accommodate the wait-and-see heuristic approach    
-	nbstages1 = T-t_roll+1;
-	if absorbing_option == 0
-		# If no MDC/SP operation is allowed in the absorbing state, do not plan for stage T since we know for sure that all states are absorbing
-		nbstages1 = T-t_roll;
-	end
-	LB = -1e10; 
-	UB = 1e10; 
-	θval = zeros(nbscen);
-    xval = zeros(Ni,nbstages1);
-	fval = zeros(N0,Ni,nbstages1);
-	# Do sampling to create (in-sample) scenarios 
-	osfname = "./data/OOS"*string(k_init)*".csv";
-    allscen = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
-	# In the first roll, always choose the nbscen scenarios out of the total of 10000 OOS once every 10000/nbscen 
-    scen = allscen[collect(1:convert(Int,10000/nbscen):10000),1:T]; # note that this is just an initialization for scen
-
-	# when t_roll = 1, i.e., the first roll, it will always be the evenly selected scenarios from allscen
-
-	# In later rolls, create in-sample scenarios by sampling
-    if t_roll > 1
-        for n=1:nbscen
-            for t=2:t_roll
-                scen[n,t] = allscen[1,1]; # prior to t_roll, just choose arbitrarily 
-            end
-            scen[n,t_roll] = kk;
-            for t=(t_roll+1):T
-                scen[n,t] = MC_sample(scen[n,t-1]);
-            end
-        end
-    end
-	return LB, UB, xval, fval, θval, scen
+	return LB, UB, xval, fval, θval, sceninfo
 end
 
 ###############################################################
@@ -251,10 +222,10 @@ end
 
 
 #solves the two-stage SP model
-function RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y,xCons,dCons,rCons)
+function RH_2SSP_solve_roll(k_t,t_roll,master,subproblem,x,f,θ,y,xCons,dCons,rCons)
 # s is the index for the sample path in the out-of-sample test 
 # Assumption coming into this function: t_roll must be before the landfall stage of sample path s in the out-of-sample test
-    LB, UB, xval, fval, θval, scen = initialize(s,t_roll);
+    LB, UB, xval, fval, θval, sceninfo = initialize(k_t,t_roll);
 	solveIter = 0;
 	flag = 1;
 #while flag == 1
@@ -265,39 +236,7 @@ function RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y,xCons,dCons,rCon
         LB, xval, fval, θval = solve_first_stage(LB,xval,fval,θval,master,x,f,θ);
 		firstCost = LB - sum(θval[n] for n=1:nbscen)*1.0/nbscen;
 		# solve second stage 
-		flag, Qbar = solve_second_stage(t_roll,xval,fval,θval,scen,master,subproblem,x,f,θ,y,xCons,dCons,rCons);
-		if flag != -1
-			UB = min(firstCost+Qbar,UB);
-		end
-    end
-	if solveIter == 100
-		println("# iterations is maxed out!");
-		print("LB = ", LB);
-		println(", UB = ", UB);
-	end
-    return LB, UB, xval, fval, θval
-end
-
-
-###############################################################
-###############################################################\
-
-#solves the two-stage SP model
-function RH_2SSP_solve_roll2(kk,t_roll,master,subproblem,x,f,θ,y,xCons,dCons,rCons)
-# kk is the starting state for the two-stage SP model: this is to accommodate the wait-and-see heuristic approach 
-# Assumption coming into this function: t_roll must be before the landfall stage of sample path s in the out-of-sample test
-    LB, UB, xval, fval, θval, scen = initialize2(kk,t_roll);
-	solveIter = 0;
-	flag = 1;
-#while flag == 1
-	while (UB-LB)*1.0/max(1e-10,abs(LB)) > ϵ && abs(UB-LB) > ϵ && solveIter < 100 # WARNING: Temporary fix here!
-        # solve first stage
-		flag = 0;
-		solveIter = solveIter + 1;
-        LB, xval, fval, θval = solve_first_stage(LB,xval,fval,θval,master,x,f,θ);
-		firstCost = LB - sum(θval[n] for n=1:nbscen)*1.0/nbscen;
-		# solve second stage 
-		flag, Qbar = solve_second_stage(t_roll,xval,fval,θval,scen,master,subproblem,x,f,θ,y,xCons,dCons,rCons);
+		flag, Qbar = solve_second_stage(t_roll,xval,fval,θval,sceninfo,master,subproblem,x,f,θ,y,xCons,dCons,rCons);
 		if flag != -1
 			UB = min(firstCost+Qbar,UB);
 		end
@@ -338,7 +277,7 @@ end
 ###############################################################
 
 #solves the second-stage problem
-function solve_second_stage(t_roll,xval,fval,θval,scen,master,subproblem,x,f,θ,y,xCons,dCons,rCons)
+function solve_second_stage(t_roll,xval,fval,θval,sceninfo,master,subproblem,x,f,θ,y,xCons,dCons,rCons)
     flag = 0;
     nbstages1 = T-t_roll+1;
 	if absorbing_option == 0
@@ -353,8 +292,7 @@ function solve_second_stage(t_roll,xval,fval,θval,scen,master,subproblem,x,f,θ
 
     for n=1:nbscen
         #identify the period when the hurricane makes landfall 
-		absorbingT = findfirst(x -> (S[x][3] == Nc || S[x][1] == 1), scen[n,:]);
-		RH_2SSP_update_RHS(absorbingT,scen[n,absorbingT],subproblem,xCons,dCons,rCons,xval,fval,y,t_roll);
+		RH_2SSP_update_RHS(sceninfo[n][1],sceninfo[n][2],subproblem,xCons,dCons,rCons,xval,fval,y,t_roll);
         #solve the subproblem and store the dual information
         Q[n], pi1[n], pi2[n], pi3[n], flag = solve_scen_subproblem(subproblem,xCons,dCons,rCons);
 		if flag == -1
@@ -367,13 +305,8 @@ function solve_second_stage(t_roll,xval,fval,θval,scen,master,subproblem,x,f,θ
     # cut generation: multi-cut version
     for n=1:nbscen
 	    if (Q[n]-θval[n])/max(1e-10,abs(Q[n])) > ϵ && Q[n]-θval[n] > ϵ
-#println("cutviol[", n, "] = ", Q[n]-θval[n], "Q[", n, "] = ", Q[n], "θval[", n, "] = ", θval[n]);
-			tt = findfirst(x -> (S[x][3] == Nc || S[x][1] == 1), scen[n,:]);
-			if tt < t_roll
-				#tt = t_roll; # WARNING: temporary fix!
-				println("tt < t_roll, how can this happen?!");
-				exit(0);
-			end	
+			#println("cutviol[", n, "] = ", Q[n]-θval[n], "Q[", n, "] = ", Q[n], "θval[", n, "] = ", θval[n]);
+			tt = sceninfo[n][1];
 			# tt is the terminal stage
 			if absorbing_option == 0
 				@constraint(master,

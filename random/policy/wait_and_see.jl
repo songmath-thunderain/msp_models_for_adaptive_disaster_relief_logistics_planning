@@ -27,7 +27,7 @@ for t_roll = 1:T
 			#define the model.
 			master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_roll,x_init);
 			#solve the model.
-			LB_Roll, UB_Roll, xval_Roll, fval_Roll, θval_Roll = RH_2SSP_solve_roll2(nodeLists[t_roll][k],t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
+			LB_Roll, UB_Roll, xval_Roll, fval_Roll, θval_Roll = RH_2SSP_solve_roll(nodeLists[t_roll][k],t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
 			objvalNodes[t_roll][k] = UB_Roll; # objGo: expected objval if implementing a two-stage plan now. This is also only temporary, need to do a round of backward cleanup
 			solutionNodes[t_roll,k] = [xval_Roll, fval_Roll];
 		else

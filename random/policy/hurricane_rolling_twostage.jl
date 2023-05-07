@@ -2,16 +2,17 @@ s = 1;
 t_roll = 1;
 x_init = x_0;
 
+osfname = "./data/OOS"*string(k_init)*".csv";
+OS_paths = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
+#OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS [REVISION: no need anymore]
+
 start = time();
 
 #define the model.
 master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_roll,x_init);
 
 #solve the model.
-LB_1stRoll, UB_1stRoll, xval_1stRoll, fval_1stRoll, θval_1stRoll = RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
-osfname = "./data/OOS"*string(k_init)*".csv";
-OS_paths = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
-#OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS [REVISION: no need anymore]
+LB_1stRoll, UB_1stRoll, xval_1stRoll, fval_1stRoll, θval_1stRoll = RH_2SSP_solve_roll(OS_paths[s,t_roll],t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
 
 objs_RH2SSP = zeros(nbOS,T);
 
@@ -37,7 +38,7 @@ for s=1:nbOS
 			#define the the model.
 			master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_roll,x_init);
 			#solve the model.
-			LB_Roll, UB_Roll, xval_Roll, fval_Roll, θval_Roll = RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
+			LB_Roll, UB_Roll, xval_Roll, fval_Roll, θval_Roll = RH_2SSP_solve_roll(OS_paths[s,t_roll],t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
 #=
 			println("roll #", t_roll);
 			for t=1:(T-t_roll+1)
@@ -88,7 +89,7 @@ for s=1:nbOS
 			#define the the model.
 			master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_roll,x_init);
 			#solve the model.
-			LB_Roll, UB_Roll, xval_Roll, fval_Roll, θval_Roll = RH_2SSP_solve_roll(s,t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
+			LB_Roll, UB_Roll, xval_Roll, fval_Roll, θval_Roll = RH_2SSP_solve_roll(OS_paths[s,t_roll],t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
 #=
 			println("roll #", t_roll);
 			for t=1:(T-t_roll+1)
