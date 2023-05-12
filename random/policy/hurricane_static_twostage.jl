@@ -8,22 +8,22 @@ OS_paths = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
 #OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS [REVISION: no need any more]
 
 #define the the model.
-master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_roll,x_init);
+master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_roll,OS_paths[s,t_roll],x_init);
 
 #solve the model.
 start=time();
 LB_st2SSP, UB_st2SSP, xval_st2SSP, fval_st2SSP, θval_st2SSP = RH_2SSP_solve_roll(OS_paths[s,t_roll],t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
 elapsed = time() - start;
 
-f1cost = LB_st2SSP-sum(θval_st2SSP[n] for n = 1:nbscen)*1.0/nbscen;
+nbScens = length(nodeScenList[t_roll,OS_paths[s,t_roll]]);
+
+f1cost = LB_st2SSP-sum(θval_st2SSP[n]*nodeScenWeights[t_roll,OS_paths[s,t_roll]][n] for n = 1:nbScens);
 
 println("training LB = ", LB_st2SSP);
 println("training UB = ", UB_st2SSP);
 
 #eval the model.
 start=time();
-
-
     
 objs_st2SSP = fill(f1cost,nbOS);
 Q = zeros(nbOS); #list for all the optimal values
@@ -52,6 +52,7 @@ println("μ ± 1.96*σ/√NS = ", st2SSP_bar, " ± ", [st2SSP_low,st2SSP_high]);
 
 elapsed2 = time() - start;
 
+#=
 fname = "./output/benchmark/static2SPresults.csv"
 df = CSV.read(fname,DataFrame);
 
@@ -65,3 +66,4 @@ results_st2SSP[inst,6] = 0;
 
 updf = DataFrame(results_st2SSP, :auto);
 CSV.write(fname,updf);
+=#

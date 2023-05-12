@@ -1,8 +1,3 @@
-for i=1:length(nodeLists)
-	@printf("nodeLists[%d]'s total # of nodes = %d\n", i, length(nodeLists[i]));
-	println(nodeLists[i]);
-end
-
 start = time();
 
 ###############################################################
@@ -25,7 +20,7 @@ for t_roll = 1:T
 			x_init = deepcopy(x_0);
 			decisionNodes[t_roll][k] = 1; # This is only temporary, need to do a round of backward cleanup
 			#define the model.
-			master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_roll,x_init);
+			master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_roll,nodeLists[t_roll][k],x_init);
 			#solve the model.
 			LB_Roll, UB_Roll, xval_Roll, fval_Roll, θval_Roll = RH_2SSP_solve_roll(nodeLists[t_roll][k],t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
 			objvalNodes[t_roll][k] = UB_Roll; # objGo: expected objval if implementing a two-stage plan now. This is also only temporary, need to do a round of backward cleanup
@@ -207,7 +202,7 @@ WS_low = WS_bar-1.96*WS_std/sqrt(nbOS);
 WS_high = WS_bar+1.96*WS_std/sqrt(nbOS);
 println("WS....");
 println("μ ± 1.96*σ/√NS = ", WS_bar, " ± ", [WS_low,WS_high]);
-
+#=
 fname = "./output/benchmark/wait-and-see.csv";
 df = CSV.read(fname,DataFrame);
 
@@ -221,6 +216,6 @@ results_WS[inst,6] = 0;
 
 updf = DataFrame(results_WS, :auto);
 CSV.write(fname,updf);
-
+=#
 println("############################################################");
 println("############################################################");

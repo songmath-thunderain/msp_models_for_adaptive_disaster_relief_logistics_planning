@@ -85,7 +85,6 @@ function createNodes(k_init)
 				end
 			end
 		end
-		#println("tempList = ", tempList);
 		push!(nodeLists,tempList);			
 	end
 	return nodeLists;
@@ -93,37 +92,38 @@ end
 
 # function that creates a list of scenarios, along with the probability of occurrence, for each transient state node in the nodeList (set of reachable nodes from the initial state k_init)
 function createNodeScens(k_init, nodeLists)
+	# Note: there might be repetitions in the nodeLists, e.g., the same Hurricane state can be reached at different times
 	nodeScenList = Dict();
 	nodeScenWeights = Dict();
 
 	for t = (T-1):-1:1
 		for k = 1:length(nodeLists[t])
 			if (nodeLists[t][k] in absorbing_states) == false
-				nodeScenList[nodeLists[t][k]] = [];
-				nodeScenWeights[nodeLists[t][k]] = [];
+				nodeScenList[t,nodeLists[t][k]] = [];
+				nodeScenWeights[t,nodeLists[t][k]] = [];
 				for kk = 1:length(nodeLists[t+1])
 					if P_joint[nodeLists[t][k],nodeLists[t+1][kk]] > smallestTransProb
 						if nodeLists[t+1][kk] in absorbing_states
 							# absorbing states, directly append 
-							push!(nodeScenList[nodeLists[t][k]],[t+1,nodeLists[t+1][kk]]);
-							push!(nodeScenWeights[nodeLists[t][k]], P_joint[nodeLists[t][k],nodeLists[t+1][kk]]);
+							push!(nodeScenList[t,nodeLists[t][k]],[t+1,nodeLists[t+1][kk]]);
+							push!(nodeScenWeights[t,nodeLists[t][k]], P_joint[nodeLists[t][k],nodeLists[t+1][kk]]);
 						else
 							# transient states, append the corresponding scenlist and weights
-							for j = 1:length(nodeScenList[nodeLists[t+1][kk]])
-								if (nodeScenList[nodeLists[t+1][kk]][j] in nodeScenList[nodeLists[t][k]]) == false
+							for j = 1:length(nodeScenList[t+1,nodeLists[t+1][kk]])
+								if (nodeScenList[t+1,nodeLists[t+1][kk]][j] in nodeScenList[t,nodeLists[t][k]]) == false
 									# Not in the scenario list, so go ahead and add it
-									push!(nodeScenList[nodeLists[t][k]],nodeScenList[nodeLists[t+1][kk]][j]);
-									push!(nodeScenWeights[nodeLists[t][k]],P_joint[nodeLists[t][k],nodeLists[t+1][kk]]*nodeScenWeights[nodeLists[t+1][kk]][j]);
+									push!(nodeScenList[t,nodeLists[t][k]],nodeScenList[t+1,nodeLists[t+1][kk]][j]);
+									push!(nodeScenWeights[t,nodeLists[t][k]],P_joint[nodeLists[t][k],nodeLists[t+1][kk]]*nodeScenWeights[t+1,nodeLists[t+1][kk]][j]);
 								else
 									# in the scenario list, increment the probability
-									ind = findfirst(x->x==nodeScenList[nodeLists[t+1][kk]][j],nodeScenList[nodeLists[t][k]]);
-									nodeScenWeights[nodeLists[t][k]][ind] += P_joint[nodeLists[t][k],nodeLists[t+1][kk]]*nodeScenWeights[nodeLists[t+1][kk]][j];
+									ind = findfirst(x->x==nodeScenList[t+1,nodeLists[t+1][kk]][j],nodeScenList[t,nodeLists[t][k]]);
+									nodeScenWeights[t,nodeLists[t][k]][ind] += P_joint[nodeLists[t][k],nodeLists[t+1][kk]]*nodeScenWeights[t+1,nodeLists[t+1][kk]][j];
 								end
 							end
 						end
 					end
 				end	
-				if abs(sum(nodeScenWeights[nodeLists[t][k]])-1) > 1e-6
+				if abs(sum(nodeScenWeights[t,nodeLists[t][k]])-1) > 1e-6
 					println("Wrong!");
 					exit(0);
 				end

@@ -9,7 +9,7 @@ OS_paths = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
 start = time();
 
 #define the model.
-master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_roll,x_init);
+master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_roll,OS_paths[s,t_roll],x_init);
 
 #solve the model.
 LB_1stRoll, UB_1stRoll, xval_1stRoll, fval_1stRoll, θval_1stRoll = RH_2SSP_solve_roll(OS_paths[s,t_roll],t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
@@ -36,7 +36,7 @@ for s=1:nbOS
 		for t_roll=2:(absorbingT-1)
 			# roll up to t = absorbingT-1
 			#define the the model.
-			master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_roll,x_init);
+			master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_roll,OS_paths[s,t_roll],x_init);
 			#solve the model.
 			LB_Roll, UB_Roll, xval_Roll, fval_Roll, θval_Roll = RH_2SSP_solve_roll(OS_paths[s,t_roll],t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
 #=
@@ -87,7 +87,7 @@ for s=1:nbOS
 		for t_roll=2:(τ-1)
 			# roll up to t = τ-1
 			#define the the model.
-			master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_roll,x_init);
+			master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_roll,OS_paths[s,t_roll],x_init);
 			#solve the model.
 			LB_Roll, UB_Roll, xval_Roll, fval_Roll, θval_Roll = RH_2SSP_solve_roll(OS_paths[s,t_roll],t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
 #=
@@ -214,7 +214,7 @@ RH2SSP_high = RH2SSP_bar+1.96*RH2SSP_std/sqrt(nbOS);
 println("RH2SSP....");
 println("μ ± 1.96*σ/√NS = ", RH2SSP_bar, " ± ", [RH2SSP_low,RH2SSP_high]);
 
-
+#=
 fname = "./output/benchmark/rolling2SPresults.csv";
 df = CSV.read(fname,DataFrame);
 
@@ -228,7 +228,7 @@ results_RH2SSP[inst,6] = 0;
 
 updf = DataFrame(results_RH2SSP, :auto);
 CSV.write(fname,updf);
-
+=#
 
 println("############################################################");
 println("############################################################");

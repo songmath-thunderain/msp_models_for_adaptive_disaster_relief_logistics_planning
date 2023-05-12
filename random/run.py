@@ -15,7 +15,7 @@ for k4 in range(len(option)):
         for k2 in range(len(instanceAttr1)):
             for k3 in range(len(instanceAttr2)):
                 counter = counter + 1;
-                command = command + ["julia MAIN.jl " + str(counter) + instanceAttr1[k2] + instanceAttr2[k3] + instanceAttr3[k1] + " 1000 57 100 " + option[k4]];	
+                command = command + ["julia MAIN.jl " + str(counter) + instanceAttr1[k2] + instanceAttr2[k3] + instanceAttr3[k1] + " 1000 57 " + option[k4]];	
 	
 
 for i in range(len(command)):
