@@ -108,6 +108,64 @@ function RH_2SSP_first_stage(t_roll,x_init)
     
 end
 
+
+#Define first-stage master problem
+function RH_2SSP_first_stage2(t_roll,k_t,x_init)
+    #Note that the static 2SSP corresponds to the case when t_roll = 1 
+	nbstages1 = T-t_roll+1;
+	if absorbing_option == 0
+		# If no MDC/SP operation is allowed in the absorbing state, do not plan for stage T since we know for sure that all states are absorbing
+		nbstages1 = T-t_roll;
+	end
+    m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GRB_ENV), "OutputFlag" => 0));
+	nbScens = length(nodeScenList[t_roll,k_t]);
+	pbScens = nodeScenWeights[t_roll,k_t];
+    #######################
+    #Define the variables, note that t is a relative index (to the current roll) going from 1 to nbstages1; from relative index to absolute index: t-> t_roll-1+t
+    @variables(m,
+                begin
+                   0 <= x[i=1:Ni,t=1:nbstages1] <= x_cap[i]
+                   0 <= f[i=1:N0,ii=1:Ni,t=1:nbstages1]
+               -1e8 <= θ[n=1:nbScens] # multicut version! 
+                end
+              );
+    
+    #######################
+    #Define the objective.
+    @objective(m,
+               Min,
+               sum(sum(sum(cb[i,ii,t_roll-1+t]*f[i,ii,t] for ii=1:Ni) for i=1:N0) for t=1:nbstages1)
+              +sum(sum(ch[i,t_roll-1+t]*x[i,t] for i=1:Ni) for t=1:nbstages1)
+              +sum(sum(h[t_roll-1+t]*f[N0,i,t] for i=1:Ni) for t=1:nbstages1)
+              +sum(θ[n]*pbScens[n] for n=1:nbScens)
+               );
+    
+    #######################
+    #Define the constraints.
+    for t=1:nbstages1
+        for i=1:Ni
+            if t == 1
+                @constraint(m, x[i,t]
+                               +sum(f[i,j,t] for j=1:Ni if j != i)
+                               -sum(f[j,i,t] for j=1:N0 if j != i)
+                               == x_init[i]
+                            ); 
+                @constraint(m, sum(f[i,j,t] for j=1:Ni if j != i) <= x_init[i]);                
+            else
+				@constraint(m, x[i,t-1]
+                             -x[i,t]
+                             -sum(f[i,j,t] for j=1:Ni if j != i)
+                             +sum(f[j,i,t] for j=1:N0 if j != i)==0);
+                @constraint(m, sum(f[i,j,t] for j=1:Ni if j != i) <= x[i,t-1]);                
+            end
+        end
+    end
+    
+    return m, x, f, θ 
+    
+end
+
+
 ###############################################################
 ###############################################################
 
@@ -249,6 +307,40 @@ function RH_2SSP_solve_roll(k_t,t_roll,master,subproblem,x,f,θ,y,xCons,dCons,rC
     return LB, UB, xval, fval, θval
 end
 
+#solves the two-stage SP model
+function RH_2SSP_solve_roll2(k_t,t_roll,master,subproblem,x,f,θ,y,xCons,dCons,rCons)
+# s is the index for the sample path in the out-of-sample test 
+# Assumption coming into this function: t_roll must be before the landfall stage of sample path s in the out-of-sample test
+	nbScens = length(nodeScenList[t_roll,k_t]);
+	pbScens = nodeScenWeights[t_roll,k_t];
+	LB = -1e10; 
+	UB = 1e10; 
+	θval = zeros(nbscen);
+    xval = zeros(Ni,nbstages1);
+	fval = zeros(N0,Ni,nbstages1);
+	solveIter = 0;
+	flag = 1;
+#while flag == 1
+	while (UB-LB)*1.0/max(1e-10,abs(LB)) > ϵ && abs(UB-LB) > ϵ && solveIter < 100 # WARNING: Temporary fix here!
+        # solve first stage
+		flag = 0;
+		solveIter = solveIter + 1;
+        LB, xval, fval, θval = solve_first_stage(LB,xval,fval,θval,master,x,f,θ);
+		firstCost = LB - sum(θval[n]*pbScens[n] for n=1:nbScens);
+		# solve second stage 
+		flag, Qbar = solve_second_stage2(k_t,t_roll,xval,fval,θval,master,subproblem,x,f,θ,y,xCons,dCons,rCons);
+		if flag != -1
+			UB = min(firstCost+Qbar,UB);
+		end
+    end
+	if solveIter == 100
+		println("# iterations is maxed out!");
+		print("LB = ", LB);
+		println(", UB = ", UB);
+	end
+    return LB, UB, xval, fval, θval
+end
+
 
 ###############################################################
 ###############################################################
@@ -307,6 +399,60 @@ function solve_second_stage(t_roll,xval,fval,θval,sceninfo,master,subproblem,x,
 	    if (Q[n]-θval[n])/max(1e-10,abs(Q[n])) > ϵ && Q[n]-θval[n] > ϵ
 			#println("cutviol[", n, "] = ", Q[n]-θval[n], "Q[", n, "] = ", Q[n], "θval[", n, "] = ", θval[n]);
 			tt = sceninfo[n][1];
+			# tt is the terminal stage
+			if absorbing_option == 0
+				@constraint(master,
+				θ[n]-sum(pi1[n][i]*x[i,tt-t_roll] for i=1:Ni)-pi3[n]*(-sum((sum(sum(cb[i,ii,t_roll+t-1]*f[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*x[i,t] for i=1:Ni)+sum(f[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (tt+1-t_roll):nbstages1)) 
+					>= 
+				 Q[n]-sum(pi1[n][i]*xval[i,tt-t_roll] for i=1:Ni)-pi3[n]*(-sum((sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)+sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (tt+1-t_roll):nbstages1))
+					);
+			else
+				@constraint(master,
+				θ[n]-sum(pi1[n][i]*x[i,tt-t_roll+1] for i=1:Ni)-pi3[n]*(-sum((sum(sum(cb[i,ii,t_roll+t-1]*f[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*x[i,t] for i=1:Ni)+sum(f[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (tt+2-t_roll):nbstages1)) 
+					>= 
+				 Q[n]-sum(pi1[n][i]*xval[i,tt-t_roll+1] for i=1:Ni)-pi3[n]*(-sum((sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)+sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (tt+2-t_roll):nbstages1))
+					);
+			end
+			flag = 1;
+	    end
+    end
+    return flag, Qbar
+end
+
+
+#solves the second-stage problem
+function solve_second_stage2(k_t,t_roll,xval,fval,θval,master,subproblem,x,f,θ,y,xCons,dCons,rCons)
+	nbScens = length(nodeScenList[t_roll,k_t]);
+	pbScens = nodeScenWeights[t_roll,k_t];
+    flag = 0;
+    nbstages1 = T-t_roll+1;
+	if absorbing_option == 0
+		# If no MDC/SP operation is allowed in the absorbing state, do not plan for stage T since we know for sure that all states are absorbing
+		nbstages1 = T-t_roll;
+	end
+    Q = zeros(nbScens); #list for all the optimal values
+    pi1 = Array{Any,1}(undef,nbScens); #list for all the dual multiplies of the first set of constraints
+    pi2 = Array{Any,1}(undef,nbScens); #list for all the dual multiplies of the second set of constraints
+    pi3 = zeros(nbScens); # dual multipliers of the third set of constraints
+    Qbar = 0;
+
+    for n=1:nbScens
+        #identify the period when the hurricane makes landfall 
+		RH_2SSP_update_RHS(nodeScenList[t_roll,k_t][n][1],nodeScenList[t_roll,k_t][n][2],subproblem,xCons,dCons,rCons,xval,fval,y,t_roll);
+        #solve the subproblem and store the dual information
+        Q[n], pi1[n], pi2[n], pi3[n], flag = solve_scen_subproblem(subproblem,xCons,dCons,rCons);
+		if flag == -1
+            println("subproblem status is infeasible?!");
+            exit(0);
+		end
+    end
+    Qbar = sum(Q[n]*pbScens[n] for n=1:nbscen);
+
+    # cut generation: multi-cut version
+    for n=1:nbScens
+	    if (Q[n]-θval[n])/max(1e-10,abs(Q[n])) > ϵ && Q[n]-θval[n] > ϵ
+			#println("cutviol[", n, "] = ", Q[n]-θval[n], "Q[", n, "] = ", Q[n], "θval[", n, "] = ", θval[n]);
+			tt = nodeScenList[t_roll,k_t][n][1];
 			# tt is the terminal stage
 			if absorbing_option == 0
 				@constraint(master,

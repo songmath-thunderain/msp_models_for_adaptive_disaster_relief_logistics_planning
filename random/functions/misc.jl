@@ -91,7 +91,7 @@ function createNodes(k_init)
 	return nodeLists;
 end
 
-
+# function that creates a list of scenarios, along with the probability of occurrence, for each transient state node in the nodeList (set of reachable nodes from the initial state k_init)
 function createNodeScens(k_init, nodeLists)
 	nodeScenList = Dict();
 	nodeScenWeights = Dict();
