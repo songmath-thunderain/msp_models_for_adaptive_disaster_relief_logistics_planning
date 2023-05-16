@@ -8,55 +8,69 @@ time_limit = nbhrs*60^2;
 ϵ = 1e-4;
 
 ########################################################################################
+# Data input
 
-N0=Ni+1; #number of supply points + the MDC
+# transition probability matrices:
+P_intensity = Matrix(CSV.read("./case-study/mc_int_transition_prob.csv",DataFrame)) #intensity MC
+Na = size(P_intensity)[1]; #intensity MC number of states
+println("P_intensity = ", P_intensity);
+println("Na = ", Na);
 
-#the set of possible locations
-L = [(0,100),(100,200),(200,300),(300,400),(400,500),(500,600),(600,700)]; #discussion on the last state
-
-# probability distributions:
-P_intesity = Matrix(CSV.read("./data/intensity.csv",DataFrame)) #intensity MC
-P_location = Matrix(CSV.read("./data/location.csv",DataFrame)) #location MC
-P_landfall = Matrix(CSV.read("./data/landfall_7.csv",DataFrame)) #landfall MC
-
-Na = size(P_intesity)[1]; #intensity MC number of states
-Nb = size(P_location)[1]; #location MC number of states
+P_landfall = Matrix(CSV.read("./case-study/landfall_10.csv",DataFrame)) #landfall MC
 Nc = size(P_landfall)[1]; #landfall MC number of states
 T = copy(Nc); #define T_max
+println("T = ", T);
 
-Tmin = 2; # for now we just hard code it
+# Now read in the track MC: note that each stage has their own track MC
+trackMatrices = [];
+trackStates = [];
+for t = 1:(T-1)
+	temp_name = "./case-study/mc_track_transition_prob_at_t"*string(t-1)*".csv";
+	temp_MC = Matrix(CSV.read(temp_name,DataFrame));
 
+	temp_name2 = "./case-study/mc_track_mean_error_at_t"*string(t)*".csv";
+	temp_states = Matrix(CSV.read(temp_name2,DataFrame))[:,2];
+
+	push!(trackMatrices, temp_MC);
+	push!(trackStates, temp_states);
+
+	if size(temp_MC)[2] != length(temp_states)
+		print("Error in reading track MCs!");
+		exit(0);
+	end
+end
+
+println("trackStates = ", trackStates);
+
+########################################################################################
+# Data processing into a joint MC
+
+k1 = 0; #counter for the number of states
+for t = 1:T
+	for k = 1:length(trackStates[t])
+		for l = 1:Na
+			global k1 += 1;
+		end
+	end
+end
+
+#=
 K = Na*Nb*Nc; #number of state in the joint MC
 P_joint = zeros(K,K); #initialize the joint probability distribution MC
 S = Array{Any,1}(undef,K); #list with elements [intensity,location]
-absorbing_states = []; # list of absorbing states: when intensity = 0 or Loc_y = 7: landfall signifies the last stage (absorbing)
+absorbing_states = []; # list of absorbing states: Loc_y = T: landfall signifies the last stage (absorbing)
 k1 = 0; #counter for the number of states
 for k=1:Na, l=1:Nb, f=1:Nc
     global k1 +=1
     k2 = 0;
     for n=1:Na, m=1:Nb, j=1:Nc
         k2 +=1
-        P_joint[k1,k2] = P_intesity[k,n]*P_location[l,m]*P_landfall[f,j];
+        P_joint[k1,k2] = P_intensity[k,n]*P_location[l,m]*P_landfall[f,j];
     end
     S[k1] = [k,l,f]; 
     if k == 1 || f == Nc
         push!(absorbing_states,k1);
     end
-
-#=
-	if k == 2 && l == 2 && f == 1
-		println("k1 = ", k1);
-	end
-
-	if k == 4 && l == 2 && f == 1
-		println("k2 = ", k1);
-	end
-
-	if k == 6 && l == 2 && f == 1
-		println("k3 = ", k1);
-	end
-=#
-
 end
     
 #normalize the probabilities
@@ -139,63 +153,8 @@ x_0 = zeros(Ni); #initial items at different SPs
 ########################################################################################
 #Demand data 
 
-#Note: we get rid of layer2 in the revised code! [REVISION]
-#=
-#split the sample evenly towards the left and the right of the range
-M = 10;
-layer2 = []; 
-for l in L
-    cover = l;
-    list = [];
-    right = [cover[1],cover[2]]
-    parts_right = (right[2]-right[1])/(2*M);
-    count_right = right[1];
-    count_2 = 0
-    while true    
-        count_2+=1
-        count_right +=parts_right
-        if count_right >= right[2]
-            break
-        elseif isodd(count_2)
-            push!(list,count_right)
-        end
-    end
-    push!(layer2,list);
-end
-=#
-
 SCEN = Array{Any,1}(undef,K); #SCEN is the list for each state k 
 c_max = 300; #the largest possible radius of a hurricane
-
-#=
-# Note: we get rid of layer2 in the revised code! [REVISION]
-for k=1:K
-    #initialize a scenario matrix (scen) for each DP j and each possible point m in layer2;
-    scen = zeros(Nj,M); #we will create a scenario list for each state k
-    a = S[k][1]; #what is the observed intensity state
-    l = S[k][2]; #what is the observed location state
-    
-    #what are the coordinates of where the hurricane made landfall [xx,yy]
-    #note that yy=0 since the huricane makes landfall in the cost by assumption
-    #since we observed state location l, here are the M possible locations
-    for m=1:M
-        predicted = layer2[l][m]; #this is the predicted x_coordinates for the landfall location
-        xx_coord = max(0,min(predicted,x_up)); #we already now x in can't be smaller than 0 and bigger than 325; 
-        landfall = [xx_coord,0]
-        #now lets calculate the demand from each DP to the m location 
-        for j=1:Nj
-            #how far did destination to DPj j
-            c_j = norm(landfall-DP[j],2);
-            if c_j <= c_max
-                scen[j,m] = D_max*(1-(c_j/c_max))*(a-1)^2/((Na-1)^2)
-            else
-                scen[j,m] = 0;
-            end
-        end
-    end
-    SCEN[k] = scen;
-end
-=#
 
 for k=1:K
     #initialize a scenario matrix (scen) for each DP j and each possible point m in layer2;
@@ -220,6 +179,8 @@ for k=1:K
 	end
     SCEN[k] = scen;
 end
+
+=#
 
 ########################################################################################
 ########################################################################################
