@@ -39,10 +39,15 @@ for k=1:Na, l=1:Nb, f=1:Nc
         P_joint[k1,k2] = P_intesity[k,n]*P_location[l,m]*P_landfall[f,j];
     end
     S[k1] = [k,l,f]; 
-    if k == 1 || f == Nc
-        push!(absorbing_states,k1);
-    end
-
+	if dissipate_option == 1
+    	if k == 1 || f == Nc
+        	push!(absorbing_states,k1);
+   	 	end
+	else
+		if f == Nc
+			push!(absorbing_states,k1);
+		end
+	end
 #=
 	if k == 2 && l == 2 && f == 1
 		println("k1 = ", k1);

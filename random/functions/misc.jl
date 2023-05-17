@@ -69,7 +69,6 @@ function createNodes(k_init)
 	nodeLists = Array{Int}[];
 	push!(nodeLists,[k_init]);
 	stopFlag = false;
-	tIter = 1;
 	while stopFlag == false
 		tempList = [];
 		stopFlag = true; # if there is at least one state that is absorbing, turn the stopFlag back to false

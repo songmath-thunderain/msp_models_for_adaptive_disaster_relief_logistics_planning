@@ -33,7 +33,12 @@ pi3 = zeros(nbOS);
 
 for s=1:nbOS
 	#identify the period where the hurricane makes landfall 
-	absorbingT = findfirst(x -> (S[x][3] == Nc || S[x][1] == 1), OS_paths[s,:]);
+	absorbingT = -1;
+	if dissipate_option == 1
+		absorbingT = findfirst(x -> (S[x][3] == Nc || S[x][1] == 1), OS_paths[s,:]);
+	else
+		absorbingT = findfirst(x -> (S[x][3] == Nc), OS_paths[s,:]);
+	end
 	RH_2SSP_update_RHS(absorbingT,OS_paths[s,absorbingT],subproblem,xCons,dCons,rCons,xval_st2SSP,fval_st2SSP,y2,t_roll);
 	
 	#solve the subproblem and store the dual information
@@ -52,7 +57,6 @@ println("μ ± 1.96*σ/√NS = ", st2SSP_bar, " ± ", [st2SSP_low,st2SSP_high]);
 
 elapsed2 = time() - start;
 
-#=
 fname = "./output/benchmark/static2SPresults.csv"
 df = CSV.read(fname,DataFrame);
 
@@ -66,4 +70,3 @@ results_st2SSP[inst,6] = 0;
 
 updf = DataFrame(results_st2SSP, :auto);
 CSV.write(fname,updf);
-=#

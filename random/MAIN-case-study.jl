@@ -15,6 +15,7 @@ inst = parse(Int, PARAMS[1]); #instance number
 factor = parse(Float64, PARAMS[2]); #cost scaling factor
 nbOS = parse(Int, PARAMS[3]); #number of scenarios in the out-of-sample
 absorbing_option = parse(Int, PARAMS[4]); # whether or not we allow MDC/SP operation in the absorbing state
+dissipate_option = parse(Int, PARAMS[5]); # whether or not we treat intensity = 0 as an absorbing state
 
 include("packages.jl");
 include("./case-study/case-study.jl");

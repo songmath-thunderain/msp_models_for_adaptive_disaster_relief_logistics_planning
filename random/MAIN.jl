@@ -10,7 +10,8 @@ cd(cwd)
 #4: cost scaling factor
 #5: number of scenarios in the out-of-sample 
 #6: initial state
-#7: number of sample paths when solving two-stage
+#7: absorbing_option
+#8: dissipate_option
 PARAMS = ARGS;    
 instname = PARAMS[1]*"-"*PARAMS[2]*"SPs-"*PARAMS[3]*"DPs-"*PARAMS[4]*"ρ";
 #tg_sendtext("Julia: Now starting instance $instname"); #comment this line if don't have bots setup
@@ -21,6 +22,7 @@ factor = parse(Float64, PARAMS[4]); #cost scaling factor
 nbOS = parse(Int, PARAMS[5]); #number of scenarios in the out-of-sample
 k_init = parse(Int, PARAMS[6]); #initial state
 absorbing_option = parse(Int, PARAMS[7]); # whether or not we allow MDC/SP operation in the absorbing state
+dissipate_option = parse(Int, PARAMS[8]); # whether or not we treat intensity = 0 as an absorbing state
 
 include("packages.jl");
 include("./data/data.jl");

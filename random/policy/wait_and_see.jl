@@ -27,7 +27,7 @@ for t_roll = 1:T
 			solutionNodes[t_roll,k] = [xval_Roll, fval_Roll];
 		else
 			# absorbing state, we can determine pretty easily if it is Go vs. No-Go
-			if S[nodeLists[t_roll][k]][1] == 1
+			if S[nodeLists[t_roll][k]][1] == 1 && dissipate_option == 1
 				# Hurricane dissipates
 				objvalNodes[t_roll][k] = 0;
 				decisionNodes[t_roll][k] = 0;
@@ -123,7 +123,12 @@ for s=1:nbOS
 				continue;
 			else
 				# Decision is Go!
-				absorbingT = findfirst(x -> (S[x][3] == Nc || S[x][1] == 1), OS_paths[s,:]);
+				absorbingT = -1;
+				if dissipate_option == 1
+					absorbingT = findfirst(x -> (S[x][3] == Nc || S[x][1] == 1), OS_paths[s,:]);
+				else
+					absorbingT = findfirst(x -> (S[x][3] == Nc), OS_paths[s,:]);
+				end
 				#define second stage (subproblem) optimality model
    				subproblem, y, xCons, dCons, rCons = RH_2SSP_second_stage();
 				if absorbing_option == 0
@@ -136,30 +141,9 @@ for s=1:nbOS
 					end
 				end
 				for j=1:Nj
-					if S[OS_paths[s,absorbingT]][1] != 1
-						set_normalized_rhs(dCons[j], SCEN[OS_paths[s,absorbingT]][j]);
-					else
-						set_normalized_rhs(dCons[j], 0);
-					end
+					set_normalized_rhs(dCons[j], SCEN[OS_paths[s,absorbingT]][j]);
 				end
-#=
-				if absorbingT == T
-					# Plan exactly until the landfall time -- no reimbursement occurred!
-					set_normalized_rhs(rCons,0);
-				else
-					if absorbing_option == 0
-						updatedRHS = -sum((sum(sum(cb[i,ii,t+tt-1]*solutionNodes[t,ind][2][i,ii,tt] for ii=1:Ni) for i=1:N0)
-								+sum(ch[i,t+tt-1]*solutionNodes[t,ind][1][i,tt] for i=1:Ni)  
-								+sum(solutionNodes[t,ind][2][N0,i,tt] for i=1:Ni)*h[t+tt-1]) for tt = (absorbingT+1-t):(T-t)); 
-						set_normalized_rhs(rCons,updatedRHS);
-					else
-						updatedRHS = -sum((sum(sum(cb[i,ii,t+tt-1]*solutionNodes[t,ind][2][i,ii,tt] for ii=1:Ni) for i=1:N0)
-								+sum(ch[i,t+tt-1]*solutionNodes[t,ind][1][i,tt] for i=1:Ni)  
-								+sum(solutionNodes[t,ind][2][N0,i,tt] for i=1:Ni)*h[t+tt-1]) for tt = (absorbingT+2-t):(T-t+1)); 
-						set_normalized_rhs(rCons,updatedRHS);
-					end
-				end
-=#
+
 				for i=1:Ni
 					for j=1:Nj
 						set_objective_coefficient(subproblem, y[i,j], ca[i,j,absorbingT]);
@@ -202,7 +186,7 @@ WS_low = WS_bar-1.96*WS_std/sqrt(nbOS);
 WS_high = WS_bar+1.96*WS_std/sqrt(nbOS);
 println("WS....");
 println("μ ± 1.96*σ/√NS = ", WS_bar, " ± ", [WS_low,WS_high]);
-#=
+
 fname = "./output/benchmark/wait-and-see.csv";
 df = CSV.read(fname,DataFrame);
 
@@ -216,6 +200,5 @@ results_WS[inst,6] = 0;
 
 updf = DataFrame(results_WS, :auto);
 CSV.write(fname,updf);
-=#
 println("############################################################");
 println("############################################################");

@@ -13,8 +13,6 @@ time_limit = nbhrs*60^2;
 # transition probability matrices:
 P_intensity = Matrix(CSV.read("./case-study/mc_int_transition_prob.csv",DataFrame)) #intensity MC
 Na = size(P_intensity)[1]; #intensity MC number of states
-println("P_intensity = ", P_intensity);
-println("Na = ", Na);
 
 P_landfall = Matrix(CSV.read("./case-study/landfall_10.csv",DataFrame)) #landfall MC
 Nc = size(P_landfall)[1]; #landfall MC number of states
@@ -40,39 +38,48 @@ for t = 1:(T-1)
 	end
 end
 
-println("trackStates = ", trackStates);
-
 ########################################################################################
 # Data processing into a joint MC
 
-k1 = 0; #counter for the number of states
-for t = 1:T
-	for k = 1:length(trackStates[t])
-		for l = 1:Na
-			global k1 += 1;
+# First, count the total number of possible states
+K = 1;
+for t = 2:T
+	global K += Na*length(trackStates[t-1]);
+end
+
+println("Total # of states K = ", K);
+
+P_joint = zeros(K,K); #initialize the joint probability distribution MC
+S = Array{Any,1}(undef,K); #list with elements [intensity,location-x,location-y], all are indices
+absorbing_states = []; # list of absorbing states: Loc_y = T: landfall signifies the last stage (absorbing)
+k1 = 1; #counter for the number of states
+S[1] = [1,1,1];
+
+for t = 2:T
+	for l = 1:length(trackStates[t-1])
+		for k = 1:Na
+			global k1 += 1
+			S[k1] = [k,l,t];
+			if t == T
+				push!(absorbing_states, k1);
+			end
+		end	
+	end
+end
+
+
+for k = 1:K
+	if S[k][3] == T
+		P_joint[k,k] = 1; # absorbing
+	else
+		for kk = 1:K
+			if (S[k][2] <= size(trackMatrices[S[k][3]])[1]) && (S[kk][2] <= size(trackMatrices[S[k][3]])[2]) 
+				P_joint[k,kk] = P_intensity[S[k][1],S[kk][1]]*trackMatrices[S[k][3]][S[k][2],S[kk][2]]*P_landfall[S[k][3],S[kk][3]];
+			end
 		end
 	end
 end
 
-#=
-K = Na*Nb*Nc; #number of state in the joint MC
-P_joint = zeros(K,K); #initialize the joint probability distribution MC
-S = Array{Any,1}(undef,K); #list with elements [intensity,location]
-absorbing_states = []; # list of absorbing states: Loc_y = T: landfall signifies the last stage (absorbing)
-k1 = 0; #counter for the number of states
-for k=1:Na, l=1:Nb, f=1:Nc
-    global k1 +=1
-    k2 = 0;
-    for n=1:Na, m=1:Nb, j=1:Nc
-        k2 +=1
-        P_joint[k1,k2] = P_intensity[k,n]*P_location[l,m]*P_landfall[f,j];
-    end
-    S[k1] = [k,l,f]; 
-    if k == 1 || f == Nc
-        push!(absorbing_states,k1);
-    end
-end
-    
 #normalize the probabilities
 P_temp = deepcopy(P_joint);
 for k=1:K, kk=1:K
@@ -83,6 +90,13 @@ P_jointVec = deepcopy(P_joint);
 # Get the smallest transition probability that is nonzero to give us a correct threshold to filter out impossible transitions
 smallestTransProb = findmin(filter!(x -> x!= 0, vec(P_jointVec)))[1]*1.0/2; # JULIA WARNING: vec(P_joint) directly will change what P_joint looks like!!!!
 
+println("smallestTransProb = ", smallestTransProb);
+
+
+########################################################################################
+
+
+#=
 ########################################################################################
 
 #locations of the different facilities:

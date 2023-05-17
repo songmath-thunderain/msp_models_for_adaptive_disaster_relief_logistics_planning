@@ -184,7 +184,7 @@ function RH_2SSP_solve_roll(k_t,t_roll,master,subproblem,x,f,θ,y,xCons,dCons,rC
 	pbScens = nodeScenWeights[t_roll,k_t];
 	LB = -1e10; 
 	UB = 1e10; 
-	θval = zeros(nbscen);
+	θval = zeros(nbScens);
     xval = zeros(Ni,nbstages1);
 	fval = zeros(N0,Ni,nbstages1);
 	solveIter = 0;
