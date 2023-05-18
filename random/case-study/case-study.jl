@@ -67,6 +67,7 @@ for t = 2:T
 	end
 end
 
+println("absorbing_states = ", absorbing_states);
 
 for k = 1:K
 	if S[k][3] == T
@@ -96,15 +97,17 @@ println("smallestTransProb = ", smallestTransProb);
 ########################################################################################
 # Data on the logistics network
 
-d_IJ = Matrix(CSV.read("./case-study/d_IJ.csv",DataFrame));
-d_JJ = Matrix(CSV.read("./case-study/d_JJ.csv",DataFrame));
-d_KJ = Matrix(CSV.read("./case-study/d_KJ.csv",DataFrame));
+d_JI = Matrix(CSV.read("./case-study/d_JI.csv",DataFrame));
+d_II = Matrix(CSV.read("./case-study/d_II.csv",DataFrame));
 d_KI = Matrix(CSV.read("./case-study/d_KI.csv",DataFrame));
-d_SI = Matrix(CSV.read("./case-study/d_SI.csv",DataFrame));
+d_KJ = Matrix(CSV.read("./case-study/d_KJ.csv",DataFrame));
+d_SJ = Matrix(CSV.read("./case-study/d_SJ.csv",DataFrame));
+x_cap = Matrix(CSV.read("./case-study/x_cap.csv",DataFrame));
+max_D = Matrix(CSV.read("./case-study/demand.csv",DataFrame));
 
-Ni = size(d_IJ)[1];
-Nj = size(d_IJ)[2];
-N0 = Nj + 1;
+Nj = size(d_JI)[1]; # number of DPs
+Ni = size(d_JI)[2]; # number of SPs
+N0 = Ni + 1;
 
 println("Ni = ", Ni, ", Nj = ", Nj);
 
@@ -112,72 +115,61 @@ println("Ni = ", Ni, ", Nj = ", Nj);
 fuel = 0.0038;
 
 #unit cost of transporting/rerouting items from MDC/SP i to/between SP i' 
-cb = Array{Float64,3}(undef,N0,Nj,T);
-for i=1:N0, ii=1:Nj, t=1:T
+cb = Array{Float64,3}(undef,N0,Ni,T);
+for i=1:N0, ii=1:Ni, t=1:T
     if i < N0
-        cb[i,ii,t] = fuel*d_JJ[i,ii]*(1+factor*(t-1))
+        cb[i,ii,t] = fuel*d_II[i,ii]*(1+factor*(t-1))
     else
-        cb[i,ii,t] = fuel*d_KJ[ii]*(1+factor*(t-1))
+        cb[i,ii,t] = fuel*d_KI[ii]*(1+factor*(t-1))
     end 
 end
 
 #unit cost of transporting items from MDC/SP i to/between a demand point j
-ca = Array{Float64,3}(undef,N0,Ni,T);
-for i=1:N0, j=1:Ni, t=1:T
+ca = Array{Float64,3}(undef,N0,Nj,T);
+for i=1:N0, j=1:Nj, t=1:T
     if i < N0
-        ca[i,j,t] = fuel*d_IJ[j,i]*(1+factor*(t-1))
+        ca[i,j,t] = fuel*d_JI[j,i]*(1+factor*(t-1))
     else
-        ca[i,j,t] = fuel*d_KI[j]*(1+factor*(t-1))
+        ca[i,j,t] = fuel*d_KJ[j]*(1+factor*(t-1))
     end 
 end
 
 base = 5; # base unit cost for logistic costs
 h = Array{Float64,1}(undef,T); #unit cost for purchasing a relief item
-ch = Array{Float64,2}(undef,Nj,T); #unit cost for holding an item at SP i
+ch = Array{Float64,2}(undef,Ni,T); #unit cost for holding an item at SP i
 for t=1:T
     h[t] = base*(1+factor*(t-1));
-	ch[:,t] = fill(0.05*base,Nj);
+	ch[:,t] = fill(0.05*base,Ni);
 end
 
 p = 50*base;
 q = -0.2*base;
 
-#x_cap = Matrix(nodes)[1:Ni,5]*(Nj/Ni); #capacity of each SP
-x_0 = zeros(Nj); #initial items at different SPs
+x_0 = zeros(Ni); #initial items at different SPs
 
 
-#=
 ########################################################################################
 #Demand data 
-D_max = 400; #the maximum demand that can happen
+x_max = 500;
+max_intensity = 5;
 SCEN = Array{Any,1}(undef,K); #SCEN is the list for each state k 
-c_max = 300; #the largest possible radius of a hurricane
 
 for k=1:K
-    #initialize a scenario matrix (scen) for each DP j and each possible point m in layer2;
-    scen = zeros(Nj); #we will create a scenario list for each state k
-    a = S[k][1]; #what is the observed intensity state
-    l = S[k][2]; #what is the observed location state
-    
-    #what are the coordinates of where the hurricane made landfall [xx,yy]
-    #note that yy=0 since the huricane makes landfall in the cost by assumption
-	predicted = 0.5*(L[l][1]+L[l][2]); #this is the predicted x_coordinates for the landfall location: for simplicity, just use the center of the interval	
-	xx_coord = max(x_low,min(predicted,x_up)); #we already know x in can't be smaller than x_low and bigger than x_up; 
-	landfall = [xx_coord,0]
-	#now lets calculate the demand from each DP to the m location 
-	for j=1:Nj
-		#how far did destination to DPj j
-		c_j = norm(landfall-DP[j],2);
-		if c_j <= c_max
-			scen[j] = D_max*(1-(c_j/c_max))*(a-1)^2/((Na-1)^2)
-		else
-			scen[j] = 0;
+    scen = zeros(Ni); #we will create a scenario list for each state k
+    if S[k][3] == T
+		#now lets calculate the demand from each DP 
+		for j=1:Nj
+			#how far did destination to DPj 
+			dLandfall = d_SJ[S[k][2],j];
+			if dLandfall >= x_max
+				scen[j] = 0;
+			else
+				scen[j] = (1-dLandfall/x_max)*(S[k][1]/max_intensity)^2*max_D[j];
+			end
 		end
 	end
     SCEN[k] = scen;
 end
-
-=#
 
 ########################################################################################
 ########################################################################################

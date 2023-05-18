@@ -17,17 +17,17 @@ nbOS = parse(Int, PARAMS[3]); #number of scenarios in the out-of-sample
 absorbing_option = parse(Int, PARAMS[4]); # whether or not we allow MDC/SP operation in the absorbing state
 dissipate_option = parse(Int, PARAMS[5]); # whether or not we treat intensity = 0 as an absorbing state
 
+k_init = 1;
+
 include("packages.jl");
 include("./case-study/case-study.jl");
-
-exit(0);
-
 include("./functions/functions.jl");
 
 nodeLists = createNodes(k_init); # List of MC states in each stage
+
 nodeScenList, nodeScenWeights = createNodeScens(k_init, nodeLists);
 
-#create_OSpaths(k_init)
+#create_OSpaths(1);
 
 #create gurobi environment
 const GRB_ENV = Gurobi.Env();

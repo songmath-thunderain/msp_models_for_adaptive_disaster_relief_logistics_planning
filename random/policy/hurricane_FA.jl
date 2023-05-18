@@ -37,4 +37,3 @@ results_fa[inst,6] = iter
 
 updf = DataFrame(results_fa, :auto);
 CSV.write(fname,updf)
-
