@@ -41,25 +41,25 @@ nodeScenList, nodeScenWeights = createNodeScens(k_init, nodeLists);
 const GRB_ENV = Gurobi.Env();
 
 #Clairvoyance solution 
-include("./policy/hurricane_CV.jl");
+#include("./policy/hurricane_CV.jl");
 
 #Fully adaptive model
-include("./policy/hurricane_FA.jl");
+#include("./policy/hurricane_FA.jl");
  
 #Rolling-horizon 2SSP
-include("./policy/hurricane_rolling_twostage.jl");
+#include("./policy/hurricane_rolling_twostage.jl");
 
 #Wait-and-see
-include("./policy/wait_and_see.jl");
+#include("./policy/wait_and_see.jl");
 
 #Static 2SSP
-include("./policy/hurricane_static_twostage.jl");
+#include("./policy/hurricane_static_twostage.jl");
 
 #Deterministic FA 
 #include("./policy/hurricane_deterministicFA.jl");
 
 #sensitivity analysis
-#include("SENS.jl");
+include("SENS.jl");
 
 
 #tg_sendtext("Julia: $instname is DONE!"); #comment this line if don't have bots setup

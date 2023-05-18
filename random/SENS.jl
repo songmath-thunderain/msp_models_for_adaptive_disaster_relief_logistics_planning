@@ -22,6 +22,7 @@ objs_fa = zeros(nbOS,T);
 xval_fa = Array{Any,2}(undef,nbOS,T); fval_fa = Array{Any,2}(undef,nbOS,T);
 yval_fa = Array{Any,2}(undef,nbOS,T); zval_fa = Array{Any,2}(undef,nbOS,T); vval_fa = Array{Any,2}(undef,nbOS,T);
 procurmnt_amount = zeros(T); 
+flow_amount = zeros(T);
 for s=1:nbOS
     xval = zeros(Ni,T);
     for t=1:T
@@ -51,7 +52,8 @@ for s=1:nbOS
                 vval_fa[s,t] = value.(v_fa[t,k_t]);
                 objs_fa[s,t] = objective_value(m_fa[t,k_t])- value(ϴ_fa[t,k_t]);
 
-                procurmnt_amount[t] += (sum(fval_fa[s,t][N0,i] for i=1:Ni))/nbOS 
+                procurmnt_amount[t] += (sum(fval_fa[s,t][N0,i] for i=1:Ni))/nbOS
+			   	flow_amount[t] += sum(sum(fval_fa[s,t][i,ii] for i = 1:Ni) for ii = 1:Ni)/nbOS	
             end
         end
     end        
@@ -61,6 +63,7 @@ fname = "./output/sensitivity.csv"
 df = CSV.read(fname,DataFrame);
 results_fa = Matrix(df);
 results_fa[inst,1:T] = procurmnt_amount
+results_fa[inst,(T+1):(2*T)] = flow_amount
 results_fa[inst,end] = inst; 
 updf = DataFrame(results_fa, :auto);
 CSV.write(fname,updf)
