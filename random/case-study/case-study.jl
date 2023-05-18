@@ -94,79 +94,62 @@ println("smallestTransProb = ", smallestTransProb);
 
 
 ########################################################################################
+# Data on the logistics network
 
+d_IJ = Matrix(CSV.read("./case-study/d_IJ.csv",DataFrame));
+d_JJ = Matrix(CSV.read("./case-study/d_JJ.csv",DataFrame));
+d_KJ = Matrix(CSV.read("./case-study/d_KJ.csv",DataFrame));
+d_KI = Matrix(CSV.read("./case-study/d_KI.csv",DataFrame));
+d_SI = Matrix(CSV.read("./case-study/d_SI.csv",DataFrame));
 
-#=
-########################################################################################
+Ni = size(d_IJ)[1];
+Nj = size(d_IJ)[2];
+N0 = Nj + 1;
 
-#locations of the different facilities:
-MDC = [350,450];
-x_low = 0; 
-x_up = 700; 
-y_low = 0; 
-y_up = 100;
-
-nodes = CSV.read("./data/nodes.csv",DataFrame); # read the nodes locations
-
-
-#list for the coordinates of the different supply points
-SP = []; 
-for i=1:Ni
-    push!(SP,[nodes[i,1],nodes[i,2]+100]);
-end
-
-#list for the coordinates of the different demand points
-DP = []; 
-for j=1:Nj
-    push!(DP,[nodes[j,3],nodes[j,4]]);
-end
+println("Ni = ", Ni, ", Nj = ", Nj);
 
 #fuel cost
 fuel = 0.0038;
 
 #unit cost of transporting/rerouting items from MDC/SP i to/between SP i' 
-cb = Array{Float64,3}(undef,N0,Ni,T);
-for i=1:N0, ii=1:Ni, t=1:T
+cb = Array{Float64,3}(undef,N0,Nj,T);
+for i=1:N0, ii=1:Nj, t=1:T
     if i < N0
-        cb[i,ii,t] = fuel*norm(SP[i]-SP[ii],2)*(1+factor*(t-1))
+        cb[i,ii,t] = fuel*d_JJ[i,ii]*(1+factor*(t-1))
     else
-        cb[i,ii,t] = fuel*norm(MDC-SP[ii],2)*(1+factor*(t-1))
+        cb[i,ii,t] = fuel*d_KJ[ii]*(1+factor*(t-1))
     end 
 end
 
 #unit cost of transporting items from MDC/SP i to/between a demand point j
-ca = Array{Float64,3}(undef,N0,Nj,T);
-for i=1:N0, j=1:Nj, t=1:T
+ca = Array{Float64,3}(undef,N0,Ni,T);
+for i=1:N0, j=1:Ni, t=1:T
     if i < N0
-        ca[i,j,t] = fuel*norm(SP[i]-DP[j],2)*(1+factor*(t-1))
+        ca[i,j,t] = fuel*d_IJ[j,i]*(1+factor*(t-1))
     else
-        ca[i,j,t] = fuel*norm(MDC-DP[j],2)*(1+factor*(t-1))
+        ca[i,j,t] = fuel*d_KI[j]*(1+factor*(t-1))
     end 
 end
 
 base = 5; # base unit cost for logistic costs
 h = Array{Float64,1}(undef,T); #unit cost for purchasing a relief item
-ch = Array{Float64,2}(undef,Ni,T); #unit cost for holding an item at SP i
+ch = Array{Float64,2}(undef,Nj,T); #unit cost for holding an item at SP i
 for t=1:T
     h[t] = base*(1+factor*(t-1));
-	#ch[:,t] = fill(0.2*base,Ni);
-	ch[:,t] = fill(0.05*base,Ni);
+	ch[:,t] = fill(0.05*base,Nj);
 end
 
-#p = 80*base; #penalty cost for failing to serve the demand
 p = 50*base;
-#q = -0.05*base; #salvage cost for each unit of overstock.
 q = -0.2*base;
-D_max = 400; #the maximum demand that can happen
 
-x_cap = Matrix(nodes)[1:Ni,5]*(Nj/Ni); #capacity of each SP
-x_0 = zeros(Ni); #initial items at different SPs
-#f_cap = fill(Inf,N0,Ni);
+#x_cap = Matrix(nodes)[1:Ni,5]*(Nj/Ni); #capacity of each SP
+x_0 = zeros(Nj); #initial items at different SPs
 
 
+#=
 ########################################################################################
 #Demand data 
-
+D_max = 400; #the maximum demand that can happen
 SCEN = Array{Any,1}(undef,K); #SCEN is the list for each state k 
 c_max = 300; #the largest possible radius of a hurricane
 
