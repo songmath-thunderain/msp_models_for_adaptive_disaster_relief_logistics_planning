@@ -9,10 +9,10 @@ OS_paths = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
 start = time();
 
 #define the model.
-master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_roll,OS_paths[s,t_roll],x_init);
+master_1stRoll, x_1stRoll, f_1stRoll, θ_1stRoll, subproblem_1stRoll, y2_1stRoll, xCons_1stRoll, dCons_1stRoll, rCons_1stRoll = RH_2SSP_define_models(t_roll,OS_paths[s,t_roll],x_init);
 
 #solve the model.
-LB_1stRoll, UB_1stRoll, xval_1stRoll, fval_1stRoll, θval_1stRoll = RH_2SSP_solve_roll(OS_paths[s,t_roll],t_roll,master,subproblem,x,f,θ,y2,xCons,dCons,rCons);
+LB_1stRoll, UB_1stRoll, xval_1stRoll, fval_1stRoll, θval_1stRoll = RH_2SSP_solve_roll(OS_paths[s,t_roll],t_roll,master_1stRoll,subproblem_1stRoll,x_1stRoll,f_1stRoll,θ_1stRoll,y2_1stRoll,xCons_1stRoll,dCons_1stRoll,rCons_1stRoll);
 
 objs_RH2SSP = zeros(nbOS,T);
 
@@ -30,12 +30,12 @@ end
 for s=1:nbOS
 	absorbingT = -1;
 	if dissipate_option == 1
-		absorbingT = findfirst(x -> (S[x][3] == Nc || S[x][1] == 1), OS_paths[s,1:T]);
+		absorbingT = findfirst(x -> (S[x][3] == Nc || S[x][1] == 1), OS_paths[s,:]);
 	else
-		absorbingT = findfirst(x -> (S[x][3] == Nc), OS_paths[s,1:T]);
+		absorbingT = findfirst(x -> (S[x][3] == Nc), OS_paths[s,:]);
 	end
 	x_init = deepcopy(xval_1stRoll[:,1]);
-	if dissipate_option == 1 && S[absorbingT][1] == 1
+	if dissipate_option == 1 && S[OS_paths[s,absorbingT]][1] == 1
 		# This rolling procedure will go all the way until the hurricane gets into the absorbing state of dissipating 
 		for t_roll=2:(absorbingT-1)
 			# roll up to t = absorbingT-1
@@ -143,8 +143,6 @@ for s=1:nbOS
 						objs_RH2SSP[s,t_roll] += objective_value(m_term);
 					end
 				end
-
-				#println("last roll value = ", objs_RH2SSP[s,t_roll]);
 			end
 		end
 	end

@@ -59,6 +59,10 @@ for s=1:nbOS
     end        
 end
 
+println("procurement amount = ", procurmnt_amount);
+println("flow amount = ", flow_amount);
+
+
 fname = "./output/sensitivity.csv"
 df = CSV.read(fname,DataFrame);
 results_fa = Matrix(df);

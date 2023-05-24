@@ -47,7 +47,7 @@ const GRB_ENV = Gurobi.Env();
 #include("./policy/hurricane_FA.jl");
  
 #Rolling-horizon 2SSP
-#include("./policy/hurricane_rolling_twostage.jl");
+include("./policy/hurricane_rolling_twostage.jl");
 
 #Wait-and-see
 #include("./policy/wait_and_see.jl");
@@ -59,7 +59,7 @@ const GRB_ENV = Gurobi.Env();
 #include("./policy/hurricane_deterministicFA.jl");
 
 #sensitivity analysis
-include("SENS.jl");
+#include("SENS.jl");
 
 
 #tg_sendtext("Julia: $instname is DONE!"); #comment this line if don't have bots setup
