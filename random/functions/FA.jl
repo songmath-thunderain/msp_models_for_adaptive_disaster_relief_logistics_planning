@@ -205,45 +205,76 @@ function FOSDDP_backward_pass_oneSP_iteration(lb,xval,thetaval,in_sample)
 		########################################
 		# Solving all stage-(t-1) problems and generate cuts/valid inequalities
 		########################################
-        for n = 1:length(nodeLists[t-1])
-            if  nodeLists[t-1][n] ∉ absorbing_states
-                #what is the expected cost value 
-                Qvalue = 0;
-				#tempProb = 0;
-				for k=1:length(nodeLists[t])
-					if P_joint[nodeLists[t-1][n],nodeLists[t][k]] > smallestTransProb
-						Qvalue = Qvalue + Q[nodeLists[t][k]]*P_joint[nodeLists[t-1][n],nodeLists[t][k]];
-						#tempProb = tempProb + P_joint[nodeLists[t-1][n],nodeLists[t][k]];
-					end
-				end
-				#if abs(tempProb-1) > 1e-7
-				#	@printf("tempProb = %f\n", tempProb);
-				#	@printf("node = %d, \n", nodeLists[t-1][n]);
-				#	println("S[node] = ", S[nodeLists[t-1][n]]);
-				#	println("P_joint[", nodeLists[t-1][n], "] = ", P_joint[nodeLists[t-1][n],:]);
-				#	exit(0);
-				#end	
-                # check if cut is violated at the sample path encountered in the forward pass
-                if nodeLists[t-1][n] == sample_n && (Qvalue-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ && abs(Qvalue-thetaval[t-1]) > ϵ
-                    cutviolFlag = 1;
-                end
 
-                # we are doing cut sharing so we will add the cut regardless
-				cutcoef = zeros(Ni);
-				cutrhs_xval = 0;
-				for k=1:length(nodeLists[t])
-					if P_joint[nodeLists[t-1][n],nodeLists[t][k]] > smallestTransProb
-						for i=1:Ni
-							tempval = (pi1[nodeLists[t][k],i]+pi2[nodeLists[t][k],i])*P_joint[nodeLists[t-1][n],nodeLists[t][k]];
-							cutcoef[i] = cutcoef[i] + tempval;
-							cutrhs_xval = cutrhs_xval + tempval*xval[i,t-1];
+
+		if FA_option == 1
+			for n = 1:length(nodeLists[t-1])
+				if  nodeLists[t-1][n] ∉ absorbing_states
+					#what is the expected cost value 
+					Qvalue = 0;
+					#tempProb = 0;
+					for k=1:length(nodeLists[t])
+						if P_joint[nodeLists[t-1][n],nodeLists[t][k]] > smallestTransProb
+							Qvalue = Qvalue + Q[nodeLists[t][k]]*P_joint[nodeLists[t-1][n],nodeLists[t][k]];
+							#tempProb = tempProb + P_joint[nodeLists[t-1][n],nodeLists[t][k]];
 						end
 					end
+					#if abs(tempProb-1) > 1e-7
+					#	@printf("tempProb = %f\n", tempProb);
+					#	@printf("node = %d, \n", nodeLists[t-1][n]);
+					#	println("S[node] = ", S[nodeLists[t-1][n]]);
+					#	println("P_joint[", nodeLists[t-1][n], "] = ", P_joint[nodeLists[t-1][n],:]);
+					#	exit(0);
+					#end	
+					# check if cut is violated at the sample path encountered in the forward pass
+					if nodeLists[t-1][n] == sample_n && (Qvalue-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ && abs(Qvalue-thetaval[t-1]) > ϵ
+						cutviolFlag = 1;
+					end
+
+					# we are doing cut sharing so we will add the cut regardless
+					cutcoef = zeros(Ni);
+					cutrhs_xval = 0;
+					for k=1:length(nodeLists[t])
+						if P_joint[nodeLists[t-1][n],nodeLists[t][k]] > smallestTransProb
+							for i=1:Ni
+								tempval = (pi1[nodeLists[t][k],i]+pi2[nodeLists[t][k],i])*P_joint[nodeLists[t-1][n],nodeLists[t][k]];
+								cutcoef[i] = cutcoef[i] + tempval;
+								cutrhs_xval = cutrhs_xval + tempval*xval[i,t-1];
+							end
+						end
+					end
+					@constraint(m_fa[t-1,nodeLists[t-1][n]],
+					ϴ_fa[t-1,nodeLists[t-1][n]]-sum(cutcoef[i]*x_fa[t-1,nodeLists[t-1][n]][i] for i=1:Ni) >= Qvalue-cutrhs_xval);
 				end
-                @constraint(m_fa[t-1,nodeLists[t-1][n]],
-                ϴ_fa[t-1,nodeLists[t-1][n]]-sum(cutcoef[i]*x_fa[t-1,nodeLists[t-1][n]][i] for i=1:Ni) >= Qvalue-cutrhs_xval);
-            end
-        end
+			end
+		else
+			#Only generate cuts to one node
+			Qvalue = 0;
+			for k=1:length(nodeLists[t])
+				if P_joint[sample_n,nodeLists[t][k]] > smallestTransProb
+					Qvalue = Qvalue + Q[nodeLists[t][k]]*P_joint[sample_n,nodeLists[t][k]];
+				end
+			end
+			# check if cut is violated at the sample path encountered in the forward pass
+			if (Qvalue-thetaval[t-1])/max(1e-10,abs(thetaval[t-1])) > ϵ && abs(Qvalue-thetaval[t-1]) > ϵ
+				cutviolFlag = 1;
+			end
+
+			# we are doing cut sharing so we will add the cut regardless
+			cutcoef = zeros(Ni);
+			cutrhs_xval = 0;
+			for k=1:length(nodeLists[t])
+				if P_joint[sample_n,nodeLists[t][k]] > smallestTransProb
+					for i=1:Ni
+						tempval = (pi1[nodeLists[t][k],i]+pi2[nodeLists[t][k],i])*P_joint[sample_n,nodeLists[t][k]];
+						cutcoef[i] = cutcoef[i] + tempval;
+						cutrhs_xval = cutrhs_xval + tempval*xval[i,t-1];
+					end
+				end
+			end
+			@constraint(m_fa[t-1,sample_n],
+			ϴ_fa[t-1,sample_n]-sum(cutcoef[i]*x_fa[t-1,sample_n][i] for i=1:Ni) >= Qvalue-cutrhs_xval);
+		end
     end
     return cutviolFlag;
 end

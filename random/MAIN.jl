@@ -23,6 +23,8 @@ nbOS = parse(Int, PARAMS[5]); #number of scenarios in the out-of-sample
 k_init = parse(Int, PARAMS[6]); #initial state
 absorbing_option = parse(Int, PARAMS[7]); # whether or not we allow MDC/SP operation in the absorbing state
 dissipate_option = parse(Int, PARAMS[8]); # whether or not we treat intensity = 0 as an absorbing state
+FA_option = parse(Int, PARAMS[9]); # whether or not we do cut sharing
+
 
 include("packages.jl");
 include("./data/data.jl");
