@@ -59,7 +59,7 @@ const GRB_ENV = Gurobi.Env();
 #include("./policy/hurricane_deterministicFA.jl");
 
 #sensitivity analysis
-include("SENS-2S.jl");
+include("SENS-WS.jl");
 
 
 #tg_sendtext("Julia: $instname is DONE!"); #comment this line if don't have bots setup

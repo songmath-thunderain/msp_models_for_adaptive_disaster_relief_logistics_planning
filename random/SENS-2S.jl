@@ -16,6 +16,10 @@ LB_st2SSP, UB_st2SSP, xval_st2SSP, fval_st2SSP, θval_st2SSP = RH_2SSP_solve_rol
 procurmnt_amount = zeros(T); 
 
 for t = 1:T
+	println("prepositioned = ", sum(xval_st2SSP[i,t] for i=1:Ni));
+end
+
+for t = 1:T
 	procurmnt_amount[t] += sum(fval_st2SSP[N0,i,t] for i=1:Ni)
 end
 
