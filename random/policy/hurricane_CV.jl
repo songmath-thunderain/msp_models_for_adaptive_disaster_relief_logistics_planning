@@ -61,9 +61,6 @@ for s=1:nbOS
 	end
 end
 
-for s=1:nbOS
-	println("obj[", s, "] = ", objs_cv[s]);
-end
 
 cv_bar = mean(objs_cv);
 cv_std = std(objs_cv);

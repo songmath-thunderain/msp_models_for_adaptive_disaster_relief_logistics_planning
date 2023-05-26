@@ -19,9 +19,12 @@ osfname = "./data/OOS"*string(k_init)*".csv";
 OS_paths = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
 #OS_M = Matrix(CSV.read("./data/inOOS.csv",DataFrame))[:,1] #read the second layer OOS
 objs_fa = zeros(nbOS,T);
+procurmnt_all = zeros(nbOS,T);
 xval_fa = Array{Any,2}(undef,nbOS,T); fval_fa = Array{Any,2}(undef,nbOS,T);
 yval_fa = Array{Any,2}(undef,nbOS,T); zval_fa = Array{Any,2}(undef,nbOS,T); vval_fa = Array{Any,2}(undef,nbOS,T);
 procurmnt_amount = zeros(T); 
+procurmnt_percentage = zeros(T); 
+procurmnt_posExpect = zeros(T); 
 flow_amount = zeros(T);
 for s=1:nbOS
     xval = zeros(Ni,T);
@@ -51,7 +54,7 @@ for s=1:nbOS
                 zval_fa[s,t] = value.(z_fa[t,k_t]);
                 vval_fa[s,t] = value.(v_fa[t,k_t]);
                 objs_fa[s,t] = objective_value(m_fa[t,k_t])- value(ϴ_fa[t,k_t]);
-
+				procurmnt_all[s,t] = sum(fval_fa[s,t][N0,i] for i=1:Ni);
                 procurmnt_amount[t] += (sum(fval_fa[s,t][N0,i] for i=1:Ni))/nbOS
 			   	flow_amount[t] += sum(sum(fval_fa[s,t][i,ii] for i = 1:Ni) for ii = 1:Ni)/nbOS	
             end
@@ -59,15 +62,30 @@ for s=1:nbOS
     end        
 end
 
+for t=1:T
+	count = 0;
+	totalPos = 0;
+	for s=1:nbOS
+		if procurmnt_all[s,t] > 1e-2
+			count += 1;
+			totalPos += procurmnt_all[s,t];
+		end
+	end
+	procurmnt_percentage[t] = count*1.0/nbOS;
+	if count > 0
+		procurmnt_posExpect[t] = totalPos*1.0/count;
+	end
+end
+
 println("procurement amount = ", procurmnt_amount);
 println("flow amount = ", flow_amount);
-
 
 fname = "./output/FA-sensitivity.csv"
 df = CSV.read(fname,DataFrame);
 results_fa = Matrix(df);
 results_fa[inst,1:T] = procurmnt_amount
-results_fa[inst,(T+1):(2*T)] = flow_amount
+results_fa[inst,(T+1):(2*T)] = procurmnt_percentage
+results_fa[inst,(2*T+1):(3*T)] = procurmnt_posExpect
 results_fa[inst,end] = inst; 
 updf = DataFrame(results_fa, :auto);
 CSV.write(fname,updf)

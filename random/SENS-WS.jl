@@ -1,5 +1,3 @@
-start = time();
-
 ###############################################################
 ###############################################################
 # Offline policy construction: for each node in the nodeLists, going backwards in time, choose Go/No-go and record the best (better) expected objective value
@@ -106,6 +104,8 @@ osfname = "./data/OOS"*string(k_init)*".csv";
 OS_paths = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
 objs_OOS = zeros(nbOS);
 
+count_goTime = zeros(T);
+
 for s=1:nbOS
 	#print("OOS[", s, "] = (");
 	for t = 1:T
@@ -115,6 +115,9 @@ for s=1:nbOS
 			# if absorbing, just take whatever that is the best, which has been computed above
 			objs_OOS[s] = objvalNodes[t][ind];
 			#print("absorbed! obj = ", objs_OOS[s], "\n");
+			if decisionNodes[t][ind] == 1
+				count_goTime[t] += 1;
+			end
 			break;
 		else
 			if decisionNodes[t][ind] == 0
@@ -168,6 +171,7 @@ for s=1:nbOS
 					end
 				end
 				#print("Go! obj = ", objs_OOS[s], "\n");
+				count_goTime[t] += 1;
 				break;
 			end
 		end
@@ -177,28 +181,17 @@ for s=1:nbOS
 	#println("] = ", objs_OOS[s]);
 end
 
+Go_percentage = zeros(T); 
 
-elapsed_WS = time() - start;
 
-WS_bar = mean(objs_OOS);
-WS_std = std(objs_OOS);
-WS_low = WS_bar-1.96*WS_std/sqrt(nbOS);
-WS_high = WS_bar+1.96*WS_std/sqrt(nbOS);
-println("WS....");
-println("μ ± 1.96*σ/√NS = ", WS_bar, " ± ", [WS_low,WS_high]);
+for t = 1:T
+	Go_percentage[t] = count_goTime[t]*1.0/nbOS; 
+end
 
-fname = "./output/benchmark/wait-and-see.csv";
+fname = "./output/WS-sensitivity.csv"
 df = CSV.read(fname,DataFrame);
-
-results_WS = Matrix(df);
-results_WS[inst,1] = 0;
-results_WS[inst,2] = WS_bar;
-results_WS[inst,3] = WS_bar-WS_low;
-results_WS[inst,4] = 0;
-results_WS[inst,5] = elapsed_WS;
-results_WS[inst,6] = 0;
-
-updf = DataFrame(results_WS, :auto);
-CSV.write(fname,updf);
-println("############################################################");
-println("############################################################");
+results_fa = Matrix(df);
+results_fa[inst,1:T] = Go_percentage
+results_fa[inst,end] = inst; 
+updf = DataFrame(results_fa, :auto);
+CSV.write(fname,updf)

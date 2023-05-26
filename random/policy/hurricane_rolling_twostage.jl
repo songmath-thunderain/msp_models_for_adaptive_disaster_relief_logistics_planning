@@ -146,8 +146,6 @@ for s=1:nbOS
 			end
 		end
 	end
-	print("obj[", s);
-	println("] = ", sum(objs_RH2SSP[s,t] for t=1:T));
 end
 
 elapsed_RH2SSP = time() - start;
