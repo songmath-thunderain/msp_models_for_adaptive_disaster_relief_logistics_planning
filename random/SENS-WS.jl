@@ -105,6 +105,7 @@ OS_paths = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
 objs_OOS = zeros(nbOS);
 
 count_goTime = zeros(T);
+count_noabsorbing_goTime = zeros(T);
 
 for s=1:nbOS
 	#print("OOS[", s, "] = (");
@@ -172,6 +173,7 @@ for s=1:nbOS
 				end
 				#print("Go! obj = ", objs_OOS[s], "\n");
 				count_goTime[t] += 1;
+				count_noabsorbing_goTime[t] += 1;
 				break;
 			end
 		end
@@ -182,16 +184,18 @@ for s=1:nbOS
 end
 
 Go_percentage = zeros(T); 
-
+Go_noabsorbing_percentage = zeros(T);
 
 for t = 1:T
 	Go_percentage[t] = count_goTime[t]*1.0/nbOS; 
+	Go_noabsorbing_percentage[t] = count_noabsorbing_goTime[t]*1.0/nbOS;
 end
 
 fname = "./output/WS-sensitivity.csv"
 df = CSV.read(fname,DataFrame);
 results_fa = Matrix(df);
-results_fa[inst,1:T] = Go_percentage
+results_fa[inst,1:T] = Go_percentage;
+results_fa[inst,(T+1):(2*T)] = Go_noabsorbing_percentage;
 results_fa[inst,end] = inst; 
 updf = DataFrame(results_fa, :auto);
 CSV.write(fname,updf)

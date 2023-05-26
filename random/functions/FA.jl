@@ -309,10 +309,7 @@ function FOSDDP_eval_offline()
     xval_fa = Array{Any,2}(undef,nbOS,T); fval_fa = Array{Any,2}(undef,nbOS,T);
     yval_fa = Array{Any,2}(undef,nbOS,T); zval_fa = Array{Any,2}(undef,nbOS,T); vval_fa = Array{Any,2}(undef,nbOS,T);
 
-    procurmnt_amount = zeros(T); 
-    
     for s=1:nbOS
-		print("OOS[", s, "] = (");
         xval = zeros(Ni,T);
         for t=1:T
             #the state is known in the first stage; if not sample a new state k 
@@ -340,15 +337,21 @@ function FOSDDP_eval_offline()
 				zval_fa[s,t] = value.(z_fa[t,k_t]);
 				vval_fa[s,t] = value.(v_fa[t,k_t]);
 				objs_fa[s,t] = objective_value(m_fa[t,k_t])- value(ϴ_fa[t,k_t]);
-				
-				procurmnt_amount[t] += (sum(fval_fa[s,t][N0,i] for i=1:Ni))/nbOS;
-				print(objs_fa[s,t], ", ");
+
+
+				if absorbing_option == 0
+					if k_t in absorbing_states
+						if (sum(fval_fa[s,t][N0,i] for i=1:Ni) > 1e-5)
+							println("something is wrong! sum of flow from MDC = ", sum(fval_fa[s,t][N0,i] for i=1:Ni));
+							exit(0);
+						end
+					end
+				end
 			end
 			if k_t in absorbing_states
 				break;
             end
         end        
-		print(")\n");
     end
     fa_bar = mean(sum(objs_fa[:,t] for t=1:T));
     fa_std = std(sum(objs_fa[:,t] for t=1:T));
