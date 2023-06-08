@@ -18,11 +18,17 @@ absorbing_option = parse(Int, PARAMS[4]); # whether or not we allow MDC/SP opera
 dissipate_option = 0; # We do not treat intensity = 0 as an absorbing state in the case study
 FA_option = 1; # We turn on cut sharing
 
+penaltyFactor = parse(Float64, PARAMS[5]); # penalty parameter: 10, 50, 100
+
 k_init = 1;
 
 include("packages.jl");
 include("./case-study/case-study.jl");
+
+p = penaltyFactor*base;
+
 include("./functions/functions.jl");
+
 
 nodeLists = createNodes(k_init); # List of MC states in each stage
 
@@ -52,7 +58,7 @@ const GRB_ENV = Gurobi.Env();
 #include("./policy/hurricane_deterministicFA.jl");
 
 #sensitivity analysis
-include("SENS-WS.jl");
+include("SENS-FA.jl");
 
 
 #tg_sendtext("Julia: $instname is DONE!"); #comment this line if don't have bots setup

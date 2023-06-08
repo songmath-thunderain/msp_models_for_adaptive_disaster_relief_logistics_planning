@@ -26,11 +26,9 @@ procurmnt_amount = zeros(T);
 procurmnt_percentage = zeros(T); 
 procurmnt_posExpect = zeros(T); 
 flow_amount = zeros(T);
-transCost = zeros(nbOS);
-procCost = zeros(nbOS);
-invCost = zeros(nbOS);
-salvageCost = zeros(nbOS);
-penaltyCost = zeros(nbOS);
+invAmount = zeros(nbOS);
+salvageAmount = zeros(nbOS);
+penaltyAmount = zeros(nbOS);
 for s=1:nbOS
     xval = zeros(Ni,T);
     for t=1:T
@@ -38,36 +36,40 @@ for s=1:nbOS
         k_t = OS_paths[s,t];
 		# we do not have this second layer now [REVISION]
 		#m = OS_M[s]; # realization from OS path corresponding to layer 2
-        if k_t ∉ absorbing_states
-            if t > 1
-                MSP_fa_update_RHS(k_t,t,xval);
-            end
-            #solve the model
-            optimize!(m_fa[t,k_t])
+    
+        if t > 1
+            MSP_fa_update_RHS(k_t,t,xval);
+        end
+        #solve the model
+        optimize!(m_fa[t,k_t])
 
-            #check the status 
-            status = termination_status(m_fa[t,k_t]);
-            if status != MOI.OPTIMAL
-                println(" in evaluation")
-                println("Model in stage =", t, " and state = ", k_t, ", in forward pass is ", status)
-                return 
-            else
-                #collect values
-                xval_fa[s,t] = value.(x_fa[t,k_t]); xval[:,t] = xval_fa[s,t]
-                fval_fa[s,t] = value.(f_fa[t,k_t]);                 
-                yval_fa[s,t] = value.(y_fa[t,k_t]);
-                zval_fa[s,t] = value.(z_fa[t,k_t]);
-                vval_fa[s,t] = value.(v_fa[t,k_t]);
-                objs_fa[s,t] = objective_value(m_fa[t,k_t])- value(ϴ_fa[t,k_t]);
-				procurmnt_all[s,t] = sum(fval_fa[s,t][N0,i] for i=1:Ni);
+        #check the status 
+        status = termination_status(m_fa[t,k_t]);
+        if status != MOI.OPTIMAL
+            println(" in evaluation")
+            println("Model in stage =", t, " and state = ", k_t, ", in forward pass is ", status)
+            return 
+        else
+            #collect values
+            xval_fa[s,t] = value.(x_fa[t,k_t]); 
+            xval[:,t] = xval_fa[s,t];
+            fval_fa[s,t] = value.(f_fa[t,k_t]);                 
+            yval_fa[s,t] = value.(y_fa[t,k_t]);
+            zval_fa[s,t] = value.(z_fa[t,k_t]);
+            vval_fa[s,t] = value.(v_fa[t,k_t]);
+            objs_fa[s,t] = objective_value(m_fa[t,k_t])- value(ϴ_fa[t,k_t]);
+            if (k_t in absorbing_states) == false
+                procurmnt_all[s,t] = sum(fval_fa[s,t][N0,i] for i=1:Ni);
                 procurmnt_amount[t] += (sum(fval_fa[s,t][N0,i] for i=1:Ni))/nbOS;
-			   	flow_amount[t] += sum(sum(fval_fa[s,t][i,ii] for i = 1:Ni) for ii = 1:Ni)/nbOS;
-				transCost[s] += (sum(sum(cb[i,ii,t]*fval_fa[s,t][i,ii] for ii=1:Ni) for i=1:N0) + sum(sum(ca[i,j,t]*yval_fa[s,t][i,j] for j=1:Nj) for i=1:Ni));
-				invCost[s] += sum(ch[i,t]*xval_fa[s,t][i] for i=1:Ni);
-				procCost[s] += sum(fval_fa[s,t][N0,i] for i=1:Ni)*h[t];
-				salvageCost[s] += sum(vval_fa[s,t][i] for i=1:Ni)*q;
-				penaltyCost[s] += sum(zval_fa[s,t][j] for j=1:Nj)*p;
+                flow_amount[t] += sum(sum(fval_fa[s,t][i,ii] for i = 1:Ni) for ii = 1:Ni)/nbOS;
+            else
+                invAmount[s] = sum(xval_fa[s,t-1][i] for i=1:Ni);
             end
+            salvageAmount[s] += sum(vval_fa[s,t][i] for i=1:Ni);
+            penaltyAmount[s] += sum(zval_fa[s,t][j] for j=1:Nj);
+        end
+        if k_t in absorbing_states
+            break;
         end
     end        
 end
@@ -90,11 +92,13 @@ end
 println("procurement amount = ", procurmnt_amount);
 println("flow amount = ", flow_amount);
 
-avgTransCost = sum(transCost)*1.0/nbOS;
-avgInvCost = sum(invCost)*1.0/nbOS;
-avgProcCost = sum(procCost)*1.0/nbOS;
-avgSalvageCost = sum(salvageCost)*1.0/nbOS;
-avgPenaltyCost = sum(penaltyCost)*1.0/nbOS;
+invAmount = zeros(nbOS);
+salvageAmount = zeros(nbOS);
+penaltyAmount = zeros(nbOS);
+
+avgInvAmount = sum(invAmount)*1.0/nbOS;
+avgSalvageAmount = sum(salvageAmount)*1.0/nbOS;
+avgPenaltyAmount = sum(penaltyAmount)*1.0/nbOS;
 
 fname = "./output/FA-sensitivity.csv"
 df = CSV.read(fname,DataFrame);
@@ -103,11 +107,9 @@ results_fa[inst,1:T] = procurmnt_amount
 results_fa[inst,(T+1):(2*T)] = procurmnt_percentage
 results_fa[inst,(2*T+1):(3*T)] = procurmnt_posExpect
 results_fa[inst,(3*T+1):(4*T)] = flow_amount
-results_fa[inst,4*T+1] = avgTransCost
-results_fa[inst,4*T+2] = avgInvCost
-results_fa[inst,4*T+3] = avgProcCost
-results_fa[inst,4*T+4] = avgSalvageCost
-results_fa[inst,4*T+5] = avgPenaltyCost
+results_fa[inst,4*T+2] = avgInvAmount
+results_fa[inst,4*T+3] = avgSalvageAmount
+results_fa[inst,4*T+4] = avgPenaltyAmount
 results_fa[inst,end] = inst; 
 updf = DataFrame(results_fa, :auto);
 CSV.write(fname,updf)
