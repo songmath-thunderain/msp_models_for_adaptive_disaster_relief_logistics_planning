@@ -4,12 +4,12 @@ resultpath = "output/benchmark/"
 
 command = []
 
-instanceAttr3 = [" 0.05 ", " 0.5 ", " 5 "];
-option = [" 0 0 ", " 1 0 "];
+instanceAttr3 = [" 0.0 "];
+option = [" 0 ", " 1 "];
 
 for k4 in range(len(option)):
     for k1 in range(len(instanceAttr3)):
-        counter = 50+k1+100*k4;
+        counter = 49+k1+100*k4;
         command = command + ["julia MAIN-case-study.jl " + str(counter) + instanceAttr3[k1] + " 1000 " + option[k4]];	
 	
 

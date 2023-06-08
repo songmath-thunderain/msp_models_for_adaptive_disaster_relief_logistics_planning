@@ -107,6 +107,14 @@ objs_OOS = zeros(nbOS);
 count_goTime = zeros(T);
 count_noabsorbing_goTime = zeros(T);
 
+procurmnt_amount = zeros(T);
+transCost = zeros(nbOS);
+procCost = zeros(nbOS);
+invCost = zeros(nbOS);
+salvageCost = zeros(nbOS);
+penaltyCost = zeros(nbOS);
+
+
 for s=1:nbOS
 	#print("OOS[", s, "] = (");
 	for t = 1:T
@@ -164,10 +172,18 @@ for s=1:nbOS
 					if absorbing_option == 0
 						for tt = 1:(absorbingT-t)
 							objs_OOS[s] = objs_OOS[s] + (sum(sum(cb[i,ii,t+tt-1]*solutionNodes[t,ind][2][i,ii,tt] for ii=1:Ni) for i=1:N0)+sum(ch[i,t+tt-1]*solutionNodes[t,ind][1][i,tt] for i=1:Ni)+sum(solutionNodes[t,ind][2][N0,i,tt] for i=1:Ni)*h[t+tt-1]);
+							procurmnt_amount[t+tt-1] += sum(solutionNodes[t,ind][2][N0,i,tt] for i=1:Ni)*h[t+tt-1]/nbOS;
+							transCost[s] += sum(sum(cb[i,ii,t+tt-1]*solutionNodes[t,ind][2][i,ii,tt] for ii=1:Ni) for i=1:N0);
+							invCost[s] += sum(ch[i,t+tt-1]*solutionNodes[t,ind][1][i,tt] for i=1:Ni);
+							procCost[s] += sum(solutionNodes[t,ind][2][N0,i,tt] for i=1:Ni)*h[t+tt-1];
 						end
 					else
 						for tt = 1:(absorbingT+1-t)
 							objs_OOS[s] = objs_OOS[s] + (sum(sum(cb[i,ii,t+tt-1]*solutionNodes[t,ind][2][i,ii,tt] for ii=1:Ni) for i=1:N0)+sum(ch[i,t+tt-1]*solutionNodes[t,ind][1][i,tt] for i=1:Ni)+sum(solutionNodes[t,ind][2][N0,i,tt] for i=1:Ni)*h[t+tt-1]);
+							procurmnt_amount[t+tt-1] += sum(solutionNodes[t,ind][2][N0,i,tt] for i=1:Ni)*h[t+tt-1]/nbOS;
+							transCost[s] += sum(sum(cb[i,ii,t+tt-1]*solutionNodes[t,ind][2][i,ii,tt] for ii=1:Ni) for i=1:N0);
+							invCost[s] += sum(ch[i,t+tt-1]*solutionNodes[t,ind][1][i,tt] for i=1:Ni);
+							procCost[s] += sum(solutionNodes[t,ind][2][N0,i,tt] for i=1:Ni)*h[t+tt-1];
 						end
 					end
 				end
@@ -191,11 +207,20 @@ for t = 1:T
 	Go_noabsorbing_percentage[t] = count_noabsorbing_goTime[t]*1.0/nbOS;
 end
 
+avgTransCost = sum(transCost)*1.0/nbOS;
+avgInvCost = sum(invCost)*1.0/nbOS;
+avgProcCost = sum(procCost)*1.0/nbOS;
+
 fname = "./output/WS-sensitivity.csv"
 df = CSV.read(fname,DataFrame);
 results_fa = Matrix(df);
 results_fa[inst,1:T] = Go_percentage;
 results_fa[inst,(T+1):(2*T)] = Go_noabsorbing_percentage;
+results_fa[inst,(2*T+1):(3*T)] = procurmnt_amount;
+results_fa[inst,3*T+1] = avgTransCost
+results_fa[inst,3*T+2] = avgInvCost
+results_fa[inst,3*T+3] = avgProcCost
+
 results_fa[inst,end] = inst; 
 updf = DataFrame(results_fa, :auto);
 CSV.write(fname,updf)
