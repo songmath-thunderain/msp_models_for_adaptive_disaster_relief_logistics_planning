@@ -92,13 +92,14 @@ end
 println("procurement amount = ", procurmnt_amount);
 println("flow amount = ", flow_amount);
 
-invAmount = zeros(nbOS);
-salvageAmount = zeros(nbOS);
-penaltyAmount = zeros(nbOS);
-
 avgInvAmount = sum(invAmount)*1.0/nbOS;
 avgSalvageAmount = sum(salvageAmount)*1.0/nbOS;
 avgPenaltyAmount = sum(penaltyAmount)*1.0/nbOS;
+
+
+println("avgInvAmount = ", avgInvAmount);
+println("avgSalvageAmount = ", avgSalvageAmount);
+println("avgPenaltyAmount = ", avgPenaltyAmount);
 
 fname = "./output/FA-sensitivity.csv"
 df = CSV.read(fname,DataFrame);
