@@ -1,6 +1,0 @@
-1. Figure 2: plot-avg-nu.ipynb, data: data_to_convert_to_table3.csv
-2. Figure 3: plots_sensitivity-gaps.ipynb, data: all1.xlsx and all3.xlsx
-3. Figure 4: plots_sensitivity.ipynb, data: sensitivity.csv
-4. Figure 5: plots-avg-nu-casestudy.ipynb, data: manually input from data contained in raw_data_case_study.xlsx
-5. Figure 6: plots-procurement-percentage-casestudy.ipynb and plots-procurement-avgAmount-casestudy.ipynb, data: procurement-percentage-case-study.xlsx and procurement-amount-case-study.xlsx
-

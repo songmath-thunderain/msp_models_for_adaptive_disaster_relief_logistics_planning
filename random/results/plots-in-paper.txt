@@ -1,0 +1,6 @@
+1. Figure 2: avg-nu.jl, data: data_to_convert_to_table3.csv
+2. Figure 3: sensitivity/sensitivity_gaps.jl, data: sensitivity/all1.xlsx and sensitivity/all3.xlsx
+3. Figure 4: sensitivity/sensitivity.jl, data: sensitivity/sensitivity.csv
+4. Figure 5: case-study/avg_nu_casestudy.jl, data: manually input from data contained in raw_data_case_study.xlsx
+5. Figure 6: case-study/procurement_percentage_case_study.jl and case-study/procurement_avg_case_study.jl, data: procurement-percentage-case-study.xlsx and procurement-amount-case-study.xlsx
+
