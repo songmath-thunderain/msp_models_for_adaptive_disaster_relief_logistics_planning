@@ -1,22 +1,22 @@
 using CSV, DataFrames, Plots, Plots.PlotMeasures, StatsPlots, LaTeXStrings, Statistics
 
 rho = ["0.05", "0.5", "5"];
-avg_data = Array{Float64, 2}(undef, 3, 4);
-avg_data[1,:] = [3,3,135,165]
-avg_data[2,:] = [73,154,117,154]
-avg_data[3,:] = [82,90,82,90]
+avg_data = Array{Float64, 2}(undef, 3, 3);
+avg_data[1,:] = [3,135,165]
+avg_data[2,:] = [73,117,154]
+avg_data[3,:] = [82,82,90]
 
-policies = ["FA-MSP","Decision-tree","RH-2SSP","S-2SSP"];
+policies = ["FA-MSP","RH-2SSP","S-2SSP"];
 
 p = groupedbar(
     rho,
     avg_data,
     xlabel=L"\nu",
     ylabel=L"\textrm{Gap}~(\%)~\textrm{on~average}",
-    label=[policies[1] policies[2] policies[3] policies[4]],
+    label=[policies[1] policies[2] policies[3]],
     #bar_position = :dodge,
     #bar_width=0.7,
-    color = [:black :gray :blue :red],
+    color = [:black :blue :red],
     #leg=(0.09,0.955),
     leg=:topright,
     #windowsize=(1000,550),
