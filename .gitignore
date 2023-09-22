@@ -26,3 +26,9 @@ Python/JuliaData/.ipynb_checkpoints/data-checkpoint.jl
 random/data.jld
 random/case-study/.ipynb_checkpoints/Untitled-checkpoint.ipynb
 random/case-study/discretization.PNG
+random/.DS_Store
+.DS_Store
+random/results/.DS_Store
+random/results/plots/.DS_Store
+random/output/.DS_Store
+random/.DS_Store
