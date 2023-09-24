@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from numpy.linalg import norm
 
-np.random.seed(2022);
+np.random.seed(2023);
 
 #Ni: number of supply points (without MDC).
 #Nj: number of demand points.
@@ -38,9 +38,9 @@ N0 = Ni + 1;  # number of supply points + the MDC
 L = [(0, 100), (100, 200), (200, 300), (300, 400), (400, 500), (500, 600), (600, 700)];  # discussion on the last state
 
 # probability distributions:
-P_intesity = pd.read_csv("JuliaData/intensity.csv").values;  # intensity MC
-P_location = pd.read_csv("JuliaData/location.csv").values;  # location MC
-P_landfall = pd.read_csv("JuliaData/landfall_7.csv").values;  # landfall MC
+P_intesity = pd.read_csv("data/synthetic/intensity.csv").values;  # intensity MC
+P_location = pd.read_csv("data/synthetic/location.csv").values;  # location MC
+P_landfall = pd.read_csv("data/synthetic/landfall_7.csv").values;  # landfall MC
 
 Na = P_intesity.shape[0];  # intensity MC number of states
 Nb = P_location.shape[0];  # location MC number of states
@@ -93,7 +93,7 @@ x_up = 700;
 y_low = 0;
 y_up = 100;
 
-nodes = pd.read_csv("JuliaData/nodes.csv");  # read the nodes locations
+nodes = pd.read_csv("data/synthetic/nodes.csv");  # read the nodes locations
 
 # list for the coordinates of the
 # list for the coordinates of the different supply points

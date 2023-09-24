@@ -1,6 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+class inputParams:
+  def __init__(self,dissipate_option,absorbing_option,k_init,nbOS):
+    self.dissipate_option = dissipate_option;
+    self.absorbing_option = absorbing_option;
+    self.k_init = k_init;
+    self.nbOS = nbOS;
+
 class solveParams:
   def __init__(self,max_iter,stall,cutviol_maxiter,time_limit,cutviol):
     self.max_iter = max_iter;
@@ -10,18 +17,21 @@ class solveParams:
     self.cutviol = cutviol;
 
 class hurricaneData:
-  def __init__(self, P_intensity, P_location, P_landfall, T, Tmin, P_joint, absorbing_states, P_terminals):
+  def __init__(self, P_intensity, P_location, P_landfall, Na, Nb, T, Tmin, P_joint, states, absorbing_states, smallestTransProb):
     self.P_intensity = P_intensity;
     self.P_location = P_location;
     self.P_landfall = P_landfall;
+    self.Na = Na;
+    self.Nb = Nb;
     self.T = T;
     self.Tmin = Tmin;
     self.P_joint = P_joint;
+    self.states = states;
     self.absorbing_states = absorbing_states;
-    self.P_terminals = P_terminals;
+    self.smallestTransProb = smallestTransProb;
     
 class networkData:
-  def __init__(self, Ni, Nj, SP, DP, fuel, cb, ca, ch, h, p, q, D_max, x_cap, x_0, f_cap, SCEN):
+  def __init__(self, Ni, Nj, SP, DP, fuel, cb, ca, ch, cp, p, q, dMax, x_cap, x_0, SCEN):
     self.N0 = Ni+1;
     self.Ni = Ni;
     self.Nj = Nj;
@@ -31,13 +41,12 @@ class networkData:
     self.cb = cb;
     self.ca = ca;
     self.ch = ch;
-    self.h = h;
+    self.cp = cp;
     self.p = p;
     self.q = q;
-    self.D_max = D_max;
+    self.dMax = dMax;
     self.x_cap = x_cap;
     self.x_0 = x_0;
-    self.f_cap = f_cap;
     self.SCEN = SCEN;
     
 #Ni: number of supply points (without MDC).
@@ -46,7 +55,7 @@ class networkData:
 #x_cap: the capacity of each supply point.
 #cb: unit cost of transporting/rerouting relief items from the MDC/SP i to/between different SP i' 
 #ch: unit cost for holding an item at SP i.
-#h: unit cost for purchasing a relief item.
+#cp: unit cost for relief item procurement.
 #-----------------------------------------------------------------------------------------
 #ca: unit cost of transporting relief items from the MDC/SP i to/between a demand point j.
 #p: penalty cost for failing to serve the demand.

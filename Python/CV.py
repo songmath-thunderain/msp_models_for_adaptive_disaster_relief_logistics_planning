@@ -4,13 +4,26 @@ import pandas as pd
 import numpy as np
 
 # Define the model
-def deterministic_model():
+def deterministic_model(networkDataSet,hurricaneDataSet):
     # Define the model
     m = Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GRB_ENV), "OutputFlag" => 0))
 
+    # Data instantiation
+    Ni = networkDataSet.Ni;
+    N0 = networkDataSet.N0;
+    Nj = networkDataSet.Nj;
+    T = hurricaneDataSet.T;
+    ca = networkDataSet.ca;
+    cb = networkDataSet.cb;
+    ch = networkDataSet.ch;
+    cp = networkDataSet.cp;
+    p = networkDataSet.p;
+    q = networkDataSet.q;
+    x_0 = networkDataSet.x_0;
+
     # Define the variables
     x = m.addVars(Ni, T, lb=0, ub=x_cap, name="x")
-    f = m.addVars(N0, Ni, T, lb=0, ub=f_cap, name="f")
+    f = m.addVars(N0, Ni, T, lb=0, name="f")
     y = m.addVars(Ni, Nj, T, lb=0, name="y")
     z = m.addVars(Nj, T, lb=0, name="z")
     v = m.addVars(Ni, T, lb=0, name="v")
@@ -20,7 +33,7 @@ def deterministic_model():
         quicksum(quicksum(quicksum(cb[i, ii, t] * f[i, ii, t] for ii in range(1, Ni+1))
                           for i in range(1, N0+1)) for t in range(1, T+1))
         + quicksum(quicksum(ch[i, t] * x[i, t] for i in range(1, Ni+1)) for t in range(1, T+1))
-        + quicksum(quicksum(f[N0, i, t] for i in range(1, Ni+1)) * h[t] for t in range(1, T+1))
+        + quicksum(quicksum(f[N0, i, t] for i in range(1, Ni+1)) * cp[t] for t in range(1, T+1))
         + quicksum(quicksum(quicksum(ca[i, j, t] * y[i, j, t] for j in range(1, Nj+1))
                             for i in range(1, Ni+1)) for t in range(1, T+1))
         + quicksum(quicksum(z[j, t] for j in range(1, Nj+1)) * p for t in range(1, T+1))
@@ -56,49 +69,93 @@ def deterministic_model():
     return m, x, f, y, z, v, dCons;
     
     
-def clairvoyant_eval():
+def clairvoyant_eval(networkDataSet,hurricaneDataSet,inputParams):
     start = time.time()
-    osfname = "JuliaData/OOS" + str(k_init) + ".csv"
-    OS_paths = pd.read_csv(osfname, header=None).values
+
+    dissipate_option = inputParams.dissipate_option;
+    absorbing_option = inputParams.absorbing_option;
+    k_init = inputParams.k_init;
+    nbOS = inputParams.nbOS;
+
+    T = hurricaneDataSet.T;
+    Ni = networkDataSet.Ni;
+    Nj = networkDataSet.Nj;
+    SCEN = networkDataSet.SCEN;
+    S = hurricaneDataSet.states;
+
+    osfname = f"data/synthetic/OOS{k_init}.csv"
+    OS_paths = pd.read_csv(osfname).values  # Read the out-of-sample file
 
     objs_cv = np.zeros(nbOS)
-    xval_cv, fval_cv, yval_cv, zval_cv, vval_cv = [], [], [], [], []
+    xval_cv = [None] * nbOS
+    fval_cv = [None] * nbOS
+    yval_cv = [None] * nbOS
+    zval_cv = [None] * nbOS
+    vval_cv = [None] * nbOS
 
     for s in range(nbOS):
-        # find the period when the hurricane made landfall && intensity != 1
-        tau = np.where((S[OS_paths[s, :T]-1, 2] == Nc-1) & (OS_paths[s, :T] - 1 != absorbing_states))[0]
-        if tau.size == 0:
+        absorbingT = -1
+
+        if dissipate_option:
+            absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if S[x][2] == T or S[x][0] == 1), None))
+        else:
+            absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if S[x][2] == T), None))
+
+        if OS_paths[s, absorbingT] == 1:
             continue
         else:
-            tau = tau[0]
-            k_t = OS_paths[s, tau] # state corresponding to the landfall
+            # Define the clairvoyant model
+            m_cv, x_cv, f_cv, y_cv, z_cv, v_cv, dCons_cv = deterministic_model(networkDataSet,hurricaneDataSet)
+            k_t = OS_paths[s, absorbingT]  # State corresponding to the landfall
+
             for j in range(Nj):
                 for t in range(T):
-                    if t == tau:
-                        dCons_cv[tau, j].setAttr(GRB.Attr.RHS, SCEN[k_t][j])
-                    else:
-                        dCons_cv[t, j].setAttr(GRB.Attr.RHS, 0)
+                    if t == absorbingT:
+                        set_normalized_rhs(dCons_cv[absorbingT, j], SCEN[k_t][j])  # Set the RHS of demand constraint
 
-            m_cv.optimize() # solve the model
-            status = m_cv.status # check the status
-            if status != GRB.OPTIMAL:
-                print("Model in clairvoyant is ", status)
+                        if absorbing_option == 0:
+                            for i in range(N0):
+                                for ii in range(Ni):
+                                    set_upper_bound(f_cv[i, ii, t], 0)
+                    else:
+                        set_normalized_rhs(dCons_cv[t, j], 0)  # Set the RHS of demand constraint
+
+            optimize(m_cv)  # Solve the model
+            status = termination_status(m_cv)  # Check the status
+
+            if status != MOI.OPTIMAL:
+                print(" Model in clairvoyant is ", status)
                 exit(0)
             else:
-                xval_cv.append(m_cv.getAttr('x', x_cv))
-                fval_cv.append(m_cv.getAttr('x', f_cv))
-                yval_cv.append(m_cv.getAttr('x', y_cv))
-                zval_cv.append(m_cv.getAttr('x', z_cv))
-                vval_cv.append(m_cv.getAttr('x', v_cv))
-                objs_cv[s] = m_cv.objVal
+                xval_cv[s] = [value(var) for var in x_cv]
+                fval_cv[s] = [value(var) for var in f_cv]
+                yval_cv[s] = [value(var) for var in y_cv]
+                zval_cv[s] = [value(var) for var in z_cv]
+                vval_cv[s] = [value(var) for var in v_cv]
+                objs_cv[s] = objective_value(m_cv)
 
     cv_bar = np.mean(objs_cv)
     cv_std = np.std(objs_cv)
     cv_low = cv_bar - 1.96 * cv_std / np.sqrt(nbOS)
     cv_high = cv_bar + 1.96 * cv_std / np.sqrt(nbOS)
+
     print("Clairvoyant....")
-    print("μ ± 1.96*σ/√NS = {}±{}".format(cv_bar, [cv_low, cv_high]))
-    elapsed = time.time() - start
+    print(f"μ ± 1.96*σ/√NS = {cv_bar} ± [{cv_low}, {cv_high}]")
+
+    elapsed_cv = time.time() - start
     vals = [xval_cv, fval_cv, yval_cv, zval_cv, vval_cv]
+
+    fname = "./output/benchmark/CVresults.csv"
+    df = pd.read_csv(fname)
+    results_cv = df.values
+    results_cv[inst, 0] = 0
+    results_cv[inst, 1] = cv_bar
+    results_cv[inst, 2] = cv_bar - cv_low
+    results_cv[inst, 3] = cv_bar + cv_low
+    results_cv[inst, 4] = elapsed_cv
+    results_cv[inst, 5] = 0
+
+    updf = pd.DataFrame(results_cv, columns=df.columns)
+    updf.to_csv(fname, index=False)
 
     return objs_cv, cv_bar, cv_low, cv_high, elapsed
