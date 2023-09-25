@@ -53,6 +53,15 @@ def hurricaneInput(intensityFile, locationFile, landfallFile, inputParams):
                     if f == Nc:
                         absorbing_states.append(k1);
 
+                if k == 2 and l == 2 and f == 1:
+                    print("k1 = ", k1);
+    
+                if k == 4 and l == 2 and f == 1:
+                    print("k1 = ", k1);
+    
+                if k == 6 and l == 2 and f == 1:
+                    print("k1 = ", k1);
+
     # normalize the probabilities
     P_temp = np.copy(P_joint);
     for k in range(K):
@@ -77,10 +86,10 @@ def networkInput(Ni,Nj,costScalingFactor,netNodesFile,netParamsFile,hurricaneDat
     Nb = hurricaneDataSet.Nb;
 
     # List for the coordinates of the different supply points
-    SP = [list(row) for row in nodes.iloc[:Ni, [1, 2]].values]
+    SP = [list(row) for row in nodes.iloc[:Ni, [0, 1]].values]
 
     # List for the coordinates of the different demand points
-    DP = [list(row) for row in nodes.iloc[:Nj, [3, 4]].values]
+    DP = [list(row) for row in nodes.iloc[:Nj, [2, 3]].values]
 
     # Create an empty dictionary to store the data
     netParams = {}

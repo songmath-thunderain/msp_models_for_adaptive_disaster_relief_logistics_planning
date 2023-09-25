@@ -1,39 +1,35 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[ ]:
-
-
 import pandas as pd
 import numpy as np
 import os
+from dataClass import inputParams, solveParams, hurricaneData, networkData
 
 #miscellaneous functions 
 
 #sample a markovian state
-def MC_sample(current_state):
-    states = np.arange(1, K+1)
-    weights = P_joint[current_state, :]
+def MC_sample(current_state,hurricaneData):
+    K = hurricaneData.Na*hurricaneData.Nb*hurricaneData.T;
+    states = np.arange(K)
+    weights = hurricaneData.P_joint[current_state, :]
     k = np.random.choice(states, p=weights)
     return k
 
 #training termination check
-def termination_check(iter, relative_gap, LB, start, cutviol_iter):
+def termination_check(iter, relative_gap, LB, start, cutviol_iter, solveParams):
     flag = 0
     Elapsed = time() - start
-    if iter > max_iter:
+    if iter > solveParams.max_iter:
         flag = 1
         print("max iteration is reached")
-    elif Elapsed > time_limit:
+    elif Elapsed > solveParams.time_limit:
         flag = 2
         print("time limit is reached")
-    elif cutviol_iter > cutviol_maxiter:
+    elif cutviol_iter > solveParams.cutviol_maxiter:
         flag = 3
         print("cut violation is reached")
     else:
-        if iter > stall:
-            relative_gap = (LB[iter]-LB[iter-stall])/max(1e-10,abs(LB[iter-stall]))
-            if relative_gap < eps:
+        if iter > solveParams.stall:
+            relative_gap = (LB[iter]-LB[iter-solveParams.stall])/max(1e-10,abs(LB[iter-solveParams.stall]))
+            if relative_gap < solveParams.cutviol:
                 flag = 4
                 print("the LB is not making significant progress")
 return flag, Elapsed
