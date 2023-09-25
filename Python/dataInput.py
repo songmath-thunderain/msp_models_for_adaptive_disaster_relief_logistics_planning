@@ -72,7 +72,50 @@ def hurricaneInput(intensityFile, locationFile, landfallFile, inputParams):
     P_jointVec = np.copy(P_joint);
     nonzero_probs = P_jointVec[P_jointVec != 0];
     smallestTransProb = np.min(nonzero_probs) * 0.5;
-        
+
+    k_init = inputParams.k_init;
+    nodeLists = []
+    nodeLists.append([k_init])
+    stopFlag = False
+
+    while not stopFlag:
+        tempList = []
+        stopFlag = True
+
+        for k in range(1, K + 1):
+            for kk in nodeLists[-1]:
+                if (kk not in absorbing_states) and (P_joint[kk][k] > smallestTransProb):
+                    tempList.append(k)
+
+                    if k not in absorbing_states:
+                        stopFlag = False
+                    break
+
+        nodeLists.append(tempList)
+
+    nodeScenList = {}
+    nodeScenWeights = {}
+
+    for t in range(T - 2, -1, -1):
+        for k in range(len(nodeLists[t])):
+            if nodeLists[t][k] not in absorbing_states:
+                nodeScenList[(t, nodeLists[t][k])] = []
+                nodeScenWeights[(t, nodeLists[t][k])] = []
+
+                for kk in range(len(nodeLists[t + 1])):
+                    if P_joint[nodeLists[t][k]][nodeLists[t + 1][kk]] > smallestTransProb:
+                        if nodeLists[t + 1][kk] in absorbing_states:
+                            nodeScenList[(t, nodeLists[t][k])].append((t + 1, nodeLists[t + 1][kk]))
+                            nodeScenWeights[(t, nodeLists[t][k])].append(P_joint[nodeLists[t][k]][nodeLists[t + 1][kk]])
+                        else:
+                            for j in range(len(nodeScenList[(t + 1, nodeLists[t + 1][kk])])):
+                                if (nodeScenList[(t + 1, nodeLists[t + 1][kk])][j] not in nodeScenList[(t, nodeLists[t][k])]):
+                                    nodeScenList[(t, nodeLists[t][k])].append(nodeScenList[(t + 1, nodeLists[t + 1][kk])][j])
+                                    nodeScenWeights[(t, nodeLists[t][k])].append(P_joint[nodeLists[t][k]][nodeLists[t + 1][kk]] * nodeScenWeights[(t + 1, nodeLists[t + 1][kk])][j])
+                if abs(sum(nodeScenWeights[(t, nodeLists[t][k])]) - 1) > 1e-6:
+                    print("Wrong!")
+                    exit(0)
+
     hurricaneDataSet = hurricaneData(P_intensity, P_location, P_landfall, Na, Nb, T, Tmin, P_joint, S, absorbing_states, smallestTransProb);
     return hurricaneDataSet;
     
