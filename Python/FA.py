@@ -30,7 +30,7 @@ def stage_t_state_k_problem(networkDataSet,hurricaneDataSet,t):
     y = {}
     z = {}
     v = {}
-    theta = m.addVar(lb = 0, name="ϴ")
+    theta = m.addVar(lb = 0)
 
     for i in range(Ni):
         x[i] = m.addVar(lb=0, ub=x_cap[i])
@@ -136,117 +136,107 @@ def define_models(networkDataSet,hurricaneDataSet,inputParams):
     return m, x, f, y, z, v, theta, dCons, FB1Cons, FB2Cons
 
 # Train model: forward pass
-def FOSDDP_forward_pass_oneSP_iteration(networkDataSet,hurricaneDataSet,inputParams, m, ):
+def FOSDDP_forward_pass_oneSP_iteration(networkDataSet,hurricaneDataSet,inputParams, m, x, theta):
     k_init = inputParams.k_init;
+    Ni = networkDataSet.Ni;
     T = hurricaneDataSet.T;
     absorbing_states = hurricaneDataSet.absorbing_states;
-    k_t = k_init-1
-    in_sample = [k_t]
+    k_t = k_init-1;
+    in_sample = [k_t];
+    xval = [[0] * T for _ in range(Ni)];
+    thetaval = [0]*T;
+    lb = 1e10;
     for t in range(T):
         if t > 0:
             k_t = MC_sample(in_sample[t - 1], hurricaneDataSet)
             in_sample.append(k_t)
-            MSP_fa_update_RHS(k_t, t, xval)
+            MSP_fa_update_RHS(m, k_t, t, xval)
         m[t, k_t].optimize()
         if m[t, k_t].status != GRB.OPTIMAL:
             print("Error in Forward Pass")
             print(f"Model in stage = {t} and state = {k_t}, in forward pass is {m[t, k_t].status}")
             sys.exit(0)
         else:
-            xval[:, t - 1] = [var.x for var in x_fa[t, k_t]]
-            thetaval[t - 1] = ϴ_fa[t, k_t].x
-            if t == 1:
-                lb = m_fa_t_k_t.objVal
+            xval[:, t] = [var.x for var in x[t, k_t]]
+            thetaval[t] = theta[t, k_t].x
+            if t == 0:
+                lb = m[t, k_t].objVal
         if k_t in absorbing_states:
             break
     return xval, thetaval, lb, in_sample
 
-'''
+
 # Train model: backward pass
-def FOSDDP_backward_pass_oneSP_iteration(lb, xval, thetaval, in_sample):
-    cutviolFlag = 0
-    for t in range(len(in_sample), 1, -1):
-        k_t_minus_1 = in_sample[t - 2]
+def FOSDDP_backward_pass_oneSP_iteration(networkDataSet,hurricaneDataSet,inputParams,solveParams, m, x, theta, FB1Cons, FB2Cons, xval, thetaval, in_sample):
+    T = hurricaneDataSet.T;
+    Ni = networkDataSet.Ni;
+    Na = hurricaneDataSet.Na;
+    Nb = hurricaneDataSet.Nb;
+    K = Na*Nb*T;
+    nodeLists = hurricaneDataSet.nodeLists;
+    absorbing_states = hurricaneDataSet.absorbing_states;
+    cutviolFlag = False;
+    for t in range(len(in_sample)-1, 0, -1):
         # Solving all stage-t problems
-        Q = [0] * K
+        Q = [0] * K  #list for all the optimal values
+        #list for all the dual multiplies of the first and second set of constraints
         pi1 = [[0] * Ni for _ in range(K)]
         pi2 = [[0] * Ni for _ in range(K)]
-        for k in range(1, len(nodeLists[t])):
-            if nodeLists[t][k - 1] != k_init:
-                MSP_fa_update_RHS(nodeLists[t][k - 1], t, xval)
-            m_fa_t_k = m_fa[t, nodeLists[t][k - 1]]
-            m_fa_t_k.optimize()
-            status = m_fa_t_k.status
-            if status != GRB.OPTIMAL:
+        sample_n = in_sample[t-1]; # the state observed at time t-1
+        for k in range(len(nodeLists[t])):
+            MSP_fa_update_RHS(m, nodeLists[t][k], t, xval)
+            m[t, nodeLists[t][k]].optimize()
+            if m[t, nodeLists[t][k]].status != GRB.OPTIMAL:
                 print("Error in Backward Pass")
-                print(f"Model in stage = {t} and state = {nodeLists[t][k - 1]}, in forward pass is {status}")
-                exit(0)
+                print(f"Model in stage = {t} and state = {nodeLists[t][k]}, in backward pass is {status}")
+                sys.exit(0)
             else:
-                Q[nodeLists[t][k - 1]] = m_fa_t_k.objVal
-                for i in range(1, Ni + 1):
-                    pi1[nodeLists[t][k - 1]][i - 1] = FB1Cons_fa[t][nodeLists[t][k - 1]][i - 1].pi
-                    pi2[nodeLists[t][k - 1]][i - 1] = FB2Cons_fa[t][nodeLists[t][k - 1]][i - 1].pi
+                Q[nodeLists[t][k]] = m[t, nodeLists[t][k]].objVal
+                for i in range(Ni):
+                    pi1[nodeLists[t][k]][i] = FB1Cons[t,nodeLists[t][k]][i].pi
+                    pi2[nodeLists[t][k]][i] = FB2Cons[t,nodeLists[t][k]][i].pi
 
         # Solving all stage-(t-1) problems and generate cuts/valid inequalities
-        if FA_option == 1:
-            for n in range(1, len(nodeLists[t - 1])):
-                if nodeLists[t - 1][n - 1] not in absorbing_states:
-                    Qvalue = 0
-                    for k in range(1, len(nodeLists[t])):
-                        if P_joint[nodeLists[t - 1][n - 1]][nodeLists[t][k - 1]] > smallestTransProb:
-                            Qvalue += Q[nodeLists[t][k - 1]] * P_joint[nodeLists[t - 1][n - 1]][nodeLists[t][k - 1]]
-                    if nodeLists[t - 1][n - 1] == in_sample[t - 2] and (
-                            (Qvalue - thetaval[t - 2]) / max(1e-10, abs(thetaval[t - 2])) > ϵ
-                            and abs(Qvalue - thetaval[t - 2]) > ϵ
-                    ):
-                        cutviolFlag = 1
-                    cutcoef = [0] * Ni
-                    cutrhs_xval = 0
-                    for k in range(1, len(nodeLists[t])):
-                        if P_joint[nodeLists[t - 1][n - 1]][nodeLists[t][k - 1]] > smallestTransProb:
-                            for i in range(1, Ni + 1):
-                                tempval = (pi1[nodeLists[t][k - 1] - 1][i - 1]
-                                           + pi2[nodeLists[t][k - 1] - 1][i - 1]) \
-                                          * P_joint[nodeLists[t - 1][n - 1]][nodeLists[t][k - 1]]
-                                cutcoef[i - 1] += tempval
-                                cutrhs_xval += tempval * xval[i - 1][t - 2]
-                    m_fa_t_minus_1_n = m_fa[t - 1][nodeLists[t - 1][n - 1]]
-                    m_fa_t_minus_1_n.addConstr(
-                        ϴ_fa[t - 1][nodeLists[t - 1][n - 1]] - gp.quicksum(
-                            cutcoef[i - 1] * x_fa[t - 1][nodeLists[t - 1][n - 1]][i - 1] for i in range(1, Ni + 1)
-                        ) >= Qvalue - cutrhs_xval
-                    )
-        else:
-            Qvalue = 0
-            for k in range(1, len(nodeLists[t])):
-                if P_joint[in_sample[t - 2]][nodeLists[t][k - 1]] > smallestTransProb:
-                    Qvalue += Q[nodeLists[t][k - 1]] * P_joint[in_sample[t - 2]][nodeLists[t][k - 1]]
-            if (Qvalue - thetaval[t - 2]) / max(1e-10, abs(thetaval[t - 2])) > ϵ and abs(Qvalue - thetaval[t - 2]) > ϵ:
-                cutviolFlag = 1
-            cutcoef = [0] * Ni
-            cutrhs_xval = 0
-            for k in range(1, len(nodeLists[t])):
-                if P_joint[in_sample[t - 2]][nodeLists[t][k - 1]] > smallestTransProb:
-                    for i in range(1, Ni + 1):
-                        tempval = (pi1[nodeLists[t][k - 1] - 1][i - 1]
-                                   + pi2[nodeLists[t][k - 1] - 1][i - 1]) \
-                                  * P_joint[in_sample[t - 2]][nodeLists[t][k - 1]]
-                        cutcoef[i - 1] += tempval
-                        cutrhs_xval += tempval * xval[i - 1][t - 2]
-            m_fa_t_minus_1_sample_n = m_fa[t - 1][in_sample[t - 2]]
-            m_fa_t_minus_1_sample_n.addConstr(
-                ϴ_fa[t - 1][in_sample[t - 2]] - gp.quicksum(
-                    cutcoef[i - 1] * x_fa[t - 1][in_sample[t - 2]][i - 1] for i in range(1, Ni + 1)
-                ) >= Qvalue - cutrhs_xval
-            )
+        for n in range(len(nodeLists[t - 1])):
+            if nodeLists[t - 1][n] not in absorbing_states:
+                Qvalue = 0
+                for k in range(len(nodeLists[t])):
+                    if P_joint[nodeLists[t - 1][n]][nodeLists[t][k]] > hurricaneDataSet.smallestTransProb:
+                        Qvalue += Q[nodeLists[t][k]] * P_joint[nodeLists[t - 1][n]][nodeLists[t][k]]              					# check if cut is violated at the sample path encountered in the forward pass
+                
+                # check if cut is violated at the sample path encountered in the forward pass
+                if nodeLists[t - 1][n] == sample_n and (
+                        (Qvalue - thetaval[t - 1]) / max(1e-10, abs(thetaval[t - 1])) > solveParams.cutviol
+                        and abs(Qvalue - thetaval[t - 1]) > solveParams.cutviol
+                ):
+                    cutviolFlag = True;
+                cutcoef = [0] * Ni
+                cutrhs_xval = 0
+                for k in range(len(nodeLists[t])):
+                    if P_joint[nodeLists[t - 1][n]][nodeLists[t][k]] > hurricaneDataSet.smallestTransProb:
+                        for i in range(Ni):
+                            tempval = (pi1[nodeLists[t][k]][i]
+                                        + pi2[nodeLists[t][k]][i]) \
+                                        * P_joint[nodeLists[t - 1][n]][nodeLists[t][k]]
+                            cutcoef[i] += tempval
+                            cutrhs_xval += tempval * xval[i][t - 1]
+                m[t - 1, nodeLists[t - 1][n]].addConstr(
+                    theta[t - 1, nodeLists[t - 1][n]] - gp.quicksum(
+                        cutcoef[i] * x[t - 1, nodeLists[t - 1][n]][i] for i in range(Ni)
+                    ) >= Qvalue - cutrhs_xval
+                )
     return cutviolFlag
 
 # Train model
-def train_models_offline():
+def train_models_offline(networkDataSet,hurricaneDataSet,inputParams,solveParams, m, x, theta, FB1Cons, FB2Cons):
+    x_0 = networkDataSet.x_0;
+    T = hurricaneDataSet.T;
+    Ni = networkDataSet.Ni;
+    
     # Set the RHS of the first_stage problem
-    for i in range(1, Ni + 1):
-        FB1Cons_fa[1][i - 1].RHS = x_0[i - 1]
-        FB2Cons_fa[1][i - 1].RHS = x_0[i - 1]
+    for i in range(0, Ni):
+        FB1Cons[0, i].setAttr(GRB.Attr.RHS, x_0[i]);
+        FB2Cons[0, i].setAttr(GRB.Attr.RHS, x_0[i]);
 
     # Initialize stuff
     train_time = 0
@@ -261,21 +251,22 @@ def train_models_offline():
     while True:
         iter += 1
         # Forward pass
-        xval, thetaval, lb, in_sample = FOSDDP_forward_pass_oneSP_iteration(lb, xval, thetaval)
+        xval, thetaval, lb, in_sample = FOSDDP_forward_pass_oneSP_iteration(networkDataSet,hurricaneDataSet,inputParams, m, x, theta)
         LB.append(lb)
         # Termination check
-        flag, Elapsed = termination_check(iter, relative_gap, LB, start, cutviol_iter)
+        flag, Elapsed = termination_check(iter, relative_gap, LB, start, cutviol_iter, solveParams)
         if flag != 0:
             train_time = Elapsed
             break
         # Backward pass (if not terminated)
-        cutviolFlag = FOSDDP_backward_pass_oneSP_iteration(lb, xval, thetaval, in_sample)
-        if cutviolFlag == 1:
+        cutviolFlag = FOSDDP_backward_pass_oneSP_iteration(networkDataSet,hurricaneDataSet,inputParams,solveParams, m, x, theta, FB1Cons, FB2Cons, xval, thetaval, in_sample)
+        if cutviolFlag:
             cutviol_iter = 0
         else:
             cutviol_iter += 1
     return LB, train_time, iter
 
+'''
 # Evaluate model
 def FOSDDP_eval_offline():
     start = time.time()

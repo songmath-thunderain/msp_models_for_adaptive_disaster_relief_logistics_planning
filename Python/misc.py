@@ -32,7 +32,7 @@ def termination_check(iter, relative_gap, LB, start, cutviol_iter, solveParams):
             if relative_gap < solveParams.cutviol:
                 flag = 4
                 print("the LB is not making significant progress")
-return flag, Elapsed
+    return flag, Elapsed
 
 # function to create an out-of-sample for given initial state k_init
 def create_OSpaths(k_init):

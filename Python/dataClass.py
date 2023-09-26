@@ -2,7 +2,7 @@
 # coding: utf-8
 
 class inputParams:
-  def __init__(self,dissipate_option,absorbing_option,k_init,nbOS):
+  def __init__(self,dissipate_option,absorbing_option,FA_option,k_init,nbOS):
     self.dissipate_option = dissipate_option;
     self.absorbing_option = absorbing_option;
     self.k_init = k_init;
