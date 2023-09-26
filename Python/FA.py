@@ -3,6 +3,7 @@ import gurobipy as gp
 from gurobipy import GRB
 import pandas as pd
 import numpy as np
+from misc import *
 import sys
 
 # Define stage-t problem
@@ -108,7 +109,7 @@ def define_models(networkDataSet,hurricaneDataSet,inputParams):
     FB1Cons = {}
     FB2Cons = {}
     for t in range(T):
-        for k in nodeLists[t]:
+        for k in hurricaneDataSet.nodeLists[t]:
             ind = k
             (
                 m[t, ind],
@@ -120,10 +121,10 @@ def define_models(networkDataSet,hurricaneDataSet,inputParams):
                 theta[t, ind],
                 dCons[t, ind],
                 FB1Cons[t, ind],
-                FB2Cons[t, ind],
+                FB2Cons[t, ind]
             ) = stage_t_state_k_problem(networkDataSet,hurricaneDataSet,t)
             if ind in hurricaneDataSet.absorbing_states:
-                theta[t, ind].lb = 0
+                theta[t, ind].setAttr(GRB.Attr.UB, 0);
                 if inputParams.absorbing_option == 0:
                     for i in range(Ni):
                         for j in range(Ni):
@@ -135,21 +136,22 @@ def define_models(networkDataSet,hurricaneDataSet,inputParams):
     return m, x, f, y, z, v, theta, dCons, FB1Cons, FB2Cons
 
 # Train model: forward pass
-def FOSDDP_forward_pass_oneSP_iteration(lb, xval, thetaval):
-    k_t = k_init
+def FOSDDP_forward_pass_oneSP_iteration(networkDataSet,hurricaneDataSet,inputParams, m, ):
+    k_init = inputParams.k_init;
+    T = hurricaneDataSet.T;
+    absorbing_states = hurricaneDataSet.absorbing_states;
+    k_t = k_init-1
     in_sample = [k_t]
-    for t in range(1, T + 1):
-        if t > 1:
-            k_t = MC_sample(in_sample[t - 1])
+    for t in range(T):
+        if t > 0:
+            k_t = MC_sample(in_sample[t - 1], hurricaneDataSet)
             in_sample.append(k_t)
             MSP_fa_update_RHS(k_t, t, xval)
-        m_fa_t_k_t = m_fa[t, k_t]
-        m_fa_t_k_t.optimize()
-        status = m_fa_t_k_t.status
-        if status != GRB.OPTIMAL:
+        m[t, k_t].optimize()
+        if m[t, k_t].status != GRB.OPTIMAL:
             print("Error in Forward Pass")
-            print(f"Model in stage = {t} and state = {k_t}, in forward pass is {status}")
-            exit(0)
+            print(f"Model in stage = {t} and state = {k_t}, in forward pass is {m[t, k_t].status}")
+            sys.exit(0)
         else:
             xval[:, t - 1] = [var.x for var in x_fa[t, k_t]]
             thetaval[t - 1] = ϴ_fa[t, k_t].x
@@ -159,6 +161,7 @@ def FOSDDP_forward_pass_oneSP_iteration(lb, xval, thetaval):
             break
     return xval, thetaval, lb, in_sample
 
+'''
 # Train model: backward pass
 def FOSDDP_backward_pass_oneSP_iteration(lb, xval, thetaval, in_sample):
     cutviolFlag = 0
@@ -335,3 +338,4 @@ def MSP_fa_update_RHS(k_t, t, xval):
             dCons_fa[t - 1][j - 1].RHS = 0
 
 
+'''

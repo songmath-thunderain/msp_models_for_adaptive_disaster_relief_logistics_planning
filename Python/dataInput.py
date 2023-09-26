@@ -1,5 +1,6 @@
 import numpy as np;
 import pandas as pd;
+import sys;
 import csv;
 from dataClass import inputParams, solveParams, hurricaneData, networkData;
 
@@ -48,19 +49,19 @@ def hurricaneInput(intensityFile, locationFile, landfallFile, inputParams):
                 S[k1-1] = [k, l, f];
                 if dissipate_option:
                     if k == 1 or f == Nc:
-                        absorbing_states.append(k1);
+                        absorbing_states.append(k1-1);
                 else:
                     if f == Nc:
-                        absorbing_states.append(k1);
+                        absorbing_states.append(k1-1);
 
-                if k == 2 and l == 2 and f == 1:
-                    print("k1 = ", k1);
+                #if k == 2 and l == 2 and f == 1:
+                #    print("k1 = ", k1);  57
     
-                if k == 4 and l == 2 and f == 1:
-                    print("k1 = ", k1);
+                #if k == 4 and l == 2 and f == 1:
+                #    print("k1 = ", k1); 155
     
-                if k == 6 and l == 2 and f == 1:
-                    print("k1 = ", k1);
+                #if k == 6 and l == 2 and f == 1:
+                #    print("k1 = ", k1); 253
 
     # normalize the probabilities
     P_temp = np.copy(P_joint);
@@ -73,16 +74,17 @@ def hurricaneInput(intensityFile, locationFile, landfallFile, inputParams):
     nonzero_probs = P_jointVec[P_jointVec != 0];
     smallestTransProb = np.min(nonzero_probs) * 0.5;
 
+    # Create a complete set of reachable nodes over time, starting from the initial state k_init
     k_init = inputParams.k_init;
     nodeLists = []
-    nodeLists.append([k_init])
+    nodeLists.append([k_init-1])
     stopFlag = False
 
     while not stopFlag:
         tempList = []
         stopFlag = True
 
-        for k in range(1, K + 1):
+        for k in range(K):
             for kk in nodeLists[-1]:
                 if (kk not in absorbing_states) and (P_joint[kk][k] > smallestTransProb):
                     tempList.append(k)
@@ -93,10 +95,12 @@ def hurricaneInput(intensityFile, locationFile, landfallFile, inputParams):
 
         nodeLists.append(tempList)
 
+    # Create a list of scenarios, along with the probability of occurrence, for each transient state node in the nodeList (set of reachable nodes from the initial state k_init)
     nodeScenList = {}
     nodeScenWeights = {}
 
     for t in range(T - 2, -1, -1):
+        # Starting from T-2 since at T-1, all states should be absorbing
         for k in range(len(nodeLists[t])):
             if nodeLists[t][k] not in absorbing_states:
                 nodeScenList[(t, nodeLists[t][k])] = []
@@ -105,18 +109,26 @@ def hurricaneInput(intensityFile, locationFile, landfallFile, inputParams):
                 for kk in range(len(nodeLists[t + 1])):
                     if P_joint[nodeLists[t][k]][nodeLists[t + 1][kk]] > smallestTransProb:
                         if nodeLists[t + 1][kk] in absorbing_states:
+                            # absorbing states, directly append
                             nodeScenList[(t, nodeLists[t][k])].append((t + 1, nodeLists[t + 1][kk]))
                             nodeScenWeights[(t, nodeLists[t][k])].append(P_joint[nodeLists[t][k]][nodeLists[t + 1][kk]])
                         else:
+                            # transient states, append the corresponding scenlist and weights
                             for j in range(len(nodeScenList[(t + 1, nodeLists[t + 1][kk])])):
                                 if (nodeScenList[(t + 1, nodeLists[t + 1][kk])][j] not in nodeScenList[(t, nodeLists[t][k])]):
+                                    # Not in the scenario list, so go ahead and add it
                                     nodeScenList[(t, nodeLists[t][k])].append(nodeScenList[(t + 1, nodeLists[t + 1][kk])][j])
                                     nodeScenWeights[(t, nodeLists[t][k])].append(P_joint[nodeLists[t][k]][nodeLists[t + 1][kk]] * nodeScenWeights[(t + 1, nodeLists[t + 1][kk])][j])
+                                else:
+                                    # in the scenario list, increment the probability
+                                    ind = list(nodeScenList[(t, nodeLists[t][k])]).index(next((x for x in nodeScenList[(t, nodeLists[t][k])] if x == nodeScenList[(t + 1, nodeLists[t + 1][kk])][j]), None))
+                                    nodeScenWeights[(t, nodeLists[t][k])][ind] += P_joint[nodeLists[t][k]][nodeLists[t + 1][kk]]*nodeScenWeights[(t + 1, nodeLists[t + 1][kk])][j]
+
                 if abs(sum(nodeScenWeights[(t, nodeLists[t][k])]) - 1) > 1e-6:
                     print("Wrong!")
-                    exit(0)
+                    sys.exit(0)
 
-    hurricaneDataSet = hurricaneData(P_intensity, P_location, P_landfall, Na, Nb, T, Tmin, P_joint, S, absorbing_states, smallestTransProb);
+    hurricaneDataSet = hurricaneData(P_intensity, P_location, P_landfall, Na, Nb, T, Tmin, P_joint, S, absorbing_states, smallestTransProb, nodeLists, nodeScenList, nodeScenWeights);
     return hurricaneDataSet;
     
 

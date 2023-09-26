@@ -17,7 +17,7 @@ class solveParams:
     self.cutviol = cutviol;
 
 class hurricaneData:
-  def __init__(self, P_intensity, P_location, P_landfall, Na, Nb, T, Tmin, P_joint, states, absorbing_states, smallestTransProb):
+  def __init__(self, P_intensity, P_location, P_landfall, Na, Nb, T, Tmin, P_joint, states, absorbing_states, smallestTransProb, nodeLists, nodeScenList, nodeScenWeights):
     self.P_intensity = P_intensity;
     self.P_location = P_location;
     self.P_landfall = P_landfall;
@@ -29,6 +29,9 @@ class hurricaneData:
     self.states = states;
     self.absorbing_states = absorbing_states;
     self.smallestTransProb = smallestTransProb;
+    self.nodeLists = nodeLists;
+    self.nodeScenList = nodeScenList;
+    self.nodeScenWeights = nodeScenWeights;
     
 class networkData:
   def __init__(self, Ni, Nj, SP, DP, fuel, cb, ca, ch, cp, p, q, dMax, x_cap, x_0, SCEN):

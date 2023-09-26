@@ -6,12 +6,12 @@ from dataClass import inputParams, solveParams, hurricaneData, networkData
 #miscellaneous functions 
 
 #sample a markovian state
-def MC_sample(current_state,hurricaneData):
-    K = hurricaneData.Na*hurricaneData.Nb*hurricaneData.T;
+def MC_sample(current_state,hurricaneDataSet):
+    K = hurricaneDataSet.Na*hurricaneDataSet.Nb*hurricaneDataSet.T;
     states = np.arange(K)
     weights = hurricaneData.P_joint[current_state, :]
-    k = np.random.choice(states, p=weights)
-    return k
+    kk = np.random.choice(states, p=weights)
+    return kk
 
 #training termination check
 def termination_check(iter, relative_gap, LB, start, cutviol_iter, solveParams):
