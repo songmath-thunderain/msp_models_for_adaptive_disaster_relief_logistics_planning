@@ -35,10 +35,12 @@ def stage_t_state_k_problem(networkDataSet,hurricaneDataSet,t):
     for i in range(Ni):
         x[i] = m.addVar(lb=0, ub=x_cap[i])
         v[i] = m.addVar(lb=0)
-        for ii in range(Ni):
-            f[i, ii] = m.addVar(lb=0)
         for j in range(Nj):
             y[i, j] = m.addVar(lb=0)
+    
+    for i in range(N0):
+        for ii in range(Ni):
+            f[i, ii] = m.addVar(lb=0)
 
     for j in range(Nj):
         z[j] = m.addVar(lb=0)
@@ -47,7 +49,7 @@ def stage_t_state_k_problem(networkDataSet,hurricaneDataSet,t):
     m.setObjective(
         gp.quicksum(cb[i,ii,t] * f[i, ii] for i in range(N0) for ii in range(Ni))
         + gp.quicksum(ch[i,t] * x[i] for i in range(Ni))
-        + gp.quicksum(f[N0,i] for i in range(Ni)) * cp[t]
+        + gp.quicksum(f[N0-1,i] for i in range(Ni)) * cp[t]
         + gp.quicksum(ca[i,j,t] * y[i, j] for i in range(Ni) for j in range(Nj))
         + gp.quicksum(z[j] for j in range(Nj)) * p
         + gp.quicksum(v[i] for i in range(Ni)) * q
@@ -88,6 +90,9 @@ def stage_t_state_k_problem(networkDataSet,hurricaneDataSet,t):
 
     for j in range(Nj):
         dCons[j] = m.addConstr(z[j] + gp.quicksum(y[i, j] for i in range(Ni)) >= 0)
+
+    m.update();
+    m.setParam("OutputFlag", 0);
 
     return m, x, f, y, z, v, theta, dCons, FB1Cons, FB2Cons
 
@@ -150,7 +155,7 @@ def FOSDDP_forward_pass_oneSP_iteration(networkDataSet,hurricaneDataSet,inputPar
         if t > 0:
             k_t = MC_sample(in_sample[t - 1], hurricaneDataSet)
             in_sample.append(k_t)
-            MSP_fa_update_RHS(m, k_t, t, xval)
+            MSP_fa_update_RHS(k_t, t, xval, networkDataSet, hurricaneDataSet, FB1Cons, FB2Cons, dCons)
         m[t, k_t].optimize()
         if m[t, k_t].status != GRB.OPTIMAL:
             print("Error in Forward Pass")
@@ -184,7 +189,7 @@ def FOSDDP_backward_pass_oneSP_iteration(networkDataSet,hurricaneDataSet,inputPa
         pi2 = [[0] * Ni for _ in range(K)]
         sample_n = in_sample[t-1]; # the state observed at time t-1
         for k in range(len(nodeLists[t])):
-            MSP_fa_update_RHS(m, nodeLists[t][k], t, xval)
+            MSP_fa_update_RHS(k_t, t, xval, networkDataSet, hurricaneDataSet, FB1Cons, FB2Cons, dCons)
             m[t, nodeLists[t][k]].optimize()
             if m[t, nodeLists[t][k]].status != GRB.OPTIMAL:
                 print("Error in Backward Pass")
@@ -215,9 +220,7 @@ def FOSDDP_backward_pass_oneSP_iteration(networkDataSet,hurricaneDataSet,inputPa
                 for k in range(len(nodeLists[t])):
                     if P_joint[nodeLists[t - 1][n]][nodeLists[t][k]] > hurricaneDataSet.smallestTransProb:
                         for i in range(Ni):
-                            tempval = (pi1[nodeLists[t][k]][i]
-                                        + pi2[nodeLists[t][k]][i]) \
-                                        * P_joint[nodeLists[t - 1][n]][nodeLists[t][k]]
+                            tempval = (pi1[nodeLists[t][k]][i]+pi2[nodeLists[t][k]][i]) * P_joint[nodeLists[t - 1][n]][nodeLists[t][k]]
                             cutcoef[i] += tempval
                             cutrhs_xval += tempval * xval[i][t - 1]
                 m[t - 1, nodeLists[t - 1][n]].addConstr(
@@ -232,11 +235,11 @@ def train_models_offline(networkDataSet,hurricaneDataSet,inputParams,solveParams
     x_0 = networkDataSet.x_0;
     T = hurricaneDataSet.T;
     Ni = networkDataSet.Ni;
-    
+    k_init = inputParams.k_init;
     # Set the RHS of the first_stage problem
-    for i in range(0, Ni):
-        FB1Cons[0, i].setAttr(GRB.Attr.RHS, x_0[i]);
-        FB2Cons[0, i].setAttr(GRB.Attr.RHS, x_0[i]);
+    for i in range(Ni):
+        FB1Cons[0,k_init-1][i].setAttr(GRB.Attr.RHS, x_0[i]);
+        FB2Cons[0,k_init-1][i].setAttr(GRB.Attr.RHS, x_0[i]);
 
     # Initialize stuff
     train_time = 0
@@ -266,9 +269,16 @@ def train_models_offline(networkDataSet,hurricaneDataSet,inputParams,solveParams
             cutviol_iter += 1
     return LB, train_time, iter
 
-'''
 # Evaluate model
-def FOSDDP_eval_offline():
+def FOSDDP_eval_offline(networkDataSet,hurricaneDataSet,inputParams,solveParams, m, x, theta, FB1Cons, FB2Cons, xval, thetaval):
+    k_init = inputParams.k_init;
+    Ni = networkDataSet.Ni;
+    N0 = networkDataSet.N0;
+    T = hurricaneDataSet.T;
+    absorbing_option = inputParams.absorbing_option;
+    nbOS = inputParams.nbOS;
+    absorbing_states = hurricaneDataSet.absorbing_states;
+
     start = time.time()
     osfname = "./data/OOS" + str(k_init) + ".csv"
     OS_paths = np.genfromtxt(osfname, delimiter=",", dtype=int)  # Read the out-of-sample file
@@ -280,31 +290,29 @@ def FOSDDP_eval_offline():
     vval_fa = np.empty((nbOS, T), dtype=object)
     for s in range(nbOS):
         xval = np.zeros((Ni, T))
-        for t in range(1, T + 1):
-            k_t = OS_paths[s, t - 1]
+        for t in range(T):
+            k_t = OS_paths[s, t]-1
             if t > 1:
-                MSP_fa_update_RHS(k_t, t, xval)
-            m_fa_t_k = m_fa[t, k_t]
-            m_fa_t_k.optimize()
-            status = m_fa_t_k.status
-            if status != GRB.OPTIMAL:
+                MSP_fa_update_RHS(k_t, t, xval, networkDataSet, hurricaneDataSet, FB1Cons, FB2Cons, dCons)
+            m[t,k_t].optimize()
+            if m[t,k_t].status != GRB.OPTIMAL:
                 print(" in evaluation")
                 print(f"Model in stage = {t} and state = {k_t}, in forward pass is {status}")
                 exit(0)
             else:
-                xval_fa[s, t - 1] = [var.x for var in x_fa[t, k_t]]
-                xval[:, t - 1] = xval_fa[s, t - 1]
-                fval_fa[s, t - 1] = [var.x for var in f_fa[t, k_t]]
-                yval_fa[s, t - 1] = [var.x for var in y_fa[t, k_t]]
-                zval_fa[s, t - 1] = [var.x for var in z_fa[t, k_t]]
-                vval_fa[s, t - 1] = [var.x for var in v_fa[t, k_t]]
-                objs_fa[s, t - 1] = m_fa_t_k.objVal - ϴ_fa[t, k_t].x
-            if absorbing_option == 0:
-                if k_t in absorbing_states:
-                    if sum(fval_fa[s, t - 1][N0 - 1][i - 1] for i in range(1, Ni + 1)) > 1e-5:
-                        print("Something is wrong! Sum of flow from MDC = ",
-                              sum(fval_fa[s, t - 1][N0 - 1][i - 1] for i in range(1, Ni + 1)))
-                        exit(0)
+                xval_fa[s, t] = [var.x for var in x[t, k_t]]
+                xval[:, t] = xval_fa[s, t]
+                fval_fa[s, t] = [var.x for var in f[t, k_t]]
+                yval_fa[s, t] = [var.x for var in y[t, k_t]]
+                zval_fa[s, t] = [var.x for var in z[t, k_t]]
+                vval_fa[s, t] = [var.x for var in v[t, k_t]]
+                objs_fa[s, t] = m[t,k_t].ObjVal - theta[t, k_t].x
+                if absorbing_option == 0:
+                    if k_t in absorbing_states:
+                        if sum(fval_fa[s, t][N0-1, i] for i in range(Ni)) > 1e-5:
+                            print("Something is wrong! Sum of flow from MDC = ",
+                                sum(fval_fa[s, t][N0-1, i] for i in range(Ni)))
+                            sys.exit(0)
             if k_t in absorbing_states:
                 break
     fa_bar = np.mean(np.sum(objs_fa, axis=1))
@@ -314,19 +322,23 @@ def FOSDDP_eval_offline():
     print("FA...")
     print(f"μ ± 1.96*σ/√NS = {fa_bar} ± {fa_low,fa_high}")
     elapsed = time.time() - start
-    vals = [xval_fa, fval_fa, yval_fa, zval_fa, vval_fa]
-    return objs_fa, fa_bar, fa_low, fa_high, elapsed
+    #vals = [xval_fa, fval_fa, yval_fa, zval_fa, vval_fa]
+    return [objs_fa, fa_bar, fa_low, fa_high, elapsed]
 
 # Update RHS of flow-balance and demand constraint
-def MSP_fa_update_RHS(k_t, t, xval):
-    for i in range(1, Ni + 1):
-        FB1Cons_fa[t - 1][i - 1].RHS = xval[i - 1][t - 2]
-        FB2Cons_fa[t - 1][i - 1].RHS = xval[i - 1][t - 2]
-    for j in range(1, Nj + 1):
-        if S[k_t - 1][2] == Nc and S[k_t - 1][0] != 1:
-            dCons_fa[t - 1][j - 1].RHS = SCEN[k_t - 1][j - 1]
+def MSP_fa_update_RHS(k_t, t, xval, networkDataSet, hurricaneDataSet, FB1Cons, FB2Cons, dCons):
+    Ni = networkDataSet.Ni;
+    Nj = networkDataSet.Nj;
+    S = hurricaneData.states;
+    T = hurricaneData.T;
+    SCEN = networkData.SCEN;
+    for i in range(Ni):
+        FB1Cons[t][i].setAttr(GRB.Attr.RHS, xval[i][t - 1])
+        FB2Cons[t][i].setAttr(GRB.Attr.RHS, xval[i][t - 1])
+    for j in range(Nj):
+        if S[k_t][2] == T and S[k_t][0] != 1:
+            dCons[t][j].setAttr(GRB.Attr.RHS, SCEN[k_t][j]);
         else:
-            dCons_fa[t - 1][j - 1].RHS = 0
+            dCons[t][j].setAttr(GRB.Attr.RHS, 0);
 
 
-'''
