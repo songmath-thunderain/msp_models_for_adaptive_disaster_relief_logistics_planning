@@ -141,14 +141,14 @@ def define_models(networkDataSet,hurricaneDataSet,inputParams):
     return m, x, f, y, z, v, theta, dCons, FB1Cons, FB2Cons
 
 # Train model: forward pass
-def FOSDDP_forward_pass_oneSP_iteration(networkDataSet,hurricaneDataSet,inputParams, m, x, theta):
+def FOSDDP_forward_pass_oneSP_iteration(networkDataSet,hurricaneDataSet,inputParams, m, x, theta, FB1Cons, FB2Cons, dCons):
     k_init = inputParams.k_init;
     Ni = networkDataSet.Ni;
     T = hurricaneDataSet.T;
     absorbing_states = hurricaneDataSet.absorbing_states;
     k_t = k_init-1;
     in_sample = [k_t];
-    xval = [[0] * T for _ in range(Ni)];
+    xval = np.zeros((Ni, T));
     thetaval = [0]*T;
     lb = 1e10;
     for t in range(T):
@@ -162,7 +162,8 @@ def FOSDDP_forward_pass_oneSP_iteration(networkDataSet,hurricaneDataSet,inputPar
             print(f"Model in stage = {t} and state = {k_t}, in forward pass is {m[t, k_t].status}")
             sys.exit(0)
         else:
-            xval[:, t] = [var.x for var in x[t, k_t]]
+            for i in range(Ni):
+                xval[i, t] = x[t,k_t][i].x
             thetaval[t] = theta[t, k_t].x
             if t == 0:
                 lb = m[t, k_t].objVal
@@ -172,8 +173,9 @@ def FOSDDP_forward_pass_oneSP_iteration(networkDataSet,hurricaneDataSet,inputPar
 
 
 # Train model: backward pass
-def FOSDDP_backward_pass_oneSP_iteration(networkDataSet,hurricaneDataSet,inputParams,solveParams, m, x, theta, FB1Cons, FB2Cons, xval, thetaval, in_sample):
+def FOSDDP_backward_pass_oneSP_iteration(networkDataSet,hurricaneDataSet,inputParams,solveParams, m, x, theta, FB1Cons, FB2Cons, dCons, xval, thetaval, in_sample):
     T = hurricaneDataSet.T;
+    P_joint = hurricaneDataSet.P_joint;
     Ni = networkDataSet.Ni;
     Na = hurricaneDataSet.Na;
     Nb = hurricaneDataSet.Nb;
@@ -189,11 +191,11 @@ def FOSDDP_backward_pass_oneSP_iteration(networkDataSet,hurricaneDataSet,inputPa
         pi2 = [[0] * Ni for _ in range(K)]
         sample_n = in_sample[t-1]; # the state observed at time t-1
         for k in range(len(nodeLists[t])):
-            MSP_fa_update_RHS(k_t, t, xval, networkDataSet, hurricaneDataSet, FB1Cons, FB2Cons, dCons)
+            MSP_fa_update_RHS(nodeLists[t][k], t, xval, networkDataSet, hurricaneDataSet, FB1Cons, FB2Cons, dCons)
             m[t, nodeLists[t][k]].optimize()
             if m[t, nodeLists[t][k]].status != GRB.OPTIMAL:
                 print("Error in Backward Pass")
-                print(f"Model in stage = {t} and state = {nodeLists[t][k]}, in backward pass is {status}")
+                print(f"Model in stage = {t} and state = {nodeLists[t][k]}, in backward pass is {m[t, nodeLists[t][k]].status}")
                 sys.exit(0)
             else:
                 Q[nodeLists[t][k]] = m[t, nodeLists[t][k]].objVal
@@ -231,7 +233,7 @@ def FOSDDP_backward_pass_oneSP_iteration(networkDataSet,hurricaneDataSet,inputPa
     return cutviolFlag
 
 # Train model
-def train_models_offline(networkDataSet,hurricaneDataSet,inputParams,solveParams, m, x, theta, FB1Cons, FB2Cons):
+def train_models_offline(networkDataSet,hurricaneDataSet,inputParams,solveParams, m, x, theta, FB1Cons, FB2Cons, dCons):
     x_0 = networkDataSet.x_0;
     T = hurricaneDataSet.T;
     Ni = networkDataSet.Ni;
@@ -254,7 +256,7 @@ def train_models_offline(networkDataSet,hurricaneDataSet,inputParams,solveParams
     while True:
         iter += 1
         # Forward pass
-        xval, thetaval, lb, in_sample = FOSDDP_forward_pass_oneSP_iteration(networkDataSet,hurricaneDataSet,inputParams, m, x, theta)
+        xval, thetaval, lb, in_sample = FOSDDP_forward_pass_oneSP_iteration(networkDataSet,hurricaneDataSet,inputParams, m, x, theta, FB1Cons, FB2Cons, dCons)
         LB.append(lb)
         # Termination check
         flag, Elapsed = termination_check(iter, relative_gap, LB, start, cutviol_iter, solveParams)
@@ -262,7 +264,7 @@ def train_models_offline(networkDataSet,hurricaneDataSet,inputParams,solveParams
             train_time = Elapsed
             break
         # Backward pass (if not terminated)
-        cutviolFlag = FOSDDP_backward_pass_oneSP_iteration(networkDataSet,hurricaneDataSet,inputParams,solveParams, m, x, theta, FB1Cons, FB2Cons, xval, thetaval, in_sample)
+        cutviolFlag = FOSDDP_backward_pass_oneSP_iteration(networkDataSet,hurricaneDataSet,inputParams,solveParams, m, x, theta, FB1Cons, FB2Cons, dCons, xval, thetaval, in_sample)
         if cutviolFlag:
             cutviol_iter = 0
         else:
@@ -329,16 +331,16 @@ def FOSDDP_eval_offline(networkDataSet,hurricaneDataSet,inputParams,solveParams,
 def MSP_fa_update_RHS(k_t, t, xval, networkDataSet, hurricaneDataSet, FB1Cons, FB2Cons, dCons):
     Ni = networkDataSet.Ni;
     Nj = networkDataSet.Nj;
-    S = hurricaneData.states;
-    T = hurricaneData.T;
-    SCEN = networkData.SCEN;
+    S = hurricaneDataSet.states;
+    T = hurricaneDataSet.T;
+    SCEN = networkDataSet.SCEN;
     for i in range(Ni):
-        FB1Cons[t][i].setAttr(GRB.Attr.RHS, xval[i][t - 1])
-        FB2Cons[t][i].setAttr(GRB.Attr.RHS, xval[i][t - 1])
+        FB1Cons[t,k_t][i].setAttr(GRB.Attr.RHS, xval[i,t - 1])
+        FB2Cons[t,k_t][i].setAttr(GRB.Attr.RHS, xval[i,t - 1])
     for j in range(Nj):
         if S[k_t][2] == T and S[k_t][0] != 1:
-            dCons[t][j].setAttr(GRB.Attr.RHS, SCEN[k_t][j]);
+            dCons[t,k_t][j].setAttr(GRB.Attr.RHS, SCEN[k_t][j]);
         else:
-            dCons[t][j].setAttr(GRB.Attr.RHS, 0);
+            dCons[t,k_t][j].setAttr(GRB.Attr.RHS, 0);
 
 

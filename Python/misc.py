@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import time
 import os
 from dataClass import inputParams, solveParams, hurricaneData, networkData
 
@@ -9,14 +10,14 @@ from dataClass import inputParams, solveParams, hurricaneData, networkData
 def MC_sample(current_state,hurricaneDataSet):
     K = hurricaneDataSet.Na*hurricaneDataSet.Nb*hurricaneDataSet.T;
     states = np.arange(K)
-    weights = hurricaneData.P_joint[current_state, :]
+    weights = hurricaneDataSet.P_joint[current_state, :]
     kk = np.random.choice(states, p=weights)
     return kk
 
 #training termination check
 def termination_check(iter, relative_gap, LB, start, cutviol_iter, solveParams):
     flag = 0
-    Elapsed = time() - start
+    Elapsed = time.time() - start
     if iter > solveParams.max_iter:
         flag = 1
         print("max iteration is reached")
@@ -28,7 +29,7 @@ def termination_check(iter, relative_gap, LB, start, cutviol_iter, solveParams):
         print("cut violation is reached")
     else:
         if iter > solveParams.stall:
-            relative_gap = (LB[iter]-LB[iter-solveParams.stall])/max(1e-10,abs(LB[iter-solveParams.stall]))
+            relative_gap = (LB[iter-1]-LB[iter-1-solveParams.stall])/max(1e-10,abs(LB[iter-1-solveParams.stall]))
             if relative_gap < solveParams.cutviol:
                 flag = 4
                 print("the LB is not making significant progress")
