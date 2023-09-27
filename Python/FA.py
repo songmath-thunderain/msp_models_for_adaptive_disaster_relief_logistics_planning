@@ -272,7 +272,7 @@ def train_models_offline(networkDataSet,hurricaneDataSet,inputParams,solveParams
     return LB, train_time, iter
 
 # Evaluate model
-def FOSDDP_eval_offline(networkDataSet,hurricaneDataSet,inputParams,solveParams, m, x, theta, FB1Cons, FB2Cons, xval, thetaval):
+def FOSDDP_eval_offline(networkDataSet,hurricaneDataSet,inputParams, m, x, theta, FB1Cons, FB2Cons, dCons, osfname):
     k_init = inputParams.k_init;
     Ni = networkDataSet.Ni;
     N0 = networkDataSet.N0;
@@ -282,14 +282,13 @@ def FOSDDP_eval_offline(networkDataSet,hurricaneDataSet,inputParams,solveParams,
     absorbing_states = hurricaneDataSet.absorbing_states;
 
     start = time.time()
-    osfname = "./data/OOS" + str(k_init) + ".csv"
-    OS_paths = np.genfromtxt(osfname, delimiter=",", dtype=int)  # Read the out-of-sample file
+    OS_paths = pd.read_csv(osfname).values
     objs_fa = np.zeros((nbOS, T))
-    xval_fa = np.empty((nbOS, T), dtype=object)
-    fval_fa = np.empty((nbOS, T), dtype=object)
-    yval_fa = np.empty((nbOS, T), dtype=object)
-    zval_fa = np.empty((nbOS, T), dtype=object)
-    vval_fa = np.empty((nbOS, T), dtype=object)
+    #xval_fa = np.empty((nbOS, T), dtype=object)
+    #fval_fa = np.empty((nbOS, T), dtype=object)
+    #yval_fa = np.empty((nbOS, T), dtype=object)
+    #zval_fa = np.empty((nbOS, T), dtype=object)
+    #vval_fa = np.empty((nbOS, T), dtype=object)
     for s in range(nbOS):
         xval = np.zeros((Ni, T))
         for t in range(T):
@@ -302,27 +301,34 @@ def FOSDDP_eval_offline(networkDataSet,hurricaneDataSet,inputParams,solveParams,
                 print(f"Model in stage = {t} and state = {k_t}, in forward pass is {status}")
                 exit(0)
             else:
-                xval_fa[s, t] = [var.x for var in x[t, k_t]]
-                xval[:, t] = xval_fa[s, t]
-                fval_fa[s, t] = [var.x for var in f[t, k_t]]
+                objs_fa[s, t] = m[t,k_t].ObjVal - theta[t,k_t].x
+                for i in range(Ni):
+                    xval[i, t] = x[t,k_t][i].x
+                '''
+                for i in range(Ni):
+                    xval_fa[s, t][i] = x[t,k_t][i].x
+                for i in range(N0):
+                    for ii in range(Ni):
+                        fval_fa[s, t][i,ii] = f[t,k_t][i,ii].x;
                 yval_fa[s, t] = [var.x for var in y[t, k_t]]
                 zval_fa[s, t] = [var.x for var in z[t, k_t]]
                 vval_fa[s, t] = [var.x for var in v[t, k_t]]
-                objs_fa[s, t] = m[t,k_t].ObjVal - theta[t, k_t].x
                 if absorbing_option == 0:
                     if k_t in absorbing_states:
                         if sum(fval_fa[s, t][N0-1, i] for i in range(Ni)) > 1e-5:
                             print("Something is wrong! Sum of flow from MDC = ",
                                 sum(fval_fa[s, t][N0-1, i] for i in range(Ni)))
                             sys.exit(0)
+                '''
             if k_t in absorbing_states:
                 break
     fa_bar = np.mean(np.sum(objs_fa, axis=1))
     fa_std = np.std(np.sum(objs_fa, axis=1))
     fa_low = fa_bar - 1.96 * fa_std / np.sqrt(nbOS)
     fa_high = fa_bar + 1.96 * fa_std / np.sqrt(nbOS)
+    CI = fa_bar-far_low;
     print("FA...")
-    print(f"μ ± 1.96*σ/√NS = {fa_bar} ± {fa_low,fa_high}")
+    print(f"μ ± 1.96*σ/√NS = {fa_bar} ± {CI}")
     elapsed = time.time() - start
     #vals = [xval_fa, fval_fa, yval_fa, zval_fa, vval_fa]
     return [objs_fa, fa_bar, fa_low, fa_high, elapsed]

@@ -92,7 +92,7 @@ def deterministic_model(networkDataSet,hurricaneDataSet):
     return m, x, f, y, z, v, dCons;
     
     
-def clairvoyant_eval(networkDataSet,hurricaneDataSet,inputParams):
+def clairvoyant_eval(networkDataSet,hurricaneDataSet,inputParams,osfname):
     start = time.time()
 
     dissipate_option = inputParams.dissipate_option;
@@ -107,7 +107,6 @@ def clairvoyant_eval(networkDataSet,hurricaneDataSet,inputParams):
     SCEN = networkDataSet.SCEN;
     S = hurricaneDataSet.states;
 
-    osfname = f"data/synthetic/OOS{k_init}.csv"
     OS_paths = pd.read_csv(osfname).values  # Read the out-of-sample file
 
     objs_cv = np.zeros(nbOS)
