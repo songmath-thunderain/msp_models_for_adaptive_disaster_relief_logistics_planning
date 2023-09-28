@@ -96,9 +96,8 @@ def RH_2SSP_first_stage(networkDataSet, hurricaneDataSet, inputParams, t_roll, k
     
     # Define the model
     m = gp.Model()
-    
-    nbScens = len(nodeScenList[t_roll][k_t])
-    pbScens = nodeScenWeights[t_roll][k_t]
+    nbScens = len(nodeScenList[(t_roll,k_t)])
+    pbScens = nodeScenWeights[(t_roll,k_t)]
     
     # Define the variables
     x = {}
@@ -147,7 +146,8 @@ def RH_2SSP_first_stage(networkDataSet, hurricaneDataSet, inputParams, t_roll, k
                     + gp.quicksum(f[j, i, t] for j in range(N0) if j != i) == 0
                 )
                 m.addConstr(gp.quicksum(f[i, j, t] for j in range(Ni) if j != i) <= x[i, t-1])
-    
+    m.update();
+    m.setParam("OutputFlag", 0);
     return m, x, f, theta
 
 # Define second-stage scenario subproblem
@@ -199,7 +199,8 @@ def RH_2SSP_second_stage(networkDataSet):
         dCons[j] = m.addConstr(z[j] + gp.quicksum(y[i, j] for i in range(Ni)) == 0)
     
     rCons = m.addConstr(reimbursement == 0)
-    
+    m.update();
+    m.setParam("OutputFlag", 0);
     return m, y, xCons, dCons, rCons
 
 
@@ -227,8 +228,8 @@ def RH_2SSP_solve_roll(networkDataSet, hurricaneDataSet, inputParams, solveParam
     if absorbing_option == 0:
         # If no MDC/SP operation is allowed in the absorbing state, do not plan for stage T since we know for sure that all states are absorbing
         nbstages1 = T - t_roll - 1
-    nbScens = len(nodeScenList[t_roll][k_t])
-    pbScens = nodeScenWeights[t_roll][k_t]
+    nbScens = len(nodeScenList[(t_roll,k_t)])
+    pbScens = nodeScenWeights[(t_roll,k_t)]
     LB = -1e10
     UB = 1e10
     thetaval = [0] * nbScens
@@ -284,13 +285,13 @@ def solve_second_stage(networkDataSet, hurricaneDataSet, inputParams, solveParam
     nodeScenList = hurricaneDataSet.nodeScenList;
     nodeScenWeights = hurricaneDataSet.nodeScenWeights;
     
-    nbScens = len(nodeScenList[t_roll][k_t])
-    pbScens = nodeScenWeights[t_roll][k_t]
+    nbScens = len(nodeScenList[(t_roll,k_t)])
+    pbScens = nodeScenWeights[(t_roll,k_t)]
     flag = 0
-    nbstages1 = T - t_roll + 1
+    nbstages1 = T - t_roll
     
     if absorbing_option == 0:
-        nbstages1 = T - t_roll
+        nbstages1 = T - t_roll - 1
     
     Q = [0] * nbScens
     pi1 = [[] for _ in range(nbScens)]
@@ -299,7 +300,7 @@ def solve_second_stage(networkDataSet, hurricaneDataSet, inputParams, solveParam
     Qbar = 0
     
     for n in range(nbScens):
-        absorbingT = nodeScenList[t_roll][k_t][n][0]
+        absorbingT = nodeScenList[(t_roll,k_t)][n][0]
         RH_2SSP_update_RHS(absorbingT, k_t, subproblem, xCons, dCons, rCons, xval, fval, y, t_roll)
         Q[n], pi1[n], pi2[n], pi3[n], flag = solve_scen_subproblem(subproblem, xCons, dCons, rCons)
         
@@ -312,45 +313,47 @@ def solve_second_stage(networkDataSet, hurricaneDataSet, inputParams, solveParam
     # Cut generation: multi-cut version
     for n in range(nbScens):
         if (Q[n] - thetaval[n]) / max(1e-10, abs(Q[n])) > solveParams.cutviol and Q[n] - thetaval[n] > solveParams.cutviol:
-            tt = nodeScenList[t_roll][k_t][n][0]
+            tt = nodeScenList[(t_roll,k_t)][n][0]
             
             if absorbing_option == 0:
                 master.addConstr(
                     theta[n] - sum(pi1[n][i] * x[i, tt - t_roll - 1] for i in range(Ni))
                     - pi3[n] * (-sum(
-                        sum(
+                        sum(sum(
                             cb[i,ii,t_roll + t] * f[i,ii,t]
                             for ii in range(Ni)
                         ) for i in range(N0))
-                    + sum(ch[i][t_roll + t] * x[i, t] for i in range(Ni))
-                    + sum(f[N0,i,t] for i in range(Ni)) * cp[t_roll + t]
+                    + sum(ch[i,t_roll + t] * x[i, t] for i in range(Ni))
+                    + sum(f[N0-1,i,t] for i in range(Ni)) * cp[t_roll + t]
                     for t in range(tt - t_roll, nbstages1)
-                    ) >= Q[n] - sum(pi1[n][i] * xval[i,tt - t_roll] for i in range(Ni)) - pi3[n] * (-sum(
-                        sum(
+                    )) >= Q[n] - sum(pi1[n][i] * xval[i,tt - t_roll -1] for i in range(Ni)) - pi3[n] * (-sum(
+                        sum(sum(
                             cb[i,ii,t_roll + t] * fval[i,ii,t]
                             for ii in range(Ni)
                         ) for i in range(N0)))
                     + sum(ch[i,t_roll + t] * xval[i,t] for i in range(Ni))
                     + sum(fval[N0-1,i,t] for i in range(Ni)) * cp[t_roll + t]
+                    for t in range(tt - t_roll, nbstages1))
                 )
             else:
                 master.addConstr(
                     theta[n] - sum(pi1[n][i] * x[i, tt - t_roll] for i in range(Ni))
                     - pi3[n] * (-sum(
-                        sum(
+                        sum(sum(
                             cb[i,ii,t_roll + t] * f[i,ii,t]
                             for ii in range(Ni)
                         ) for i in range(N0))
                     + sum(ch[i,t_roll + t] * x[i, t] for i in range(Ni))
                     + sum(f[N0-1,i,t] for i in range(Ni)) * cp[t_roll + t]
                     for t in range(tt + 1 - t_roll, nbstages1)
-                    ) >= Q[n] - sum(pi1[n][i] * xval[i,tt - t_roll] for i in range(Ni)) - pi3[n] * (-sum(
-                        sum(
+                    )) >= Q[n] - sum(pi1[n][i] * xval[i,tt - t_roll] for i in range(Ni)) - pi3[n] * (-sum(
+                        sum(sum(
                             cb[i,ii,t_roll + t] * fval[i,ii,t]
                             for ii in range(Ni)
                         ) for i in range(N0)))
                     + sum(ch[i,t_roll + t] * xval[i,t] for i in range(Ni))
                     + sum(fval[N0-1,i,t] for i in range(Ni)) * cp[t_roll + t]
+                    for t in range(tt + 1 - t_roll, nbstages1))
                 )
             
             flag = 1
@@ -359,6 +362,7 @@ def solve_second_stage(networkDataSet, hurricaneDataSet, inputParams, solveParam
 
 # Solves scenario subproblem of the second stage
 def solve_scen_subproblem(networkDataSet, subproblem, xCons, dCons, rCons):
+    flag = 0;
     Ni = networkDataSet.Ni;
     Nj = networkDataSet.Nj;
     subproblem.optimize()
@@ -387,13 +391,15 @@ def RH_2SSP_update_RHS(networkDataSet, hurricaneDataSet, inputParams, absorbingT
     SCEN = networkDataSet.SCEN;
     T = hurricaneDataSet.T;
     cb = networkDataSet.cb;
+    ca = networkDataSet.ca;
     ch = networkDataSet.ch;
     cp = networkDataSet.cp;
     absorbing_option = inputParams.absorbing_option;
-    nbstages1 = T - t_roll + 1
+    nbstages1 = T - t_roll
     
     if absorbing_option == 0:
-        nbstages1 = T - t_roll
+        # If no MDC/SP operation is allowed in the absorbing state, do not plan for stage T since we know for sure that all states are absorbing
+        nbstages1 = T - t_roll - 1
     
     for i in range(Ni):
         if absorbing_option == 0:
@@ -402,60 +408,31 @@ def RH_2SSP_update_RHS(networkDataSet, hurricaneDataSet, inputParams, absorbingT
             xCons[i].setAttr(GRB.Attr.RHS, xval[i][absorbingT - t_roll])
 
     for j in range(Nj):
-        if S[k_t][0] != 1:
+        if hurricaneDataSet.states[k_t][0] != 1:
             dCons[j].setAttr(GRB.Attr.RHS, SCEN[k_t][j]);
         else:
             dCons[j].setAttr(GRB.Attr.RHS, 0);
     
-    if absorbingT == T:
+    if absorbingT == (T-1):
+        # Plan exactly until the landfall time -- no reimbursement occurred!
         rCons.setAttr(GRB.Attr.RHS, 0);
     else:
         updatedRHS = 0
         
         if absorbing_option == 0:
-            updatedRHS = -sum(
-                sum(
-                    cb[i,ii,t_roll + t] * fval[i,ii,t]
-                    for ii in range(Ni)
-                ) for i in range(N0)
-            ) + sum(ch[i,t_roll + t] * xval[i,t] for i in range(Ni)) + sum(fval[N0-1,i,t] for i in range(Ni)) * cp[t_roll + t]
+            # reimburse the operational cost starting from the terminal stage, since the terminal stage does not allow operation
+            updatedRHS = -sum((
+                sum(sum(cb[i,ii,t_roll + t] * fval[i,ii,t] for ii in range(Ni)) for i in range(N0))
+                + sum(ch[i,t_roll + t] * xval[i,t] for i in range(Ni)) + sum(fval[N0-1,i,t] for i in range(Ni)) * cp[t_roll + t])
+                for t in range(absorbingT-t_roll,nbstages1))
         else:
-            updatedRHS = -sum(
-                sum(
-                    cb[i,ii,t_roll + t] * fval[i,ii,t]
-                    for ii in range(Ni)
-                ) for i in range(N0)
-            ) + sum(ch[i,t_roll + t] * xval[i,t] for i in range(Ni)) + sum(fval[N0-1,i,t] for i in range(Ni)) * cp[t_roll + t]
-        
+            # reimburse the operational cost if they occur after the terminal stage: starting from stage (τ+1)-t_roll
+            updatedRHS = -sum((
+                sum(sum(cb[i,ii,t_roll + t] * fval[i,ii,t] for ii in range(Ni)) for i in range(N0))
+                + sum(ch[i,t_roll + t] * xval[i,t] for i in range(Ni)) + sum(fval[N0-1,i,t] for i in range(Ni)) * cp[t_roll + t])
+                for t in range(absorbingT-t_roll+1,nbstages1))
         rCons.setAttr(GRB.Attr.RHS, updatedRHS);
-    
-    return subproblem
-
-# Main function to solve the rolling horizon problem
-def RH_2SSP_main():
-    k = 1
-    LB = 0
-    UB = 1e10
-    master, x, f, θ, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(t_roll, k, x_init)
-    
-    while k <= K:
-        print("******")
-        print("Rolling horizon iteration k =", k)
-        print("******")
-        
-        # Solve RH_2SSP
-        LB, UB, xval, fval, θval = RH_2SSP_solve_roll(k, t_roll, master, subproblem, x, f, θ, y2, xCons, dCons, rCons)
-        
-        # Update t_roll
-        t_roll += 1
-        if absorbing_option == 1:
-            if t_roll > T:
-                t_roll = 1
-                k += 1
-        else:
-            if t_roll > T - 1:
-                t_roll = 1
-                k += 1
-    
-    return LB, UB, xval, fval, θval
-
+        # Also need to update the coefficients of y[i,j] variables in the 2nd stage
+        for i in range(Ni):
+            for j in range(Nj):
+                y[i,j].Obj = ca[i,j,absorbingT];
