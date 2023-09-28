@@ -326,7 +326,7 @@ def FOSDDP_eval_offline(networkDataSet,hurricaneDataSet,inputParams, m, x, theta
     fa_std = np.std(np.sum(objs_fa, axis=1))
     fa_low = fa_bar - 1.96 * fa_std / np.sqrt(nbOS)
     fa_high = fa_bar + 1.96 * fa_std / np.sqrt(nbOS)
-    CI = fa_bar-far_low;
+    CI = fa_bar-fa_low;
     print("FA...")
     print(f"μ ± 1.96*σ/√NS = {fa_bar} ± {CI}")
     elapsed = time.time() - start
