@@ -272,8 +272,7 @@ def train_models_offline(networkDataSet,hurricaneDataSet,inputParams,solveParams
     return LB, train_time, iter
 
 # Evaluate model
-def FOSDDP_eval_offline(networkDataSet,hurricaneDataSet,inputParams, m, x, theta, FB1Cons, FB2Cons, dCons, osfname):
-    k_init = inputParams.k_init;
+def FOSDDP_eval(networkDataSet,hurricaneDataSet,inputParams,solveParams,osfname):
     Ni = networkDataSet.Ni;
     N0 = networkDataSet.N0;
     T = hurricaneDataSet.T;
@@ -281,7 +280,10 @@ def FOSDDP_eval_offline(networkDataSet,hurricaneDataSet,inputParams, m, x, theta
     nbOS = inputParams.nbOS;
     absorbing_states = hurricaneDataSet.absorbing_states;
 
-    start = time.time()
+    m, x, f, y, z, v, theta, dCons, FB1Cons, FB2Cons = define_models(networkDataSet,hurricaneDataSet,inputParams)
+
+    LB, train_time, iter = train_models_offline(networkDataSet,hurricaneDataSet,inputParams,solveParams, m, x, theta, FB1Cons, FB2Cons, dCons)
+
     OS_paths = pd.read_csv(osfname).values
     objs_fa = np.zeros((nbOS, T))
     #xval_fa = np.empty((nbOS, T), dtype=object)
@@ -289,6 +291,7 @@ def FOSDDP_eval_offline(networkDataSet,hurricaneDataSet,inputParams, m, x, theta
     #yval_fa = np.empty((nbOS, T), dtype=object)
     #zval_fa = np.empty((nbOS, T), dtype=object)
     #vval_fa = np.empty((nbOS, T), dtype=object)
+    start = time.time()
     for s in range(nbOS):
         xval = np.zeros((Ni, T))
         for t in range(T):
@@ -329,9 +332,9 @@ def FOSDDP_eval_offline(networkDataSet,hurricaneDataSet,inputParams, m, x, theta
     CI = fa_bar-fa_low;
     print("FA...")
     print(f"μ ± 1.96*σ/√NS = {fa_bar} ± {CI}")
-    elapsed = time.time() - start
+    test_time = time.time() - start
     #vals = [xval_fa, fval_fa, yval_fa, zval_fa, vval_fa]
-    return [objs_fa, fa_bar, fa_low, fa_high, elapsed]
+    return [objs_fa, fa_bar, fa_low, fa_high, train_time, test_time]
 
 # Update RHS of flow-balance and demand constraint
 def MSP_fa_update_RHS(k_t, t, xval, networkDataSet, hurricaneDataSet, FB1Cons, FB2Cons, dCons):
@@ -348,5 +351,4 @@ def MSP_fa_update_RHS(k_t, t, xval, networkDataSet, hurricaneDataSet, FB1Cons, F
             dCons[t,k_t][j].setAttr(GRB.Attr.RHS, SCEN[k_t][j]);
         else:
             dCons[t,k_t][j].setAttr(GRB.Attr.RHS, 0);
-
 

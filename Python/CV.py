@@ -97,7 +97,6 @@ def clairvoyant_eval(networkDataSet,hurricaneDataSet,inputParams,osfname):
 
     dissipate_option = inputParams.dissipate_option;
     absorbing_option = inputParams.absorbing_option;
-    k_init = inputParams.k_init;
     nbOS = inputParams.nbOS;
 
     T = hurricaneDataSet.T;

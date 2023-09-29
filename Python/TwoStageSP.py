@@ -268,7 +268,7 @@ def solve_first_stage(networkDataSet, master, x, f, theta, nbstages1, nbScens):
         sys.exit(0)
     else:
         LB = master.objVal
-        xval = [[x[i, t].x for t in range(nbstages1)] for i in range(Ni)]
+        xval = [[x[i, t].x for t in range(nbstages1)] for i in range(Ni)] # referred to as xval[i][t]
         fval = [[[f[i, j, t].x for t in range(nbstages1)] for j in range(Ni)] for i in range(N0)]
         thetaval = [theta[n].x for n in range(nbScens)]
         return LB, xval, fval, thetaval
@@ -301,7 +301,8 @@ def solve_second_stage(networkDataSet, hurricaneDataSet, inputParams, solveParam
     
     for n in range(nbScens):
         absorbingT = nodeScenList[(t_roll,k_t)][n][0]
-        RH_2SSP_update_RHS(networkDataSet, hurricaneDataSet, inputParams, absorbingT, k_t, xCons, dCons, rCons, xval, fval, y, t_roll)
+        absorbingState = nodeScenList[(t_roll,k_t)][n][1]
+        RH_2SSP_update_RHS(networkDataSet, hurricaneDataSet, inputParams, absorbingT, absorbingState, xCons, dCons, rCons, xval, fval, y, t_roll)
         Q[n], pi1[n], pi2[n], pi3[n], flag = solve_scen_subproblem(networkDataSet, subproblem, xCons, dCons, rCons)
         
         if flag == -1:
@@ -314,7 +315,7 @@ def solve_second_stage(networkDataSet, hurricaneDataSet, inputParams, solveParam
     for n in range(nbScens):
         if (Q[n] - thetaval[n]) / max(1e-10, abs(Q[n])) > solveParams.cutviol and Q[n] - thetaval[n] > solveParams.cutviol:
             tt = nodeScenList[(t_roll,k_t)][n][0]
-            
+            # tt is the terminal stage
             if absorbing_option == 0:
                 master.addConstr(
                     theta[n] - sum(pi1[n][i] * x[i, tt - t_roll - 1] for i in range(Ni))
@@ -330,10 +331,10 @@ def solve_second_stage(networkDataSet, hurricaneDataSet, inputParams, solveParam
                         sum(sum(
                             cb[i,ii,t_roll + t] * fval[i][ii][t]
                             for ii in range(Ni)
-                        ) for i in range(N0)))
+                        ) for i in range(N0))
                     + sum(ch[i,t_roll + t] * xval[i][t] for i in range(Ni))
                     + sum(fval[N0-1][i][t] for i in range(Ni)) * cp[t_roll + t]
-                    for t in range(tt - t_roll, nbstages1))
+                    for t in range(tt - t_roll, nbstages1)))
                 )
             else:
                 master.addConstr(
@@ -350,10 +351,10 @@ def solve_second_stage(networkDataSet, hurricaneDataSet, inputParams, solveParam
                         sum(sum(
                             cb[i,ii,t_roll + t] * fval[i][ii][t]
                             for ii in range(Ni)
-                        ) for i in range(N0)))
+                        ) for i in range(N0))
                     + sum(ch[i,t_roll + t] * xval[i][t] for i in range(Ni))
                     + sum(fval[N0-1][i][t] for i in range(Ni)) * cp[t_roll + t]
-                    for t in range(tt + 1 - t_roll, nbstages1))
+                    for t in range(tt + 1 - t_roll, nbstages1)))
                 )
             
             flag = 1
@@ -437,3 +438,67 @@ def RH_2SSP_update_RHS(networkDataSet, hurricaneDataSet, inputParams, absorbingT
         for i in range(Ni):
             for j in range(Nj):
                 y[i,j].Obj = ca[i,j,absorbingT];
+
+
+def RH_eval(networkDataSet, hurricaneDataSet, inputParams, solveParams, osfname):
+    T = hurricaneDataSet.T;
+    absorbing_option = inputParams.absorbing_option;
+    nbOS = inputParams.nbOS;
+    absorbing_states = hurricaneDataSet.absorbing_states;
+    dissipate_option = inputParams.dissipate_option;
+    nodeScenList = hurricaneDataSet.nodeScenList;
+    nodeScenWeights = hurricaneDataSet.nodeScenWeights;
+    S = hurricaneDataSet.states;
+    x_0 = networkDataSet.x_0;
+
+    s = 0
+    t_roll = 0
+    x_init = x_0
+
+    # Define the model
+    OS_paths = pd.read_csv(osfname).values 
+    master, x, f, theta, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(networkDataSet, hurricaneDataSet, inputParams, t_roll, OS_paths[s, t_roll]-1, x_init)
+
+    # Solve the model
+    start_time = time.time()
+    LB, UB, xval, fval, thetaval = RH_2SSP_solve_roll(networkDataSet, hurricaneDataSet, inputParams, solveParams, OS_paths[s, t_roll]-1, t_roll, master, subproblem, x, f, theta, y2, xCons, dCons, rCons)
+    timeTrain = time.time() - start_time
+
+    nbScens = len(nodeScenList[t_roll, OS_paths[s, t_roll]-1])
+
+    f1cost = LB - sum(thetaval[n] * nodeScenWeights[t_roll, OS_paths[s, t_roll]-1][n] for n in range(0, nbScens))
+
+    print("training LB =", LB)
+    print("training UB =", UB)
+
+    # Evaluate the model
+    start_time = time.time()
+
+    objs = [f1cost] * nbOS
+    Q = np.zeros(nbOS)
+    pi1 = [None] * nbOS
+    pi2 = [None] * nbOS
+    pi3 = np.zeros(nbOS)
+
+    for s in range(nbOS):
+        absorbingT = -1
+        if dissipate_option == 1:
+            absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if S[x-1][2] == T or S[x-1][0] == 1), None))
+        else:
+            absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if S[x-1][2] == T), None))
+
+        RH_2SSP_update_RHS(networkDataSet, hurricaneDataSet, inputParams, absorbingT, OS_paths[s, absorbingT]-1, xCons, dCons, rCons, xval, fval, y2, t_roll)
+        
+        Q[s], pi1[s], pi2[s], pi3[s], flag = solve_scen_subproblem(networkDataSet, subproblem, xCons, dCons, rCons)
+        objs[s] = objs[s] + Q[s]
+
+    st2SSP_bar = np.mean(objs)
+    st2SSP_std = np.std(objs)
+    st2SSP_low = st2SSP_bar - 1.96 * st2SSP_std / np.sqrt(nbOS)
+    st2SSP_high = st2SSP_bar + 1.96 * st2SSP_std / np.sqrt(nbOS)
+    CI = 1.96 * st2SSP_std / np.sqrt(nbOS)
+
+    print("static 2SSP....")
+    print("μ ± 1.96*σ/√NS =", st2SSP_bar, "±", CI)
+    timeTest = time.time() - start_time
+    return [objs, st2SSP_bar, st2SSP_low, st2SSP_high, timeTrain, timeTest]
