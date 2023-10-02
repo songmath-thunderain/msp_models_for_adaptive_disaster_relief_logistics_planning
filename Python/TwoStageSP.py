@@ -317,6 +317,15 @@ def solve_second_stage(networkDataSet, hurricaneDataSet, inputParams, solveParam
             tt = nodeScenList[(t_roll,k_t)][n][0]
             # tt is the terminal stage
             if absorbing_option == 0:
+                rhsval = Q[n] - sum(pi1[n][i] * xval[i][tt - t_roll -1] for i in range(Ni)) - pi3[n] * (-sum(
+                        sum(sum(
+                            cb[i,ii,t_roll + t] * fval[i][ii][t]
+                            for ii in range(Ni)
+                        ) for i in range(N0))
+                    + sum(ch[i,t_roll + t] * xval[i][t] for i in range(Ni))
+                    + sum(fval[N0-1][i][t] for i in range(Ni)) * cp[t_roll + t]
+                    for t in range(tt - t_roll, nbstages1)));
+                print("rhsval = ", rhsval);
                 master.addConstr(
                     theta[n] - sum(pi1[n][i] * x[i, tt - t_roll - 1] for i in range(Ni))
                     - pi3[n] * (-sum(
@@ -327,16 +336,18 @@ def solve_second_stage(networkDataSet, hurricaneDataSet, inputParams, solveParam
                     + sum(ch[i,t_roll + t] * x[i, t] for i in range(Ni))
                     + sum(f[N0-1,i,t] for i in range(Ni)) * cp[t_roll + t]
                     for t in range(tt - t_roll, nbstages1)
-                    )) >= Q[n] - sum(pi1[n][i] * xval[i][tt - t_roll -1] for i in range(Ni)) - pi3[n] * (-sum(
+                    )) >= rhsval
+                )
+            else:
+                rhsval = Q[n] - sum(pi1[n][i] * xval[i][tt - t_roll] for i in range(Ni)) - pi3[n] * (-sum(
                         sum(sum(
                             cb[i,ii,t_roll + t] * fval[i][ii][t]
                             for ii in range(Ni)
                         ) for i in range(N0))
                     + sum(ch[i,t_roll + t] * xval[i][t] for i in range(Ni))
                     + sum(fval[N0-1][i][t] for i in range(Ni)) * cp[t_roll + t]
-                    for t in range(tt - t_roll, nbstages1)))
-                )
-            else:
+                    for t in range(tt + 1 - t_roll, nbstages1)))
+                print("rhsval = ", rhsval);
                 master.addConstr(
                     theta[n] - sum(pi1[n][i] * x[i, tt - t_roll] for i in range(Ni))
                     - pi3[n] * (-sum(
@@ -347,14 +358,7 @@ def solve_second_stage(networkDataSet, hurricaneDataSet, inputParams, solveParam
                     + sum(ch[i,t_roll + t] * x[i, t] for i in range(Ni))
                     + sum(f[N0-1,i,t] for i in range(Ni)) * cp[t_roll + t]
                     for t in range(tt + 1 - t_roll, nbstages1)
-                    )) >= Q[n] - sum(pi1[n][i] * xval[i][tt - t_roll] for i in range(Ni)) - pi3[n] * (-sum(
-                        sum(sum(
-                            cb[i,ii,t_roll + t] * fval[i][ii][t]
-                            for ii in range(Ni)
-                        ) for i in range(N0))
-                    + sum(ch[i,t_roll + t] * xval[i][t] for i in range(Ni))
-                    + sum(fval[N0-1][i][t] for i in range(Ni)) * cp[t_roll + t]
-                    for t in range(tt + 1 - t_roll, nbstages1)))
+                    )) >= rhsval
                 )
             
             flag = 1
