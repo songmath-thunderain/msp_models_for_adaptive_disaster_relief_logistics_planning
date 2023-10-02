@@ -201,6 +201,9 @@ function RH_2SSP_solve_roll(k_t,t_roll,master,subproblem,x,f,θ,y,xCons,dCons,rC
 		if flag != -1
 			UB = min(firstCost+Qbar,UB);
 		end
+        #print("LB = ", LB);
+		#println(", UB = ", UB);
+        #println("xval = ", xval);
     end
 	if solveIter == 100
 		println("# iterations is maxed out!");
@@ -257,7 +260,15 @@ function solve_second_stage(k_t,t_roll,xval,fval,θval,master,subproblem,x,f,θ,
         #identify the period when the hurricane makes landfall 
 		RH_2SSP_update_RHS(nodeScenList[t_roll,k_t][n][1],nodeScenList[t_roll,k_t][n][2],subproblem,xCons,dCons,rCons,xval,fval,y,t_roll);
         #solve the subproblem and store the dual information
+        println("absorbingT = ", nodeScenList[t_roll,k_t][n][1]);
+        println("rCons = ", normalized_rhs(rCons))
         Q[n], pi1[n], pi2[n], pi3[n], flag = solve_scen_subproblem(subproblem,xCons,dCons,rCons);
+        println("Q[", n-1, "] = ", Q[n], "(", nodeScenList[t_roll,k_t][n][1], ",", nodeScenList[t_roll,k_t][n][2], ")")
+        for i=1:Ni
+            for j=1:Nj
+                println(ca[i,j,nodeScenList[t_roll,k_t][n][1]]);
+            end
+        end
 		if flag == -1
             println("subproblem status is infeasible?!");
             exit(0);
@@ -267,21 +278,33 @@ function solve_second_stage(k_t,t_roll,xval,fval,θval,master,subproblem,x,f,θ,
 
     # cut generation: multi-cut version
     for n=1:nbScens
-	    if (Q[n]-θval[n])/max(1e-10,abs(Q[n])) > ϵ && Q[n]-θval[n] > ϵ
+        if (Q[n]-θval[n])/max(1e-10,abs(Q[n])) > ϵ && Q[n]-θval[n] > ϵ
 			#println("cutviol[", n, "] = ", Q[n]-θval[n], "Q[", n, "] = ", Q[n], "θval[", n, "] = ", θval[n]);
 			tt = nodeScenList[t_roll,k_t][n][1];
 			# tt is the terminal stage
+            #println("pi1[n] = ", pi1[n]);
+            #println("pi3[n] = ", pi3[n]);
 			if absorbing_option == 0
-				@constraint(master,
+                reimbursement = 0
+                if tt+1-t_roll <= nbstages1
+                    reimbursement = -sum((sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)+sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (tt+1-t_roll):nbstages1)
+				end
+                #@printf "reimbursement[%d] = %f \n" n reimbursement
+                @constraint(master,
 				θ[n]-sum(pi1[n][i]*x[i,tt-t_roll] for i=1:Ni)-pi3[n]*(-sum((sum(sum(cb[i,ii,t_roll+t-1]*f[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*x[i,t] for i=1:Ni)+sum(f[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (tt+1-t_roll):nbstages1)) 
 					>= 
-				 Q[n]-sum(pi1[n][i]*xval[i,tt-t_roll] for i=1:Ni)-pi3[n]*(-sum((sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)+sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (tt+1-t_roll):nbstages1))
+				 Q[n]-sum(pi1[n][i]*xval[i,tt-t_roll] for i=1:Ni)-pi3[n]*reimbursement
 					);
 			else
-				@constraint(master,
+                reimbursement = 0
+                if tt+2-t_roll <= nbstages1
+                    reimbursement = -sum((sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)+sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (tt+2-t_roll):nbstages1)
+				end
+                #@printf "reimbursement[%d] = %f \n" n reimbursement
+                @constraint(master,
 				θ[n]-sum(pi1[n][i]*x[i,tt-t_roll+1] for i=1:Ni)-pi3[n]*(-sum((sum(sum(cb[i,ii,t_roll+t-1]*f[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*x[i,t] for i=1:Ni)+sum(f[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (tt+2-t_roll):nbstages1)) 
 					>= 
-				 Q[n]-sum(pi1[n][i]*xval[i,tt-t_roll+1] for i=1:Ni)-pi3[n]*(-sum((sum(sum(cb[i,ii,t_roll+t-1]*fval[i,ii,t] for ii=1:Ni) for i=1:N0)+sum(ch[i,t_roll+t-1]*xval[i,t] for i=1:Ni)+sum(fval[N0,i,t] for i=1:Ni)*h[t_roll+t-1]) for t = (tt+2-t_roll):nbstages1))
+				 Q[n]-sum(pi1[n][i]*xval[i,tt-t_roll+1] for i=1:Ni)-pi3[n]*reimbursement
 					);
 			end
 			flag = 1;
