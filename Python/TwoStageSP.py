@@ -361,7 +361,7 @@ def solve_second_stage(networkDataSet, hurricaneDataSet, inputParams, solveParam
                     + sum(ch[i,t_roll + t] * x[i, t] for i in range(Ni))
                     + sum(f[N0-1,i,t] for i in range(Ni)) * cp[t_roll + t]
                     for t in range(tt + 1 - t_roll, nbstages1)
-                    )) >= Q[n] - sum(pi1[n][i] * xval[i][tt - t_roll -1] for i in range(Ni)) + pi3[n]*reimbursement
+                    )) >= Q[n] - sum(pi1[n][i] * xval[i][tt - t_roll] for i in range(Ni)) + pi3[n]*reimbursement
                 )
             
             flag = 1
