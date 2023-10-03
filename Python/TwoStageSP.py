@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 from misc import *
 import sys
+import copy
 
 # Define the terminal-stage problem: only used when absorbing_option = 1, i.e., MDC/SP operation is allowed to occur
 def terminal_model(networkDataSet,hurricaneDataSet, t_roll, x_init):
@@ -449,7 +450,6 @@ def static_2SSP_eval(networkDataSet, hurricaneDataSet, inputParams, solveParams,
     T = hurricaneDataSet.T;
     absorbing_option = inputParams.absorbing_option;
     nbOS = inputParams.nbOS;
-    absorbing_states = hurricaneDataSet.absorbing_states;
     dissipate_option = inputParams.dissipate_option;
     nodeScenList = hurricaneDataSet.nodeScenList;
     nodeScenWeights = hurricaneDataSet.nodeScenWeights;
@@ -512,7 +512,6 @@ def RH_2SSP_eval(networkDataSet, hurricaneDataSet, inputParams, solveParams, osf
     T = hurricaneDataSet.T;
     absorbing_option = inputParams.absorbing_option;
     nbOS = inputParams.nbOS;
-    absorbing_states = hurricaneDataSet.absorbing_states;
     dissipate_option = inputParams.dissipate_option;
     nodeScenList = hurricaneDataSet.nodeScenList;
     nodeScenWeights = hurricaneDataSet.nodeScenWeights;
@@ -662,3 +661,165 @@ def RH_2SSP_eval(networkDataSet, hurricaneDataSet, inputParams, solveParams, osf
     print("RH 2SSP....")
     print("μ ± 1.96*σ/√NS =", RH2SSP_bar, "±", CI)
     return [objs_RH2SSP, RH2SSP_bar, RH2SSP_low, RH2SSP_high, elapsed_RH2SSP]
+
+def WS_eval(networkDataSet, hurricaneDataSet, inputParams, solveParams, osfname):
+    T = hurricaneDataSet.T;
+    absorbing_option = inputParams.absorbing_option;
+    nbOS = inputParams.nbOS;
+    absorbing_states = hurricaneDataSet.absorbing_states;
+    dissipate_option = inputParams.dissipate_option;
+    nodeLists = hurricaneDataSet.nodeLists;
+    nodeScenList = hurricaneDataSet.nodeScenList;
+    nodeScenWeights = hurricaneDataSet.nodeScenWeights;
+    smallestTransProb = hurricaneDataSet.smallestTransProb; 
+    P_joint = hurricaneDataSet.P_joint; 
+    S = hurricaneDataSet.states;
+    x_0 = networkDataSet.x_0;
+    SCEN = networkDataSet.SCEN;
+    Ni = networkDataSet.Ni;
+    Nj = networkDataSet.Nj;
+    N0 = networkDataSet.N0;
+    cb = networkDataSet.cb;
+    ca = networkDataSet.ca;
+    ch = networkDataSet.ch;
+    cp = networkDataSet.cp;
+    p = networkDataSet.p;
+    q = networkDataSet.q;
+    
+    start_time = time.time()
+
+    # Initialization
+    decisionNodes = copy.deepcopy(nodeLists);
+    objvalNodes = [[] for _ in range(T)]
+    solutionNodes = {}
+
+    for t in range(T):
+        objvalNodes[t] = [0.0] * len(nodeLists[t])
+
+    for t_roll in range(T):
+        for k in range(len(nodeLists[t_roll])):
+            if nodeLists[t_roll][k] not in absorbing_states:
+                # transient state: solving a 2SSP
+                x_init = x_0
+                decisionNodes[t_roll][k] = 1
+                master, x, f, theta, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(networkDataSet, hurricaneDataSet, inputParams, t_roll, nodeLists[t_roll][k], x_init)
+                LB_Roll, UB_Roll, xval_Roll, fval_Roll, thetaval_Roll = RH_2SSP_solve_roll(networkDataSet, hurricaneDataSet, inputParams, solveParams, nodeLists[t_roll][k], t_roll, master, subproblem, x, f, theta, y2, xCons, dCons, rCons)
+                objvalNodes[t_roll][k] = UB_Roll # objGo: expected objval if implementing a two-stage plan now. This is also only temporary, need to do a round of backward cleanup
+                solutionNodes[(t_roll, k)] = [xval_Roll, fval_Roll]
+            else:
+                # absorbing state, we can determine pretty easily if it is Go vs. No-Go
+                if S[nodeLists[t_roll][k]][0] == 1 and dissipate_option == 1:
+                    objvalNodes[t_roll][k] = 0
+                    decisionNodes[t_roll][k] = 0
+                else:
+                    # Hurricane makes landfall with intensity, need to decide to do nothing or do some last-minute operation (although perhaps costly)
+                    costNoGo = p * np.sum(SCEN[nodeLists[t_roll][k]])
+                    if absorbing_option == 0:
+                        objvalNodes[t_roll][k] = costNoGo
+                        decisionNodes[t_roll][k] = 0
+                    else:
+                        #define terminal stage optimality model
+                        m_term, x_term, f_term, y_term, z_term, v_term, dCons_term = terminal_model(networkDataSet, hurricaneDataSet, t_roll, x_0)
+                        for j in range(Nj):
+                            dCons_term[j].setAttr(GRB.Attr.RHS, SCEN[nodeLists[t_roll][k]][j])
+
+                        m_term.optimize()
+
+                        if m_term.status != GRB.OPTIMAL:
+                            print("status_subproblem =", m_term.status)
+                            exit(0)
+                        else:
+                            costGo = m_term.ObjVal
+
+                        if costNoGo < costGo:
+                            objvalNodes[t_roll][k] = costNoGo
+                            decisionNodes[t_roll][k] = 0
+                        else:
+                            objvalNodes[t_roll][k] = costGo
+                            decisionNodes[t_roll][k] = 1
+
+    # Now let's do a round of backward correction!
+    for t in range(T - 2, -1, -1):
+        for k in range(len(nodeLists[t])):
+            if nodeLists[t][k] not in absorbing_states:
+                costNoGo = 0
+                for kk in range(len(nodeLists[t + 1])):
+                    if P_joint[nodeLists[t][k]][nodeLists[t + 1][kk]] > smallestTransProb:
+                        costNoGo += P_joint[nodeLists[t][k]][nodeLists[t + 1][kk]] * objvalNodes[t + 1][kk]
+                if costNoGo < objvalNodes[t][k]:
+                    decisionNodes[t][k] = 0
+                    objvalNodes[t][k] = costNoGo
+
+    train_time = time.time() - start_time
+    start_time = time.time()
+
+    # Start evaluating policies on the decision tree
+    print("Construction is done....Now we do evaluation...")
+
+    OS_paths = pd.read_csv(osfname).values 
+    objs_OOS = np.zeros(nbOS)
+
+    for s in range(nbOS):
+        for t in range(T):
+            ind = list(nodeLists[t]).index(next((x for x in nodeLists[t] if x == (OS_paths[s,t]-1))))
+            if (OS_paths[s, t]-1) in absorbing_states:
+                # if absorbing, just take whatever that is the best, which has been computed above
+                objs_OOS[s] = objvalNodes[t][ind]
+                break
+            else:
+                if decisionNodes[t][ind] == 0:
+                    # Decision is No-go!
+                    continue
+                else:
+                    # Decision is Go!
+                    absorbingT = -1
+                    if dissipate_option == 1:
+                        absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if S[x-1][2] == T or S[x-1][0] == 1), None))
+                    else:
+                        absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if S[x-1][2] == T), None))
+
+                    #define second stage (subproblem) optimality model
+                    subproblem, y, xCons, dCons, rCons = RH_2SSP_second_stage(networkDataSet)
+
+                    if absorbing_option == 0:
+                        for i in range(Ni):
+                            xCons[i].setAttr(GRB.Attr.RHS, solutionNodes[(t, ind)][0][i][absorbingT - t - 1])
+                    else:
+                        for i in range(Ni):
+                            xCons[i].setAttr(GRB.Attr.RHS, solutionNodes[(t, ind)][0][i][absorbingT - t])
+
+                    for i in range(Ni):
+                        for j in range(Nj):
+                            y[i, j].setAttr(GRB.Attr.Obj, ca[i, j, absorbingT])
+
+                    subproblem.optimize()
+
+                    if subproblem.status != GRB.OPTIMAL:
+                        print("status_subproblem =", subproblem.status)
+                        exit(0)
+                    else:
+                        objs_OOS[s] = subproblem.ObjVal
+                        if absorbing_option == 0:
+                            for tt in range(absorbingT - t):
+                                objs_OOS[s] += np.sum(
+                                    cb[i, ii, t + tt - 1] * solutionNodes[(t, ind)][1][i][ii][tt] for ii in range(Ni) for i in range(N0)
+                                ) + np.sum(ch[i, t + tt - 1] * solutionNodes[(t, ind)][0][i][tt] for i in range(Ni)) + np.sum(
+                                    solutionNodes[(t, ind)][1][N0-1][i][tt] for i in range(Ni)
+                                ) * cp[t + tt - 1]
+                        else:
+                            for tt in range(absorbingT + 1 - t):
+                                objs_OOS[s] += np.sum(
+                                    cb[i, ii, t + tt - 1] * solutionNodes[(t, ind)][1][i][ii][tt] for ii in range(Ni) for i in range(N0)
+                                ) + np.sum(ch[i, t + tt - 1] * solutionNodes[(t, ind)][0][i][tt] for i in range(Ni)) + np.sum(
+                                    solutionNodes[(t, ind)][1][N0-1][i][tt] for i in range(Ni)
+                                ) * cp[t + tt - 1]
+                    break
+
+    test_time = time.time() - start_time
+
+    WS_bar = np.mean(objs_OOS)
+    WS_std = np.std(objs_OOS)
+    WS_low = WS_bar - 1.96 * WS_std / np.sqrt(nbOS)
+    WS_high = WS_bar + 1.96 * WS_std / np.sqrt(nbOS)
+    print("WS....")
+    print("μ ± 1.96*σ/√NS =", WS_bar, "±", [WS_low, WS_high])
