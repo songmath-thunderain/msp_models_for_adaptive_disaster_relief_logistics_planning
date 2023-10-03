@@ -117,11 +117,9 @@ def RH_2SSP_first_stage(networkDataSet, hurricaneDataSet, inputParams, t_roll, k
     
     # Define the objective
     m.setObjective(
-        gp.quicksum(
             gp.quicksum(
                 gp.quicksum(cb[i,ii,t+t_roll] * f[i, ii, t] for ii in range(Ni) for i in range(N0))
                 for t in range(nbstages1))
-            for i in range(Ni))
         + gp.quicksum(
             gp.quicksum(ch[i,t_roll+t] * x[i, t] for i in range(Ni))
             for t in range(nbstages1))
@@ -447,7 +445,7 @@ def RH_2SSP_update_RHS(networkDataSet, hurricaneDataSet, inputParams, absorbingT
             y[i,j].setAttr(GRB.Attr.Obj, ca[i,j,absorbingT]);
 
 
-def RH_eval(networkDataSet, hurricaneDataSet, inputParams, solveParams, osfname):
+def static_2SSP_eval(networkDataSet, hurricaneDataSet, inputParams, solveParams, osfname):
     T = hurricaneDataSet.T;
     absorbing_option = inputParams.absorbing_option;
     nbOS = inputParams.nbOS;
@@ -509,3 +507,156 @@ def RH_eval(networkDataSet, hurricaneDataSet, inputParams, solveParams, osfname)
     print("μ ± 1.96*σ/√NS =", st2SSP_bar, "±", CI)
     timeTest = time.time() - start_time
     return [objs, st2SSP_bar, st2SSP_low, st2SSP_high, timeTrain, timeTest]
+
+def RH_2SSP_eval(networkDataSet, hurricaneDataSet, inputParams, solveParams, osfname):
+    T = hurricaneDataSet.T;
+    absorbing_option = inputParams.absorbing_option;
+    nbOS = inputParams.nbOS;
+    absorbing_states = hurricaneDataSet.absorbing_states;
+    dissipate_option = inputParams.dissipate_option;
+    nodeScenList = hurricaneDataSet.nodeScenList;
+    nodeScenWeights = hurricaneDataSet.nodeScenWeights;
+    S = hurricaneDataSet.states;
+    x_0 = networkDataSet.x_0;
+    SCEN = networkDataSet.SCEN;
+    Ni = networkDataSet.Ni;
+    Nj = networkDataSet.Nj;
+    N0 = networkDataSet.N0;
+    cb = networkDataSet.cb;
+    ca = networkDataSet.ca;
+    ch = networkDataSet.ch;
+    cp = networkDataSet.cp;
+    p = networkDataSet.p;
+    q = networkDataSet.q;
+
+    s = 0
+    t_roll = 0
+    x_init = x_0
+
+    start_time = time.time()
+
+    OS_paths = pd.read_csv(osfname).values 
+    # Define and solve the model
+    master_1, x_1, f_1, theta_1, subproblem_1, y2_1, xCons_1, dCons_1, rCons_1 = RH_2SSP_define_models(networkDataSet, hurricaneDataSet, inputParams, t_roll, OS_paths[s, t_roll]-1, x_init)
+    LB_1, UB_1, xval_1, fval_1, thetaval_1 = RH_2SSP_solve_roll(networkDataSet, hurricaneDataSet, inputParams, solveParams, OS_paths[s, t_roll]-1, t_roll, master_1, subproblem_1, x_1, f_1, theta_1, y2_1, xCons_1, dCons_1, rCons_1)
+
+    objs_RH2SSP = np.zeros((nbOS, T))
+
+    for s in range(nbOS):
+        for i in range(N0):
+            for ii in range(Ni):
+                objs_RH2SSP[s, 0] += cb[i, ii, 0] * fval_1[i][ii][0]
+
+        for i in range(Ni):
+            objs_RH2SSP[s, 0] += (ch[i, 0] * xval_1[i][0] + cp[0] * fval_1[N0 - 1][i][0])
+
+    for s in range(nbOS):
+        absorbingT = -1
+        if dissipate_option == 1:
+            absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if S[x-1][2] == T or S[x-1][0] == 1), None))
+        else:
+            absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if S[x-1][2] == T), None))
+
+        x_init = [item[0] for item in xval_1]
+
+        if dissipate_option == 1 and S[OS_paths[s, absorbingT]-1][0] == 1:
+            # This rolling procedure will go all the way until the hurricane gets into the absorbing state of dissipating 
+            for t_roll in range(1, absorbingT):
+                # roll up to t = absorbingT-1
+                master, x, f, theta, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(networkDataSet, hurricaneDataSet, inputParams, t_roll, OS_paths[s, t_roll]-1, x_init)
+                LB_Roll, UB_Roll, xval_Roll, fval_Roll, thetaval_Roll = RH_2SSP_solve_roll(networkDataSet, hurricaneDataSet, inputParams, solveParams, OS_paths[s, t_roll]-1, t_roll, master, subproblem, x, f, theta, y2, xCons, dCons, rCons)
+                
+                #implement xₜ, pay cost, and pass xₜ to new t+1.
+                x_init = [item[0] for item in xval_Roll]
+                objs_RH2SSP[s, t_roll] = 0
+
+                for i in range(N0):
+                    for ii in range(Ni):
+                        objs_RH2SSP[s, t_roll] += cb[i, ii, t_roll] * fval_Roll[i][ii][0]
+
+                for i in range(Ni):
+                    objs_RH2SSP[s, t_roll] += (ch[i, t_roll] * xval_Roll[i][0] + cp[t_roll] * fval_Roll[N0 - 1][i][0])
+
+                if t_roll == (absorbingT - 1):
+                    # Now we get the realization, do the recourse now and finish the rolling procedure
+                    t_roll += 1
+                    objs_RH2SSP[s, t_roll] = 0
+                    # Just salvage all the x_init
+
+				    # Regardless of what the absorbing_option is, we won't do anything but to salvage everything
+                    for i in range(Ni):
+                        objs_RH2SSP[s, t_roll] += xval_Roll[i][0] * q
+        else:
+            # This rolling procedure will stop at t = absorbingT
+            for t_roll in range(1, absorbingT):
+                # roll up to t = absorbingT-1
+                master, x, f, theta, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(networkDataSet, hurricaneDataSet, inputParams, t_roll, OS_paths[s, t_roll]-1, x_init)
+                LB_Roll, UB_Roll, xval_Roll, fval_Roll, thetaval_Roll = RH_2SSP_solve_roll(networkDataSet, hurricaneDataSet, inputParams, solveParams, OS_paths[s, t_roll]-1, t_roll, master, subproblem, x, f, theta, y2, xCons, dCons, rCons)
+                
+                x_init = [item[0] for item in xval_Roll]
+                objs_RH2SSP[s, t_roll] = 0
+
+                for i in range(N0):
+                    for ii in range(Ni):
+                        objs_RH2SSP[s, t_roll] += cb[i, ii, t_roll] * fval_Roll[i][ii][0]
+
+                for i in range(Ni):
+                    objs_RH2SSP[s, t_roll] += (ch[i, t_roll] * xval_Roll[i][0] + cp[t_roll] * fval_Roll[N0 - 1][i][0])
+
+                if t_roll == (absorbingT - 1):
+                    t_roll += 1
+                    objs_RH2SSP[s, t_roll] = 0
+
+                    # Approach #2: based on xvals_Roll[:,0], optimize all the operations together with full information
+                    if absorbing_option == 0:
+                        for i in range(Ni):
+                            xCons[i].setAttr(GRB.Attr.RHS, xval_Roll[i][0])
+                        k_t = OS_paths[s, t_roll]-1
+                        for j in range(Nj):
+                            if S[k_t][0] != 1:
+                                dCons[j].setAttr(GRB.Attr.RHS, SCEN[k_t][j])
+                            else:
+                                dCons[j].setAttr(GRB.Attr.RHS, 0)
+
+                        rCons.setAttr(GRB.Attr.RHS, 0) #This is 0 since the cost in the future has not been paid yet -- this is rolling horizon
+                        # Also need to update the coefficients of y2[i,j] variables in the 2nd stage
+                        for i in range(Ni):
+                            for j in range(Nj):
+                                y2[i, j].setAttr(GRB.Attr.Obj, ca[i, j, absorbingT])
+
+                        subproblem.optimize()
+
+                        if subproblem.status != GRB.OPTIMAL:
+                            print("status =", subproblem.status)
+                            exit(0)
+                        else:
+                            objs_RH2SSP[s, t_roll] += subproblem.objVal
+                    else:
+                        # Solve a terminal stage problem, just as the FA/MSP version
+                        m_term, x_term, f_term, y_term, z_term, v_term, dCons_term = terminal_model(networkDataSet,hurricaneDataSet,t_roll,x_init)
+                        k_t = OS_paths[s, t_roll]-1
+
+                        for j in range(Nj):
+                            if S[k_t][0] != 1:
+                                dCons[j].setAttr(GRB.Attr.RHS, SCEN[k_t][j])
+                            else:
+                                dCons[j].setAttr(GRB.Attr.RHS, 0)
+
+                        m_term.optimize()
+
+                        if m_term.status != GRB.OPTIMAL:
+                            print("status =", m_term.status)
+                            exit(0)
+                        else:
+                            objs_RH2SSP[s, t_roll] += m_term.objVal
+
+    elapsed_RH2SSP = time.time() - start_time
+
+    RH2SSP_bar = np.mean(np.sum(objs_RH2SSP[:, :T], axis=1))
+    RH2SSP_std = np.std(np.sum(objs_RH2SSP[:, :T], axis=1))
+    RH2SSP_low = RH2SSP_bar - 1.96 * RH2SSP_std / np.sqrt(nbOS)
+    RH2SSP_high = RH2SSP_bar + 1.96 * RH2SSP_std / np.sqrt(nbOS)
+    CI = 1.96 * RH2SSP_std / np.sqrt(nbOS)
+    print("RH 2SSP....")
+    print("μ ± 1.96*σ/√NS =", RH2SSP_bar, "±", CI)
+    return [objs_RH2SSP, RH2SSP_bar, RH2SSP_low, RH2SSP_high, elapsed_RH2SSP]

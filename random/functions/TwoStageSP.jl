@@ -201,9 +201,6 @@ function RH_2SSP_solve_roll(k_t,t_roll,master,subproblem,x,f,θ,y,xCons,dCons,rC
 		if flag != -1
 			UB = min(firstCost+Qbar,UB);
 		end
-        #print("LB = ", LB);
-		#println(", UB = ", UB);
-        #println("xval = ", xval);
     end
 	if solveIter == 100
 		println("# iterations is maxed out!");
@@ -260,15 +257,8 @@ function solve_second_stage(k_t,t_roll,xval,fval,θval,master,subproblem,x,f,θ,
         #identify the period when the hurricane makes landfall 
 		RH_2SSP_update_RHS(nodeScenList[t_roll,k_t][n][1],nodeScenList[t_roll,k_t][n][2],subproblem,xCons,dCons,rCons,xval,fval,y,t_roll);
         #solve the subproblem and store the dual information
-        println("absorbingT = ", nodeScenList[t_roll,k_t][n][1]);
-        println("rCons = ", normalized_rhs(rCons))
         Q[n], pi1[n], pi2[n], pi3[n], flag = solve_scen_subproblem(subproblem,xCons,dCons,rCons);
-        println("Q[", n-1, "] = ", Q[n], "(", nodeScenList[t_roll,k_t][n][1], ",", nodeScenList[t_roll,k_t][n][2], ")")
-        for i=1:Ni
-            for j=1:Nj
-                println(ca[i,j,nodeScenList[t_roll,k_t][n][1]]);
-            end
-        end
+
 		if flag == -1
             println("subproblem status is infeasible?!");
             exit(0);
