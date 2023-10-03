@@ -557,8 +557,8 @@ def RH_2SSP_eval(networkDataSet, hurricaneDataSet, inputParams, solveParams, osf
         else:
             absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if S[x-1][2] == T), None))
 
-        x_init = [item[0] for item in xval_1]
-
+        #x_init = [item[0] for item in xval_1]
+        x_init = np.array(xval_1)[:,0]
         if dissipate_option == 1 and S[OS_paths[s, absorbingT]-1][0] == 1:
             # This rolling procedure will go all the way until the hurricane gets into the absorbing state of dissipating 
             for t_roll in range(1, absorbingT):
@@ -567,7 +567,8 @@ def RH_2SSP_eval(networkDataSet, hurricaneDataSet, inputParams, solveParams, osf
                 LB_Roll, UB_Roll, xval_Roll, fval_Roll, thetaval_Roll = RH_2SSP_solve_roll(networkDataSet, hurricaneDataSet, inputParams, solveParams, OS_paths[s, t_roll]-1, t_roll, master, subproblem, x, f, theta, y2, xCons, dCons, rCons)
                 
                 #implement xₜ, pay cost, and pass xₜ to new t+1.
-                x_init = [item[0] for item in xval_Roll]
+                #x_init = [item[0] for item in xval_Roll]
+                x_init = np.array(xval_Roll)[:,0]
                 objs_RH2SSP[s, t_roll] = 0
 
                 for i in range(N0):
@@ -593,7 +594,8 @@ def RH_2SSP_eval(networkDataSet, hurricaneDataSet, inputParams, solveParams, osf
                 master, x, f, theta, subproblem, y2, xCons, dCons, rCons = RH_2SSP_define_models(networkDataSet, hurricaneDataSet, inputParams, t_roll, OS_paths[s, t_roll]-1, x_init)
                 LB_Roll, UB_Roll, xval_Roll, fval_Roll, thetaval_Roll = RH_2SSP_solve_roll(networkDataSet, hurricaneDataSet, inputParams, solveParams, OS_paths[s, t_roll]-1, t_roll, master, subproblem, x, f, theta, y2, xCons, dCons, rCons)
                 
-                x_init = [item[0] for item in xval_Roll]
+                #x_init = [item[0] for item in xval_Roll]
+                x_init = np.array(xval_Roll)[:,0]
                 objs_RH2SSP[s, t_roll] = 0
 
                 for i in range(N0):
@@ -638,15 +640,15 @@ def RH_2SSP_eval(networkDataSet, hurricaneDataSet, inputParams, solveParams, osf
 
                         for j in range(Nj):
                             if S[k_t][0] != 1:
-                                dCons[j].setAttr(GRB.Attr.RHS, SCEN[k_t][j])
+                                dCons_term[j].setAttr(GRB.Attr.RHS, SCEN[k_t][j])
                             else:
-                                dCons[j].setAttr(GRB.Attr.RHS, 0)
+                                dCons_term[j].setAttr(GRB.Attr.RHS, 0)
 
                         m_term.optimize()
 
                         if m_term.status != GRB.OPTIMAL:
                             print("status =", m_term.status)
-                            exit(0)
+                            sys.exit(0)
                         else:
                             objs_RH2SSP[s, t_roll] += m_term.objVal
 
