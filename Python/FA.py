@@ -271,6 +271,22 @@ def train_models_offline(networkDataSet,hurricaneDataSet,inputParams,solveParams
             cutviol_iter += 1
     return LB, train_time, iter
 
+# Update RHS of flow-balance and demand constraint
+def MSP_fa_update_RHS(k_t, t, xval, networkDataSet, hurricaneDataSet, FB1Cons, FB2Cons, dCons):
+    Ni = networkDataSet.Ni;
+    Nj = networkDataSet.Nj;
+    S = hurricaneDataSet.states;
+    T = hurricaneDataSet.T;
+    SCEN = networkDataSet.SCEN;
+    for i in range(Ni):
+        FB1Cons[t,k_t][i].setAttr(GRB.Attr.RHS, xval[i,t - 1])
+        FB2Cons[t,k_t][i].setAttr(GRB.Attr.RHS, xval[i,t - 1])
+    for j in range(Nj):
+        if S[k_t][2] == T and S[k_t][0] != 1:
+            dCons[t,k_t][j].setAttr(GRB.Attr.RHS, SCEN[k_t][j]);
+        else:
+            dCons[t,k_t][j].setAttr(GRB.Attr.RHS, 0);
+
 # Evaluate model
 def FOSDDP_eval(networkDataSet,hurricaneDataSet,inputParams,solveParams,osfname):
     Ni = networkDataSet.Ni;
@@ -335,20 +351,3 @@ def FOSDDP_eval(networkDataSet,hurricaneDataSet,inputParams,solveParams,osfname)
     test_time = time.time() - start
     #vals = [xval_fa, fval_fa, yval_fa, zval_fa, vval_fa]
     return [objs_fa, fa_bar, fa_low, fa_high, train_time, test_time]
-
-# Update RHS of flow-balance and demand constraint
-def MSP_fa_update_RHS(k_t, t, xval, networkDataSet, hurricaneDataSet, FB1Cons, FB2Cons, dCons):
-    Ni = networkDataSet.Ni;
-    Nj = networkDataSet.Nj;
-    S = hurricaneDataSet.states;
-    T = hurricaneDataSet.T;
-    SCEN = networkDataSet.SCEN;
-    for i in range(Ni):
-        FB1Cons[t,k_t][i].setAttr(GRB.Attr.RHS, xval[i,t - 1])
-        FB2Cons[t,k_t][i].setAttr(GRB.Attr.RHS, xval[i,t - 1])
-    for j in range(Nj):
-        if S[k_t][2] == T and S[k_t][0] != 1:
-            dCons[t,k_t][j].setAttr(GRB.Attr.RHS, SCEN[k_t][j]);
-        else:
-            dCons[t,k_t][j].setAttr(GRB.Attr.RHS, 0);
-
