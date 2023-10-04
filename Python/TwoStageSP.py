@@ -761,10 +761,12 @@ def WS_eval(networkDataSet, hurricaneDataSet, inputParams, solveParams, osfname)
 
     for s in range(nbOS):
         for t in range(T):
-            ind = list(nodeLists[t]).index(next((x for x in nodeLists[t] if x == (OS_paths[s,t]-1))))
+            ind = list(nodeLists[t]).index(next((x for x in nodeLists[t] if x == (OS_paths[s,t]-1)), None))
+            print("t = %d, ind = %d" % (t, ind))
             if (OS_paths[s, t]-1) in absorbing_states:
                 # if absorbing, just take whatever that is the best, which has been computed above
                 objs_OOS[s] = objvalNodes[t][ind]
+                print("absorbed! obj = ", objs_OOS[s], "\n");
                 break
             else:
                 if decisionNodes[t][ind] == 0:
@@ -788,6 +790,9 @@ def WS_eval(networkDataSet, hurricaneDataSet, inputParams, solveParams, osfname)
                         for i in range(Ni):
                             xCons[i].setAttr(GRB.Attr.RHS, solutionNodes[(t, ind)][0][i][absorbingT - t])
 
+                    for j in range(Nj):
+                        dCons[j].setAttr(GRB.Attr.RHS, SCEN[OS_paths[s,absorbingT]-1][j]);
+                    
                     for i in range(Ni):
                         for j in range(Nj):
                             y[i, j].setAttr(GRB.Attr.Obj, ca[i, j, absorbingT])
@@ -799,20 +804,22 @@ def WS_eval(networkDataSet, hurricaneDataSet, inputParams, solveParams, osfname)
                         exit(0)
                     else:
                         objs_OOS[s] = subproblem.ObjVal
+                        print("first obj = ", objs_OOS[s]);
                         if absorbing_option == 0:
                             for tt in range(absorbingT - t):
-                                objs_OOS[s] += np.sum(
-                                    cb[i, ii, t + tt - 1] * solutionNodes[(t, ind)][1][i][ii][tt] for ii in range(Ni) for i in range(N0)
-                                ) + np.sum(ch[i, t + tt - 1] * solutionNodes[(t, ind)][0][i][tt] for i in range(Ni)) + np.sum(
+                                objs_OOS[s] += sum(sum(
+                                    cb[i, ii, t + tt] * solutionNodes[(t, ind)][1][i][ii][tt] for ii in range(Ni)) for i in range(N0)
+                                ) + sum(ch[i, t + tt] * solutionNodes[(t, ind)][0][i][tt] for i in range(Ni)) + sum(
                                     solutionNodes[(t, ind)][1][N0-1][i][tt] for i in range(Ni)
-                                ) * cp[t + tt - 1]
+                                ) * cp[t + tt]
                         else:
                             for tt in range(absorbingT + 1 - t):
-                                objs_OOS[s] += np.sum(
-                                    cb[i, ii, t + tt - 1] * solutionNodes[(t, ind)][1][i][ii][tt] for ii in range(Ni) for i in range(N0)
-                                ) + np.sum(ch[i, t + tt - 1] * solutionNodes[(t, ind)][0][i][tt] for i in range(Ni)) + np.sum(
+                                objs_OOS[s] += sum(sum(
+                                    cb[i, ii, t + tt] * solutionNodes[(t, ind)][1][i][ii][tt] for ii in range(Ni)) for i in range(N0)
+                                ) + sum(ch[i, t + tt] * solutionNodes[(t, ind)][0][i][tt] for i in range(Ni)) + sum(
                                     solutionNodes[(t, ind)][1][N0-1][i][tt] for i in range(Ni)
-                                ) * cp[t + tt - 1]
+                                ) * cp[t + tt]
+                    print("Go! obj = ", objs_OOS[s], "\n");
                     break
 
     test_time = time.time() - start_time

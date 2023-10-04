@@ -107,14 +107,14 @@ OS_paths = Matrix(CSV.read(osfname,DataFrame)); #read the out-of-sample file
 objs_OOS = zeros(nbOS);
 
 for s=1:nbOS
-	#print("OOS[", s, "] = (");
+	print("OOS[", s, "] = (");
 	for t = 1:T
-		#print("t = ", t, ":");
 		ind = findfirst(x->x==OS_paths[s,t], nodeLists[t]);
+		print("t = ", t, ", ind = ", ind);
 		if OS_paths[s,t] in absorbing_states
 			# if absorbing, just take whatever that is the best, which has been computed above
 			objs_OOS[s] = objvalNodes[t][ind];
-			#print("absorbed! obj = ", objs_OOS[s], "\n");
+			print("absorbed! obj = ", objs_OOS[s], "\n");
 			break;
 		else
 			if decisionNodes[t][ind] == 0
@@ -157,6 +157,7 @@ for s=1:nbOS
 					exit(0);
     			else
         			objs_OOS[s] = objective_value(subproblem);
+					print("first obj = ", objs_OOS[s]);
 					if absorbing_option == 0
 						for tt = 1:(absorbingT-t)
 							objs_OOS[s] = objs_OOS[s] + (sum(sum(cb[i,ii,t+tt-1]*solutionNodes[t,ind][2][i,ii,tt] for ii=1:Ni) for i=1:N0)+sum(ch[i,t+tt-1]*solutionNodes[t,ind][1][i,tt] for i=1:Ni)+sum(solutionNodes[t,ind][2][N0,i,tt] for i=1:Ni)*h[t+tt-1]);
@@ -167,14 +168,11 @@ for s=1:nbOS
 						end
 					end
 				end
-				#print("Go! obj = ", objs_OOS[s], "\n");
+				print("Go! obj = ", objs_OOS[s], "\n");
 				break;
 			end
 		end
-
 	end
-	#print("obj[", s);
-	#println("] = ", objs_OOS[s]);
 end
 
 
