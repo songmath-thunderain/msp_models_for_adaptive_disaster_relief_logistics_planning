@@ -16,7 +16,7 @@ if __name__ == "__main__":
     parser.add_argument("-ni", "--Ni", type = int, choices = [3,6,9], help = "number of SPs")
     parser.add_argument("-nj", "--Nj", type = int, choices = [10,20,30], help = "number of DPs")
     parser.add_argument("-t", "--tau", type = float, help = "cost-scaling factor")
-    parser.add_argument("-s", "--solution_option", type = int, choices = [1,2,3,4], help = "solution options: 1. FA, 2. static2SSP, 3. RH2SSP, 4. WS")
+    parser.add_argument("-s", "--solution_option", type = int, choices = [0,1,2,3,4], help = "solution options: 0. CV, 1. FA, 2. static2SSP, 3. RH2SSP, 4. WS")
     args = parser.parse_args()
     solveparam_file = args.solveparam
     dissipate_option = args.dissipate_option
@@ -51,15 +51,21 @@ if __name__ == "__main__":
     osfname = "./data/synthetic/OOS" + str(inputParams.k_init) + ".csv"
 
     option = args.solution_option
-    if option == 1:
+    if option == 0:
+        CV = CV(inputParams,hurricaneDataSet,networkDataSet)
+        CV.clairvoyant_eval(osfname) 
+    elif option == 1:
         FA = FA(inputParams,solveParams,hurricaneDataSet,networkDataSet)
         FA.FOSDDP_eval(osfname)
     elif option == 2:
-        static_2SSP_eval(networkDataSet, hurricaneDataSet, inputParams, solveParams, osfname)
+        TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneDataSet,networkDataSet)
+        TwoStageSP.static_2SSP_eval(osfname)
     elif option == 3:
-        RH_2SSP_eval(networkDataSet, hurricaneDataSet, inputParams, solveParams, osfname)
+        TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneDataSet,networkDataSet)
+        TwoStageSP.RH_2SSP_eval(osfname)
     elif option == 4:
-        WS_eval(networkDataSet, hurricaneDataSet, inputParams, solveParams, osfname)
+        TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneDataSet,networkDataSet)
+        TwoStageSP.WS_eval(osfname)
     else:
         print("This option is not available!")
         sys.exit(0);
