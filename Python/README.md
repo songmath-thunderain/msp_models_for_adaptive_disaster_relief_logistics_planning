@@ -8,3 +8,8 @@ We consider a logistics planning problem of prepositioning relief items in prepa
 
 ## paper: preprint version [link](https://arxiv.org/pdf/2201.10678.pdf)
 
+## Example run command: 
+python main.py -p solveParams.yaml -d 1 -a 1 -k 57 -o 1000 -ni 3 -nj 10 -t 0.05 -s 1
+
+## Get help on all different arguments to use:
+python main.py -h
