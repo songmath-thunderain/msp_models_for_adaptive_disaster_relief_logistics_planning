@@ -20,18 +20,18 @@ class FA:
         m = gp.Model()
 
         # Data instantiation
-        Ni = self.networkDataSet.Ni;
-        N0 = self.networkDataSet.N0;
-        Nj = self.networkDataSet.Nj;
-        T = self.hurricaneDataSet.T;
-        ca = self.networkDataSet.ca;
-        cb = self.networkDataSet.cb;
-        ch = self.networkDataSet.ch;
-        cp = self.networkDataSet.cp;
-        p = self.networkDataSet.p;
-        q = self.networkDataSet.q;
-        x_0 = self.networkDataSet.x_0;
-        x_cap = self.networkDataSet.x_cap;
+        Ni = self.networkData.Ni;
+        N0 = self.networkData.N0;
+        Nj = self.networkData.Nj;
+        T = self.hurricaneData.T;
+        ca = self.networkData.ca;
+        cb = self.networkData.cb;
+        ch = self.networkData.ch;
+        cp = self.networkData.cp;
+        p = self.networkData.p;
+        q = self.networkData.q;
+        x_0 = self.networkData.x_0;
+        x_cap = self.networkData.x_cap;
 
         x = {}
         f = {}
@@ -107,10 +107,10 @@ class FA:
     # Define the model
     def define_models(self):
         # Data instantiation
-        Ni = self.networkDataSet.Ni;
-        N0 = self.networkDataSet.N0;
-        Nj = self.networkDataSet.Nj;
-        T = self.hurricaneDataSet.T;
+        Ni = self.networkData.Ni;
+        N0 = self.networkData.N0;
+        Nj = self.networkData.Nj;
+        T = self.hurricaneData.T;
         self.m = {}
         self.x = {}
         self.f = {}
@@ -122,7 +122,7 @@ class FA:
         self.FB1Cons = {}
         self.FB2Cons = {}
         for t in range(T):
-            for k in self.hurricaneDataSet.nodeLists[t]:
+            for k in self.hurricaneData.nodeLists[t]:
                 ind = k
                 (
                     self.m[t, ind],
@@ -135,8 +135,8 @@ class FA:
                     self.dCons[t, ind],
                     self.FB1Cons[t, ind],
                     self.FB2Cons[t, ind]
-                ) = stage_t_state_k_problem(t)
-                if ind in self.hurricaneDataSet.absorbing_states:
+                ) = self.stage_t_state_k_problem(t)
+                if ind in self.hurricaneData.absorbing_states:
                     self.theta[t, ind].setAttr(GRB.Attr.UB, 0);
                     if self.inputParams.absorbing_option == 0:
                         for i in range(Ni):
@@ -150,9 +150,9 @@ class FA:
     # Train model: forward pass
     def FOSDDP_forward_pass_oneSP_iteration(self):
         k_init = self.inputParams.k_init;
-        Ni = self.networkDataSet.Ni;
-        T = self.hurricaneDataSet.T;
-        absorbing_states = self.hurricaneDataSet.absorbing_states;
+        Ni = self.networkData.Ni;
+        T = self.hurricaneData.T;
+        absorbing_states = self.hurricaneData.absorbing_states;
         k_t = k_init-1;
         in_sample = [k_t];
         xval = np.zeros((Ni, T));
@@ -160,9 +160,9 @@ class FA:
         lb = 1e10;
         for t in range(T):
             if t > 0:
-                k_t = MC_sample(in_sample[t - 1], self.hurricaneDataSet)
+                k_t = MC_sample(in_sample[t - 1], self.hurricaneData)
                 in_sample.append(k_t)
-                MSP_fa_update_RHS(k_t, t, xval)
+                self.MSP_fa_update_RHS(k_t, t, xval)
             self.m[t, k_t].optimize()
             if self.m[t, k_t].status != GRB.OPTIMAL:
                 print("Error in Forward Pass")
@@ -181,14 +181,14 @@ class FA:
 
     # Train model: backward pass
     def FOSDDP_backward_pass_oneSP_iteration(self, xval, thetaval, in_sample):
-        T = self.hurricaneDataSet.T;
-        P_joint = self.hurricaneDataSet.P_joint;
-        Ni = self.networkDataSet.Ni;
-        Na = self.hurricaneDataSet.Na;
-        Nb = self.hurricaneDataSet.Nb;
+        T = self.hurricaneData.T;
+        P_joint = self.hurricaneData.P_joint;
+        Ni = self.networkData.Ni;
+        Na = self.hurricaneData.Na;
+        Nb = self.hurricaneData.Nb;
         K = Na*Nb*T;
-        nodeLists = self.hurricaneDataSet.nodeLists;
-        absorbing_states = self.hurricaneDataSet.absorbing_states;
+        nodeLists = self.hurricaneData.nodeLists;
+        absorbing_states = self.hurricaneData.absorbing_states;
         cutviolFlag = False;
         for t in range(len(in_sample)-1, 0, -1):
             # Solving all stage-t problems
@@ -198,7 +198,7 @@ class FA:
             pi2 = [[0] * Ni for _ in range(K)]
             sample_n = in_sample[t-1]; # the state observed at time t-1
             for k in range(len(nodeLists[t])):
-                MSP_fa_update_RHS(nodeLists[t][k], t, xval)
+                self.MSP_fa_update_RHS(nodeLists[t][k], t, xval)
                 self.m[t, nodeLists[t][k]].optimize()
                 if self.m[t, nodeLists[t][k]].status != GRB.OPTIMAL:
                     print("Error in Backward Pass")
@@ -215,7 +215,7 @@ class FA:
                 if nodeLists[t - 1][n] not in absorbing_states:
                     Qvalue = 0
                     for k in range(len(nodeLists[t])):
-                        if P_joint[nodeLists[t - 1][n]][nodeLists[t][k]] > self.hurricaneDataSet.smallestTransProb:
+                        if P_joint[nodeLists[t - 1][n]][nodeLists[t][k]] > self.hurricaneData.smallestTransProb:
                             Qvalue += Q[nodeLists[t][k]] * P_joint[nodeLists[t - 1][n]][nodeLists[t][k]]              					# check if cut is violated at the sample path encountered in the forward pass
                     
                     # check if cut is violated at the sample path encountered in the forward pass
@@ -227,7 +227,7 @@ class FA:
                     cutcoef = [0] * Ni
                     cutrhs_xval = 0
                     for k in range(len(nodeLists[t])):
-                        if P_joint[nodeLists[t - 1][n]][nodeLists[t][k]] > self.hurricaneDataSet.smallestTransProb:
+                        if P_joint[nodeLists[t - 1][n]][nodeLists[t][k]] > self.hurricaneData.smallestTransProb:
                             for i in range(Ni):
                                 tempval = (pi1[nodeLists[t][k]][i]+pi2[nodeLists[t][k]][i]) * P_joint[nodeLists[t - 1][n]][nodeLists[t][k]]
                                 cutcoef[i] += tempval
@@ -241,9 +241,9 @@ class FA:
 
     # Train model
     def train_models_offline(self):
-        x_0 = self.networkDataSet.x_0;
-        T = self.hurricaneDataSet.T;
-        Ni = self.networkDataSet.Ni;
+        x_0 = self.networkData.x_0;
+        T = self.hurricaneData.T;
+        Ni = self.networkData.Ni;
         k_init = self.inputParams.k_init;
         # Set the RHS of the first_stage problem
         for i in range(Ni):
@@ -263,7 +263,7 @@ class FA:
         while True:
             iter += 1
             # Forward pass
-            xval, thetaval, lb, in_sample = FOSDDP_forward_pass_oneSP_iteration()
+            xval, thetaval, lb, in_sample = self.FOSDDP_forward_pass_oneSP_iteration()
             LB.append(lb)
             # Termination check
             flag, Elapsed = termination_check(iter, relative_gap, LB, start, cutviol_iter, self.solveParams)
@@ -271,7 +271,7 @@ class FA:
                 train_time = Elapsed
                 break
             # Backward pass (if not terminated)
-            cutviolFlag = FOSDDP_backward_pass_oneSP_iteration(xval, thetaval, in_sample)
+            cutviolFlag = self.FOSDDP_backward_pass_oneSP_iteration(xval, thetaval, in_sample)
             if cutviolFlag:
                 cutviol_iter = 0
             else:
@@ -280,11 +280,11 @@ class FA:
 
     # Update RHS of flow-balance and demand constraint
     def MSP_fa_update_RHS(self, k_t, t, xval):
-        Ni = self.networkDataSet.Ni;
-        Nj = self.networkDataSet.Nj;
-        S = self.hurricaneDataSet.states;
-        T = self.hurricaneDataSet.T;
-        SCEN = self.networkDataSet.SCEN;
+        Ni = self.networkData.Ni;
+        Nj = self.networkData.Nj;
+        S = self.hurricaneData.states;
+        T = self.hurricaneData.T;
+        SCEN = self.networkData.SCEN;
         for i in range(Ni):
             self.FB1Cons[t,k_t][i].setAttr(GRB.Attr.RHS, xval[i,t - 1])
             self.FB2Cons[t,k_t][i].setAttr(GRB.Attr.RHS, xval[i,t - 1])
@@ -296,16 +296,16 @@ class FA:
 
     # Evaluate model
     def FOSDDP_eval(self, osfname):
-        Ni = self.networkDataSet.Ni;
-        N0 = self.networkDataSet.N0;
-        T = self.hurricaneDataSet.T;
+        Ni = self.networkData.Ni;
+        N0 = self.networkData.N0;
+        T = self.hurricaneData.T;
         absorbing_option = self.inputParams.absorbing_option;
         nbOS = self.inputParams.nbOS;
-        absorbing_states = self.hurricaneDataSet.absorbing_states;
+        absorbing_states = self.hurricaneData.absorbing_states;
 
-        define_models()
+        self.define_models()
 
-        LB, train_time, iter = train_models_offline()
+        LB, train_time, iter = self.train_models_offline()
 
         OS_paths = pd.read_csv(osfname).values
         objs_fa = np.zeros((nbOS, T))
@@ -320,7 +320,7 @@ class FA:
             for t in range(T):
                 k_t = OS_paths[s, t]-1
                 if t > 1:
-                    MSP_fa_update_RHS(k_t, t, xval)
+                    self.MSP_fa_update_RHS(k_t, t, xval)
                 self.m[t,k_t].optimize()
                 if self.m[t,k_t].status != GRB.OPTIMAL:
                     print(" in evaluation")

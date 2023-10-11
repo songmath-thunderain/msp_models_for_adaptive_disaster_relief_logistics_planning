@@ -52,7 +52,7 @@ if __name__ == "__main__":
 
     option = args.solution_option
     if option == 1:
-        FA = FA(inputParams,solveParams,hurricaneData,networkData)
+        FA = FA(inputParams,solveParams,hurricaneDataSet,networkDataSet)
         FA.FOSDDP_eval(osfname)
     elif option == 2:
         static_2SSP_eval(networkDataSet, hurricaneDataSet, inputParams, solveParams, osfname)
