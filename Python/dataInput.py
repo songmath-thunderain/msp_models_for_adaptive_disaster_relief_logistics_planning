@@ -4,17 +4,6 @@ import sys;
 import csv;
 from dataClass import inputParams, solveParams, hurricaneData, networkData;
 
-def solveParamsInput():
-    # all are default parameters for solving the problem
-    max_iter = 100000;
-    stall = 200;
-    cutviol_maxiter = 100000;
-    nbhrs = 3;
-    time_limit = nbhrs * 60 ** 2;
-    eps = 1e-4;
-    solveParamSet = solveParams(max_iter,stall,cutviol_maxiter,time_limit,eps);
-    return solveParamSet;
-
 def hurricaneInput(intensityFile, locationFile, landfallFile, inputParams):
     dissipate_option = inputParams.dissipate_option;
 
