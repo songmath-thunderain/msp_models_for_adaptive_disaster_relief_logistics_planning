@@ -17,10 +17,12 @@ if __name__ == "__main__":
     parser.add_argument("-nj", "--Nj", type = int, choices = [10,20,30], help = "number of DPs")
     parser.add_argument("-t", "--tau", type = float, help = "cost-scaling factor")
     parser.add_argument("-s", "--solution_option", type = int, choices = [0,1,2,3,4], help = "solution options: 0. CV, 1. FA, 2. static2SSP, 3. RH2SSP, 4. WS")
+    parser.add_argument("-i", "--instance_option", type = int, choices = [0,1], help = "instance option: 0 -- Synthetic, 1 -- Case Study")
     args = parser.parse_args()
     solveparam_file = args.solveparam
     dissipate_option = args.dissipate_option
     absorbing_option = args.absorbing_option
+    instance_option = args.instance_option
     k_init = args.k_init
     oos = args.oos
     Ni = args.Ni
@@ -38,34 +40,42 @@ if __name__ == "__main__":
     inputParams = inputParams(dissipate_option, absorbing_option, k_init, oos);
     solveParams = solveParams(max_iter, stall, cutviol_maxiter, time_limit, cutviol);
 
-    intensityFile = 'data/synthetic/intensity.csv';
-    locationFile = 'data/synthetic/location.csv';
-    landfallFile = 'data/synthetic/landfall_7.csv';
+    if instance_option == 0:
+        # synthetic instance family
+        intensityFile = 'data/synthetic/intensity.csv';
+        locationFile = 'data/synthetic/location.csv';
+        landfallFile = 'data/synthetic/landfall.csv';
+        hurricaneDataSet = hurricaneInputSyn(intensityFile, locationFile, landfallFile, inputParams)
 
-    hurricaneDataSet = hurricaneInput(intensityFile, locationFile, landfallFile, inputParams)
+        netNodesFile = 'data/synthetic/nodes.csv';
+        netParamsFile = 'data/synthetic/netParams.csv';
+        networkDataSet = networkInputSyn(Ni,Nj,tau,netNodesFile,netParamsFile,hurricaneDataSet)
 
-    netNodesFile = 'data/synthetic/nodes.csv';
-    netParamsFile = 'data/synthetic/netParams.csv';
-    networkDataSet = networkInput(Ni,Nj,tau,netNodesFile,netParamsFile,hurricaneDataSet)
+        osfname = "./data/synthetic/OOS" + str(inputParams.k_init) + ".csv"
 
-    osfname = "./data/synthetic/OOS" + str(inputParams.k_init) + ".csv"
-
-    option = args.solution_option
-    if option == 0:
-        CV = CV(inputParams,hurricaneDataSet,networkDataSet)
-        CV.clairvoyant_eval(osfname) 
-    elif option == 1:
-        FA = FA(inputParams,solveParams,hurricaneDataSet,networkDataSet)
-        FA.FOSDDP_eval(osfname)
-    elif option == 2:
-        TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneDataSet,networkDataSet)
-        TwoStageSP.static_2SSP_eval(osfname)
-    elif option == 3:
-        TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneDataSet,networkDataSet)
-        TwoStageSP.RH_2SSP_eval(osfname)
-    elif option == 4:
-        TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneDataSet,networkDataSet)
-        TwoStageSP.WS_eval(osfname)
+        option = args.solution_option
+        if option == 0:
+            CV = CV(inputParams,hurricaneDataSet,networkDataSet)
+            CV.clairvoyant_eval(osfname) 
+        elif option == 1:
+            FA = FA(inputParams,solveParams,hurricaneDataSet,networkDataSet)
+            FA.FOSDDP_eval(osfname)
+        elif option == 2:
+            TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneDataSet,networkDataSet)
+            TwoStageSP.static_2SSP_eval(osfname)
+        elif option == 3:
+            TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneDataSet,networkDataSet)
+            TwoStageSP.RH_2SSP_eval(osfname)
+        elif option == 4:
+            TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneDataSet,networkDataSet)
+            TwoStageSP.WS_eval(osfname)
+        else:
+            print("This option is not available!")
+            sys.exit(0);
+    elif instance_option == 1:
+        # case-study instance
+        print("Not implemented yet!")
+        exit(0);
     else:
-        print("This option is not available!")
-        sys.exit(0);
+        print("ERROR: instance_option has to be 0 or 1!")
+        exit(0);

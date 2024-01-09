@@ -8,7 +8,7 @@ from dataClass import inputParams, solveParams, hurricaneData, networkData
 
 #sample a markovian state
 def MC_sample(current_state,hurricaneDataSet):
-    K = hurricaneDataSet.Na*hurricaneDataSet.Nb*hurricaneDataSet.T;
+    K = hurricaneDataSet.K;
     states = np.arange(K)
     weights = hurricaneDataSet.P_joint[current_state, :]
     kk = np.random.choice(states, p=weights)
