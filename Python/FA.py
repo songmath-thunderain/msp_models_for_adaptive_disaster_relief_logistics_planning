@@ -184,9 +184,7 @@ class FA:
         T = self.hurricaneData.T;
         P_joint = self.hurricaneData.P_joint;
         Ni = self.networkData.Ni;
-        Na = self.hurricaneData.Na;
-        Nb = self.hurricaneData.Nb;
-        K = Na*Nb*T;
+        K = self.hurricaneData.K;
         nodeLists = self.hurricaneData.nodeLists;
         absorbing_states = self.hurricaneData.absorbing_states;
         cutviolFlag = False;
