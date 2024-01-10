@@ -3,6 +3,7 @@ import pandas as pd;
 import sys;
 import csv;
 from dataClass import inputParams, solveParams, hurricaneData, networkData;
+from misc import *
 
 def hurricaneInputSyn(intensityFile, locationFile, landfallFile, inputParams):
     # hurricane data class generator from synthetic instances
@@ -64,63 +65,14 @@ def hurricaneInputSyn(intensityFile, locationFile, landfallFile, inputParams):
 
     # Create a complete set of reachable nodes over time, starting from the initial state k_init
     k_init = inputParams.k_init;
-    nodeLists = []
-    nodeLists.append([k_init-1])
-    stopFlag = False
+    nodeLists = createNodes(k_init, K, absorbing_states, P_joint, smallestTransProb); # List of MC states in each stage
+    nodeScenList, nodeScenWeights = createNodeScens(nodeLists, T, absorbing_states, P_joint, smallestTransProb)
 
-    while not stopFlag:
-        tempList = []
-        stopFlag = True
-
-        for k in range(K):
-            for kk in nodeLists[-1]:
-                if (kk not in absorbing_states) and (P_joint[kk][k] > smallestTransProb):
-                    tempList.append(k)
-
-                    if k not in absorbing_states:
-                        stopFlag = False
-                    break
-
-        nodeLists.append(tempList)
-
-    # Create a list of scenarios, along with the probability of occurrence, for each transient state node in the nodeList (set of reachable nodes from the initial state k_init)
-    nodeScenList = {}
-    nodeScenWeights = {}
-
-    for t in range(T - 2, -1, -1):
-        # Starting from T-2 since at T-1, all states should be absorbing
-        for k in range(len(nodeLists[t])):
-            if nodeLists[t][k] not in absorbing_states:
-                nodeScenList[(t, nodeLists[t][k])] = []
-                nodeScenWeights[(t, nodeLists[t][k])] = []
-
-                for kk in range(len(nodeLists[t + 1])):
-                    if P_joint[nodeLists[t][k]][nodeLists[t + 1][kk]] > smallestTransProb:
-                        if nodeLists[t + 1][kk] in absorbing_states:
-                            # absorbing states, directly append
-                            nodeScenList[(t, nodeLists[t][k])].append((t + 1, nodeLists[t + 1][kk]))
-                            nodeScenWeights[(t, nodeLists[t][k])].append(P_joint[nodeLists[t][k]][nodeLists[t + 1][kk]])
-                        else:
-                            # transient states, append the corresponding scenlist and weights
-                            for j in range(len(nodeScenList[(t + 1, nodeLists[t + 1][kk])])):
-                                if (nodeScenList[(t + 1, nodeLists[t + 1][kk])][j] not in nodeScenList[(t, nodeLists[t][k])]):
-                                    # Not in the scenario list, so go ahead and add it
-                                    nodeScenList[(t, nodeLists[t][k])].append(nodeScenList[(t + 1, nodeLists[t + 1][kk])][j])
-                                    nodeScenWeights[(t, nodeLists[t][k])].append(P_joint[nodeLists[t][k]][nodeLists[t + 1][kk]] * nodeScenWeights[(t + 1, nodeLists[t + 1][kk])][j])
-                                else:
-                                    # in the scenario list, increment the probability
-                                    ind = list(nodeScenList[(t, nodeLists[t][k])]).index(next((x for x in nodeScenList[(t, nodeLists[t][k])] if x == nodeScenList[(t + 1, nodeLists[t + 1][kk])][j]), None))
-                                    nodeScenWeights[(t, nodeLists[t][k])][ind] += P_joint[nodeLists[t][k]][nodeLists[t + 1][kk]]*nodeScenWeights[(t + 1, nodeLists[t + 1][kk])][j]
-
-                if abs(sum(nodeScenWeights[(t, nodeLists[t][k])]) - 1) > 1e-6:
-                    print("Wrong!")
-                    sys.exit(0)
-
-    hurricaneDataSet = hurricaneData(P_intensity, P_location, P_landfall, Na, K, T, P_joint, S, absorbing_states, smallestTransProb, nodeLists, nodeScenList, nodeScenWeights);
+    hurricaneDataSet = hurricaneData(Na, K, T, P_joint, S, absorbing_states, smallestTransProb, nodeLists, nodeScenList, nodeScenWeights);
     return hurricaneDataSet;
     
 
-def hurricaneInputCase(intensityFile, trackProbFile, trackErrorFile, landfallFile, inputParams):
+def hurricaneInputCase(intensityFile, trackProbFile, trackErrorFile, landfallFile):
     # hurricane data class generator from synthetic instances
     # Default: trackProbFile = "data/case-study/mc_track_transition_prob_at_t"
     # Default: trackErrorFile = "data/case-study/mc_track_mean_error_at_t"
@@ -163,22 +115,23 @@ def hurricaneInputCase(intensityFile, trackProbFile, trackErrorFile, landfallFil
     absorbing_states = [];  # list of absorbing states
 
     k1 = 0;  # counter for the number of states
+    S[0] = [1,1,1];
  
-    for t in range(1,Nc+1):
-        for l in range(1,len(trackStates[t])+1):
+    for t in range(2,Nc+1):
+        for l in range(1,len(trackStates[t-2])+1):
             for k in range(1,Na+1):
                 k1 += 1;
-                S[k1-1] = [k, l, t]
+                S[k1] = [k, l, t]
                 if t == Nc:
-                    absorbing_states.append(k1-1);
+                    absorbing_states.append(k1);
  
     for k in range(K):
         if S[k][2] == T:
             P_joint[k,k] = 1; # absorbing
         else:
             for kk in range(K):
-                if (S[k][1] <= np.shape(trackMatrices[S[k][2]])[0]) and (S[kk][1] <= np.shape(trackMatrices[S[k][2]])[1]):
-                    P_joint[k,kk] = P_intensity[S[k][0],S[kk][0]]*trackMatrices[S[k][2]][S[k][1],S[kk][1]]*P_landfall[S[k][2],S[kk][2]]
+                if (S[k][1] <= np.shape(trackMatrices[S[k][2]-1])[0]) and (S[kk][1] <= np.shape(trackMatrices[S[k][2]-1])[1]):
+                    P_joint[k,kk] = P_intensity[S[k][0]-1,S[kk][0]-1]*trackMatrices[S[k][2]-1][S[k][1]-1,S[kk][1]-1]*P_landfall[S[k][2]-1,S[kk][2]-1]
 
     # normalize the probabilities
     P_temp = np.copy(P_joint);
@@ -191,61 +144,12 @@ def hurricaneInputCase(intensityFile, trackProbFile, trackErrorFile, landfallFil
     nonzero_probs = P_jointVec[P_jointVec != 0];
     smallestTransProb = np.min(nonzero_probs) * 0.5;
 
-    # Create a complete set of reachable nodes over time, starting from the initial state k_init
-    k_init = inputParams.k_init;
-    nodeLists = []
-    nodeLists.append([k_init-1])
-    stopFlag = False
+    # Create a complete set of reachable nodes over time, starting from the initial state k_init = 1
+    k_init = 1
+    nodeLists = createNodes(k_init, K, absorbing_states, P_joint, smallestTransProb); # List of MC states in each stage
+    nodeScenList, nodeScenWeights = createNodeScens(nodeLists, T, absorbing_states, P_joint, smallestTransProb)
 
-    while not stopFlag:
-        tempList = []
-        stopFlag = True
-
-        for k in range(K):
-            for kk in nodeLists[-1]:
-                if (kk not in absorbing_states) and (P_joint[kk][k] > smallestTransProb):
-                    tempList.append(k)
-
-                    if k not in absorbing_states:
-                        stopFlag = False
-                    break
-
-        nodeLists.append(tempList)
-
-    # Create a list of scenarios, along with the probability of occurrence, for each transient state node in the nodeList (set of reachable nodes from the initial state k_init)
-    nodeScenList = {}
-    nodeScenWeights = {}
-
-    for t in range(T - 2, -1, -1):
-        # Starting from T-2 since at T-1, all states should be absorbing
-        for k in range(len(nodeLists[t])):
-            if nodeLists[t][k] not in absorbing_states:
-                nodeScenList[(t, nodeLists[t][k])] = []
-                nodeScenWeights[(t, nodeLists[t][k])] = []
-
-                for kk in range(len(nodeLists[t + 1])):
-                    if P_joint[nodeLists[t][k]][nodeLists[t + 1][kk]] > smallestTransProb:
-                        if nodeLists[t + 1][kk] in absorbing_states:
-                            # absorbing states, directly append
-                            nodeScenList[(t, nodeLists[t][k])].append((t + 1, nodeLists[t + 1][kk]))
-                            nodeScenWeights[(t, nodeLists[t][k])].append(P_joint[nodeLists[t][k]][nodeLists[t + 1][kk]])
-                        else:
-                            # transient states, append the corresponding scenlist and weights
-                            for j in range(len(nodeScenList[(t + 1, nodeLists[t + 1][kk])])):
-                                if (nodeScenList[(t + 1, nodeLists[t + 1][kk])][j] not in nodeScenList[(t, nodeLists[t][k])]):
-                                    # Not in the scenario list, so go ahead and add it
-                                    nodeScenList[(t, nodeLists[t][k])].append(nodeScenList[(t + 1, nodeLists[t + 1][kk])][j])
-                                    nodeScenWeights[(t, nodeLists[t][k])].append(P_joint[nodeLists[t][k]][nodeLists[t + 1][kk]] * nodeScenWeights[(t + 1, nodeLists[t + 1][kk])][j])
-                                else:
-                                    # in the scenario list, increment the probability
-                                    ind = list(nodeScenList[(t, nodeLists[t][k])]).index(next((x for x in nodeScenList[(t, nodeLists[t][k])] if x == nodeScenList[(t + 1, nodeLists[t + 1][kk])][j]), None))
-                                    nodeScenWeights[(t, nodeLists[t][k])][ind] += P_joint[nodeLists[t][k]][nodeLists[t + 1][kk]]*nodeScenWeights[(t + 1, nodeLists[t + 1][kk])][j]
-
-                if abs(sum(nodeScenWeights[(t, nodeLists[t][k])]) - 1) > 1e-6:
-                    print("Wrong!")
-                    sys.exit(0)
-
-    hurricaneDataSet = hurricaneData(P_intensity, P_location, P_landfall, Na, K, T, P_joint, S, absorbing_states, smallestTransProb, nodeLists, nodeScenList, nodeScenWeights);
+    hurricaneDataSet = hurricaneData(Na, K, T, P_joint, S, absorbing_states, smallestTransProb, nodeLists, nodeScenList, nodeScenWeights);
     return hurricaneDataSet;
 
 def networkInputSyn(Ni,Nj,costScalingFactor,netNodesFile,netParamsFile,hurricaneDataSet):
@@ -374,15 +278,15 @@ def networkInputSyn(Ni,Nj,costScalingFactor,netNodesFile,netParamsFile,hurricane
     return networkDataSet;
 
 
-def networkInputCase(costScalingFactor,netFolderPath,hurricaneDataSet):
+def networkInputCase(costScalingFactor,netFolderPath,netParamsFile,hurricaneDataSet):
     # network data class generator from synthetic instances
-    d_JI = pd.read_csv(netFolderPath+"/d_JI.csv");
-    d_II = pd.read_csv(netFolderPath+"/d_II.csv");
-    d_KI = pd.read_csv(netFolderPath+"/d_KI.csv");
-    d_KJ = pd.read_csv(netFolderPath+"/d_KJ.csv");
-    d_SJ = pd.read_csv(netFolderPath+"/d_SJ.csv");
-    x_cap = pd.read_csv(netFolderPath+"/x_cap.csv");
-    max_D = pd.read_csv(netFolderPath+"/demand.csv");
+    d_JI = pd.read_csv(netFolderPath+"/d_JI.csv").values;
+    d_II = pd.read_csv(netFolderPath+"/d_II.csv").values;
+    d_KI = pd.read_csv(netFolderPath+"/d_KI.csv").values;
+    d_KJ = pd.read_csv(netFolderPath+"/d_KJ.csv").values;
+    d_SJ = pd.read_csv(netFolderPath+"/d_SJ.csv").values;
+    x_cap = pd.read_csv(netFolderPath+"/x_cap.csv").values[0];
+    max_D = pd.read_csv(netFolderPath+"/demand.csv").values;
 
     Nj = np.shape(d_JI)[0]; # number of DPs
     Ni = np.shape(d_JI)[1]; # number of SPs
@@ -427,17 +331,17 @@ def networkInputCase(costScalingFactor,netFolderPath,hurricaneDataSet):
                 if i < N0-1:
                     cb[i, ii, t] = fuel * d_II[i,ii] * (1 + costScalingFactor * t)
                 else:
-                    cb[i, ii, t] = fuel * d_KI[ii] * (1 + costScalingFactor * t)
+                    cb[i, ii, t] = fuel * d_KI[0,ii] * (1 + costScalingFactor * t)
 
     # Unit cost of transporting items from MDC/SP i to/between a demand point j
     ca = np.empty((N0, Nj, T))
     for i in range(N0):
         for j in range(Nj):
             for t in range(T):
-                if i < N0:
+                if i < N0-1:
                     ca[i, j, t] = fuel * d_JI[j,i] * (1 + costScalingFactor * t)
                 else:
-                    ca[i, j, t] = fuel * d_KJ[j] * (1 + costScalingFactor * t)
+                    ca[i, j, t] = fuel * d_KJ[0,j] * (1 + costScalingFactor * t)
 
     cp = np.empty(T)
     ch = np.empty((Ni, T))
@@ -458,11 +362,9 @@ def networkInputCase(costScalingFactor,netFolderPath,hurricaneDataSet):
         l = states[k - 1][1]
 
         for j in range(1, Nj + 1):
-            dLandfall = d_SJ[states[k-1][1],j-1]
+            dLandfall = d_SJ[states[k-1][1]-1,j-1]
             if dLandfall <= cMax:
-                scen[j - 1] = (
-                    max_D[j-1] * (1 - (dLandfall / cMax)) * (a - 1) ** 2 / ((Na - 1) ** 2)
-                )
+                scen[j - 1] = max_D[0,j-1] * (1 - (dLandfall / cMax)) * (a - 1) ** 2 / ((Na - 1) ** 2)
             else:
                 scen[j - 1] = 0
 

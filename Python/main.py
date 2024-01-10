@@ -24,6 +24,9 @@ if __name__ == "__main__":
     absorbing_option = args.absorbing_option
     instance_option = args.instance_option
     k_init = args.k_init
+    if instance_option == 1:
+        # case-study instance, k_init is always 1 regardless
+        k_init = 1;
     oos = args.oos
     Ni = args.Ni
     Nj = args.Nj
@@ -52,30 +55,39 @@ if __name__ == "__main__":
         networkDataSet = networkInputSyn(Ni,Nj,tau,netNodesFile,netParamsFile,hurricaneDataSet)
 
         osfname = "./data/synthetic/OOS" + str(inputParams.k_init) + ".csv"
-
-        option = args.solution_option
-        if option == 0:
-            CV = CV(inputParams,hurricaneDataSet,networkDataSet)
-            CV.clairvoyant_eval(osfname) 
-        elif option == 1:
-            FA = FA(inputParams,solveParams,hurricaneDataSet,networkDataSet)
-            FA.FOSDDP_eval(osfname)
-        elif option == 2:
-            TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneDataSet,networkDataSet)
-            TwoStageSP.static_2SSP_eval(osfname)
-        elif option == 3:
-            TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneDataSet,networkDataSet)
-            TwoStageSP.RH_2SSP_eval(osfname)
-        elif option == 4:
-            TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneDataSet,networkDataSet)
-            TwoStageSP.WS_eval(osfname)
-        else:
-            print("This option is not available!")
-            sys.exit(0);
     elif instance_option == 1:
         # case-study instance
-        print("Not implemented yet!")
-        exit(0);
+        intensityFile = 'data/case-study/mc_int_transition_prob.csv';
+        trackProbFile = 'data/case-study/mc_track_transition_prob_at_t';
+        trackErrorFile = 'data/case-study/mc_track_mean_error_at_t';
+        landfallFile = 'data/case-study/landfall.csv';
+        hurricaneDataSet = hurricaneInputCase(intensityFile, trackProbFile, trackErrorFile, landfallFile);
+
+        netFolderPath = 'data/case-study';
+        netParamsFile = 'data/case-study/netParams.csv';
+        networkDataSet = networkInputCase(tau, netFolderPath, netParamsFile, hurricaneDataSet);
+
+        osfname = "./data/case-study/OOS1.csv"
     else:
         print("ERROR: instance_option has to be 0 or 1!")
         exit(0);
+
+    option = args.solution_option
+    if option == 0:
+        CV = CV(inputParams,hurricaneDataSet,networkDataSet)
+        CV.clairvoyant_eval(osfname) 
+    elif option == 1:
+        FA = FA(inputParams,solveParams,hurricaneDataSet,networkDataSet)
+        FA.FOSDDP_eval(osfname)
+    elif option == 2:
+        TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneDataSet,networkDataSet)
+        TwoStageSP.static_2SSP_eval(osfname)
+    elif option == 3:
+        TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneDataSet,networkDataSet)
+        TwoStageSP.RH_2SSP_eval(osfname)
+    elif option == 4:
+        TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneDataSet,networkDataSet)
+        TwoStageSP.WS_eval(osfname)
+    else:
+        print("This option is not available!")
+        sys.exit(0);

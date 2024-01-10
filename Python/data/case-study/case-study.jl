@@ -155,7 +155,7 @@ max_intensity = 5;
 SCEN = Array{Any,1}(undef,K); #SCEN is the list for each state k 
 
 for k=1:K
-    scen = zeros(Ni); #we will create a scenario list for each state k
+    scen = zeros(Nj); #we will create a scenario list for each state k
     if S[k][3] == T
 		#now lets calculate the demand from each DP 
 		for j=1:Nj
