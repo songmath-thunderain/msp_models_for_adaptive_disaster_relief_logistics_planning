@@ -111,8 +111,8 @@ def hurricaneInputCase(intensityFile, trackProbFile, trackErrorFile, landfallFil
     print("Total # of states K = ", K);
     
     P_joint = np.zeros((K, K));  # initialize the joint probability distribution MC
-    S = [None] * K;  # list with elements [intensity, location]
-    absorbing_states = [];  # list of absorbing states
+    S = [None] * K;  # list with elements [intensity, location] (actual state labels, starting from 1) 
+    absorbing_states = [];  # list of absorbing states (their indices, starting from 0)
 
     k1 = 0;  # counter for the number of states
     S[0] = [1,1,1];
@@ -130,7 +130,7 @@ def hurricaneInputCase(intensityFile, trackProbFile, trackErrorFile, landfallFil
             P_joint[k,k] = 1; # absorbing
         else:
             for kk in range(K):
-                if (S[k][1] <= np.shape(trackMatrices[S[k][2]-1])[0]) and (S[kk][1] <= np.shape(trackMatrices[S[k][2]-1])[1]):
+                if S[kk][1] <= np.shape(trackMatrices[S[k][2]-1])[1]:
                     P_joint[k,kk] = P_intensity[S[k][0]-1,S[kk][0]-1]*trackMatrices[S[k][2]-1][S[k][1]-1,S[kk][1]-1]*P_landfall[S[k][2]-1,S[kk][2]-1]
 
     # normalize the probabilities
@@ -244,7 +244,7 @@ def networkInputSyn(Ni,Nj,costScalingFactor,netNodesFile,netParamsFile,hurricane
     ch = np.empty((Ni, T))
     for t in range(1, T + 1):
         cp[t - 1] = base * (1 + costScalingFactor * (t - 1))
-        ch[:, t - 1] = np.full(Ni, 0.05 * base)
+        ch[:, t - 1] = np.full(Ni, invCostRatio * base)
 
     p = penCostRatio * base
     q = salvageCostRatio * base
@@ -293,7 +293,7 @@ def networkInputCase(costScalingFactor,netFolderPath,netParamsFile,hurricaneData
     N0 = Ni + 1;
 
     states = hurricaneDataSet.states;
-    K = len(states);
+    K = hurricaneDataSet.K;
     T = hurricaneDataSet.T;
     Na = hurricaneDataSet.Na;
 
@@ -362,7 +362,7 @@ def networkInputCase(costScalingFactor,netFolderPath,netParamsFile,hurricaneData
         l = states[k - 1][1]
 
         for j in range(1, Nj + 1):
-            dLandfall = d_SJ[states[k-1][1]-1,j-1]
+            dLandfall = d_SJ[l-1,j-1]
             if dLandfall <= cMax:
                 scen[j - 1] = max_D[0,j-1] * (1 - (dLandfall / cMax)) * (a - 1) ** 2 / ((Na - 1) ** 2)
             else:
