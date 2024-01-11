@@ -160,7 +160,7 @@ class FA:
         lb = 1e10;
         for t in range(T):
             if t > 0:
-                k_t = MC_sample(in_sample[t - 1], self.hurricaneData)
+                k_t = MC_sample(in_sample[t - 1]+1, self.hurricaneData)
                 in_sample.append(k_t)
                 self.MSP_fa_update_RHS(k_t, t, xval)
             self.m[t, k_t].optimize()

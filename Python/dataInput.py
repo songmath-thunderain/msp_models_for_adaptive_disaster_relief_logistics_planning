@@ -147,6 +147,9 @@ def hurricaneInputCase(intensityFile, trackProbFile, trackErrorFile, landfallFil
     # Create a complete set of reachable nodes over time, starting from the initial state k_init = 1
     k_init = 1
     nodeLists = createNodes(k_init, K, absorbing_states, P_joint, smallestTransProb); # List of MC states in each stage
+
+    print("nodeLists = ", nodeLists);
+
     nodeScenList, nodeScenWeights = createNodeScens(nodeLists, T, absorbing_states, P_joint, smallestTransProb)
 
     hurricaneDataSet = hurricaneData(Na, K, T, P_joint, S, absorbing_states, smallestTransProb, nodeLists, nodeScenList, nodeScenWeights);
