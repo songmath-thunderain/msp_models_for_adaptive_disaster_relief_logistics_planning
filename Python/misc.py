@@ -11,7 +11,7 @@ from dataClass import inputParams, solveParams, hurricaneData, networkData
 def MC_sample(current_state,hurricaneDataSet):
     K = hurricaneDataSet.K;
     states = np.arange(K)
-    weights = hurricaneDataSet.P_joint[current_state, :]
+    weights = hurricaneDataSet.P_joint[current_state-1, :]
     kk = np.random.choice(states, p=weights)
     return kk
 
@@ -42,10 +42,12 @@ def create_OSpaths(k_init,hurricaneDataSet):
     OS_paths = pd.read_csv(osfname, header=0).to_numpy()
     rr = OS_paths.shape[0]
     cc = OS_paths.shape[1]
+    print("rr = ", rr);
+    print("cc = ", cc);
     OS_paths = np.full((rr, cc), k_init)
     for s in range(rr):
         for t in range(1, cc):
-            OS_paths[s][t] = MC_sample(OS_paths[s][t-1],hurricaneDataSet)
+            OS_paths[s][t] = MC_sample(OS_paths[s][t-1],hurricaneDataSet)+1
     df = pd.DataFrame(OS_paths)
     df.to_csv(osfname, index=False)
 
