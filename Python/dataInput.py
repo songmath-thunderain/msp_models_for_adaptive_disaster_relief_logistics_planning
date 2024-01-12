@@ -2,7 +2,7 @@ import numpy as np;
 import pandas as pd;
 import sys;
 import csv;
-from dataClass import inputParams, solveParams, hurricaneData, networkData;
+from dataClass import inputParams, solveParams; 
 from misc import *
 
 def hurricaneInputSyn(intensityFile, locationFile, landfallFile, inputParams):
@@ -147,8 +147,6 @@ def hurricaneInputCase(intensityFile, trackProbFile, trackErrorFile, landfallFil
     # Create a complete set of reachable nodes over time, starting from the initial state k_init = 1
     k_init = 1
     nodeLists = createNodes(k_init, K, absorbing_states, P_joint, smallestTransProb); # List of MC states in each stage
-
-    print("nodeLists = ", nodeLists);
 
     nodeScenList, nodeScenWeights = createNodeScens(nodeLists, T, absorbing_states, P_joint, smallestTransProb)
 

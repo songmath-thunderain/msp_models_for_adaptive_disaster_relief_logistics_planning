@@ -1,7 +1,7 @@
 import yaml
 import argparse
 import sys
-from dataInput import *
+from dataClass import *
 from CV import *
 from TwoStageSP import *
 from FA import *
@@ -43,16 +43,20 @@ if __name__ == "__main__":
     inputParams = inputParams(dissipate_option, absorbing_option, k_init, oos);
     solveParams = solveParams(max_iter, stall, cutviol_maxiter, time_limit, cutviol);
 
+    hurricaneInstance = hurricaneData();
+    networkInstance = networkData(Ni,Nj);
+
     if instance_option == 0:
         # synthetic instance family
         intensityFile = 'data/synthetic/intensity.csv';
         locationFile = 'data/synthetic/location.csv';
         landfallFile = 'data/synthetic/landfall.csv';
-        hurricaneDataSet = hurricaneInputSyn(intensityFile, locationFile, landfallFile, inputParams)
+        
+        hurricaneInstance.input_from_Syn(intensityFile, locationFile, landfallFile, inputParams)
 
         netNodesFile = 'data/synthetic/nodes.csv';
         netParamsFile = 'data/synthetic/netParams.csv';
-        networkDataSet = networkInputSyn(Ni,Nj,tau,netNodesFile,netParamsFile,hurricaneDataSet)
+        networkInstance.input_from_Syn(tau,netNodesFile,netParamsFile,hurricaneInstance)
 
         osfname = "./data/synthetic/OOS" + str(inputParams.k_init) + ".csv"
     elif instance_option == 1:
@@ -61,11 +65,11 @@ if __name__ == "__main__":
         trackProbFile = 'data/case-study/mc_track_transition_prob_at_t';
         trackErrorFile = 'data/case-study/mc_track_mean_error_at_t';
         landfallFile = 'data/case-study/landfall.csv';
-        hurricaneDataSet = hurricaneInputCase(intensityFile, trackProbFile, trackErrorFile, landfallFile);
+        hurricaneInstance.input_from_Case(intensityFile, trackProbFile, trackErrorFile, landfallFile);
 
         netFolderPath = 'data/case-study';
         netParamsFile = 'data/case-study/netParams.csv';
-        networkDataSet = networkInputCase(tau, netFolderPath, netParamsFile, hurricaneDataSet);
+        networkInstance.input_from_Case(tau, netFolderPath, netParamsFile, hurricaneInstance);
 
         osfname = "./data/case-study/OOS1.csv"
     else:
@@ -74,19 +78,19 @@ if __name__ == "__main__":
 
     option = args.solution_option
     if option == 0:
-        CV = CV(inputParams,hurricaneDataSet,networkDataSet)
+        CV = CV(inputParams,hurricaneInstance,networkInstance)
         CV.clairvoyant_eval(osfname) 
     elif option == 1:
-        FA = FA(inputParams,solveParams,hurricaneDataSet,networkDataSet)
+        FA = FA(inputParams,solveParams,hurricaneInstance,networkInstance)
         FA.FOSDDP_eval(osfname)
     elif option == 2:
-        TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneDataSet,networkDataSet)
+        TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance)
         TwoStageSP.static_2SSP_eval(osfname)
     elif option == 3:
-        TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneDataSet,networkDataSet)
+        TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance)
         TwoStageSP.RH_2SSP_eval(osfname)
     elif option == 4:
-        TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneDataSet,networkDataSet)
+        TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance)
         TwoStageSP.WS_eval(osfname)
     else:
         print("This option is not available!")

@@ -4,7 +4,7 @@ resultpath = "output/benchmark/"
 
 command = []
 
-instanceAttr3 = [" 0.0 "];
+instanceAttr3 = [" 0.0 ", " 0.05 ", " 0.5 ", " 5 "];
 option = [" 0 ", " 1 "];
 
 for k4 in range(len(option)):
