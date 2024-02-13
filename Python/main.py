@@ -68,15 +68,16 @@ if __name__ == "__main__":
         intensityFile = 'data/case-study/mc_int_transition_prob.csv';
         trackProbFile = 'data/case-study/mc_track_transition_prob_at_t';
         trackErrorFile = 'data/case-study/mc_track_mean_error_at_t';
-        #landfallFile = 'data/case-study/landfall_deterministic.csv';
-        landfallFile = 'data/case-study/landfall.csv';
+        landfallFile = 'data/case-study/landfall_deterministic.csv';
+        #landfallFile = 'data/case-study/landfall.csv';
         hurricaneInstance.input_from_Case(intensityFile, trackProbFile, trackErrorFile, landfallFile);
 
         netFolderPath = 'data/case-study';
         netParamsFile = 'data/case-study/netParams.csv';
         networkInstance.input_from_Case(tau, netFolderPath, netParamsFile, hurricaneInstance);
 
-        osfname = "./data/case-study/OOS1.csv"
+        osfname = "./data/case-study/OOS1_deterministic.csv"
+        #osfname = "./data/case-study/OOS1.csv"
     else:
         print("ERROR: instance_option has to be 0 or 1!")
         exit(0);

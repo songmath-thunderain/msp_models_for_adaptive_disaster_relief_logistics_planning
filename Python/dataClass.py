@@ -503,6 +503,9 @@ class networkData:
     self.Nj = Nj;
     self.N0 = self.Ni+1;
 
+    print("# of SPs = ", self.Ni);
+    print("# of DPs = ", self.Nj);
+
 #Ni: number of supply points (without MDC).
 #Nj: number of demand points.
 #N0: number of supply points including MDC.
