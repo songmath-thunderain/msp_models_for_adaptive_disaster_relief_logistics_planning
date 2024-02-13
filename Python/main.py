@@ -31,6 +31,9 @@ if __name__ == "__main__":
     if instance_option == 1:
         # case-study instance, k_init is always 1 regardless
         k_init = 1;
+        if dissipate_option == 1:
+            print("ERROR! dissipatte_option has to be 0 if running the case study instance!")
+            exit(0);
     oos = args.oos
     Ni = args.Ni
     Nj = args.Nj
