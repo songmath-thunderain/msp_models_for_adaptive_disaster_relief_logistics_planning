@@ -105,6 +105,11 @@ class hurricaneData:
     S = [None] * K;  # list with elements [intensity, location]
     absorbing_states = [];  # list of absorbing states
 
+    print("Total # of states K = ", K);
+    print("Total # of intensity MC states = ", Na);
+    print("Total # of location MC states = ", Nb);
+    print("Total # of stages = ", Nc);
+
     k1 = 0;  # counter for the number of states
     for k in range(1, Na+1):
         for l in range(1, Nb+1):
@@ -194,6 +199,15 @@ class hurricaneData:
 	    K += Na*len(trackStates[t]);
 
     print("Total # of states K = ", K);
+    print("Total # of intensity MC states = ", Na);
+    print("Total # of location MC states = [", end = "");
+    for t in range(T-1):
+        print(len(trackStates[t]), end = ""); 
+        if t != T-2:
+            print(",", end="");
+        else:
+            print("]");
+    print("Total # of stages = ", Nc);
     
     P_joint = np.zeros((K, K));  # initialize the joint probability distribution MC
     S = [None] * K;  # list with elements [intensity, location] (actual state labels, starting from 1) 

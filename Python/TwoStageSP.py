@@ -803,11 +803,11 @@ class TwoStageSP:
 
                         self.subproblem.optimize()
 
-                        if subproblem.status != GRB.OPTIMAL:
-                            print("status_subproblem =", subproblem.status)
+                        if self.subproblem.status != GRB.OPTIMAL:
+                            print("status_subproblem =", self.subproblem.status)
                             exit(0)
                         else:
-                            objs_OOS[s] = subproblem.ObjVal
+                            objs_OOS[s] = self.subproblem.ObjVal
                             #print("first obj = ", objs_OOS[s]);
                             if absorbing_option == 0:
                                 for tt in range(absorbingT - t):

@@ -124,7 +124,7 @@ class CV:
             else:
                 absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if S[x-1][2] == T), None))
 
-            if OS_paths[s, absorbingT] == 1:
+            if S[OS_paths[s, absorbingT]-1][0] == 1:
                 continue
             else:
                 # Define the clairvoyant model

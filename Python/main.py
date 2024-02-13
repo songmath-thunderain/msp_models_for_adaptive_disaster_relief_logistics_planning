@@ -21,7 +21,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
     solveparam_file = args.solveparam
     dissipate_option = args.dissipate_option
+    # dissipate_option = 1: has dissipation state, when hurricane intensity reaches state 0, it is absorbed
+    # dissipate_option = 0: has no dissipation state, won't be absorbed because of intensity
     absorbing_option = args.absorbing_option
+    # absorbing_option = 0: do not allow shipping at the period that hurricane reaches an absorbing state
+    # absorbing_option = 1: still allows shipping at the period that hurricane reaches an absorbing state 
     instance_option = args.instance_option
     k_init = args.k_init
     if instance_option == 1:
@@ -64,6 +68,7 @@ if __name__ == "__main__":
         intensityFile = 'data/case-study/mc_int_transition_prob.csv';
         trackProbFile = 'data/case-study/mc_track_transition_prob_at_t';
         trackErrorFile = 'data/case-study/mc_track_mean_error_at_t';
+        #landfallFile = 'data/case-study/landfall_deterministic.csv';
         landfallFile = 'data/case-study/landfall.csv';
         hurricaneInstance.input_from_Case(intensityFile, trackProbFile, trackErrorFile, landfallFile);
 
