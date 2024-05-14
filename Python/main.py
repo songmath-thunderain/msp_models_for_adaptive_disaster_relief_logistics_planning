@@ -1,6 +1,7 @@
 import yaml
 import argparse
 import sys
+import time
 from dataClass import *
 from CV import *
 from TwoStageSP import *
@@ -53,6 +54,9 @@ if __name__ == "__main__":
     hurricaneInstance = hurricaneData();
     networkInstance = networkData(Ni,Nj);
 
+    print("Reading data...");
+    start_time = time.time()
+
     if instance_option == 0:
         # synthetic instance family
         intensityFile = 'data/synthetic/intensity.csv';
@@ -84,6 +88,9 @@ if __name__ == "__main__":
     else:
         print("ERROR: instance_option has to be 0 or 1!")
         exit(0);
+
+    elapse_time = time.time() - start_time
+    print("Elapse time = ", elapse_time);
 
     option = args.solution_option
     if option == 0:

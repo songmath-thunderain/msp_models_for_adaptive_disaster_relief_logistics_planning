@@ -832,5 +832,7 @@ class TwoStageSP:
         WS_std = np.std(objs_OOS)
         WS_low = WS_bar - 1.96 * WS_std / np.sqrt(nbOS)
         WS_high = WS_bar + 1.96 * WS_std / np.sqrt(nbOS)
+        CI = WS_bar-WS_low;
         print("WS....")
-        print("μ ± 1.96*σ/√NS =", WS_bar, "±", [WS_low, WS_high])
+        print(f"μ ± 1.96*σ/√NS = {WS_bar} ± {CI}")
+        return [objs_OOS, WS_bar, WS_low, WS_high, train_time, test_time]

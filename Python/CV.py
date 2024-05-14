@@ -158,9 +158,9 @@ class CV:
         cv_std = np.std(objs_cv)
         cv_low = cv_bar - 1.96 * cv_std / np.sqrt(nbOS)
         cv_high = cv_bar + 1.96 * cv_std / np.sqrt(nbOS)
-
+        CI = cv_bar - cv_low;
         print("Clairvoyant....")
-        print(f"μ ± 1.96*σ/√NS = {cv_bar} ± [{cv_low}, {cv_high}]")
+        print(f"μ ± 1.96*σ/√NS = {cv_bar} ± {CI}")
 
         elapsed_cv = time.time() - start
         return [objs_cv, cv_bar, cv_low, cv_high, elapsed_cv]
