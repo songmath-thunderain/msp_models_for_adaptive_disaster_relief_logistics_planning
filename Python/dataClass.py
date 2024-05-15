@@ -23,7 +23,7 @@ class solveParams:
 
 class hurricaneData:
   def createNodes(self, k_init):
-    # create a list of MC states in each stage, starting from initial state k_init
+    # create a complete list of reachable node over time, starting from initial state k_init
     K = self.K;
     absorbing_states = self.absorbing_states;
     P_joint = self.P_joint;
@@ -36,7 +36,7 @@ class hurricaneData:
     while not stopFlag:
         tempList = []
         stopFlag = True
-
+        # if there is at least one state that is not absorbing, turn the stopFlag back to false
         for k in range(K):
             for kk in nodeLists[-1]:
                 if (kk not in absorbing_states) and (P_joint[kk][k] > smallestTransProb):
@@ -50,6 +50,7 @@ class hurricaneData:
     self.nodeLists = nodeLists;
 
     # Create a list of scenarios, along with the probability of occurrence, for each transient state node in the nodeList (set of reachable nodes from the initial state k_init)
+    # Note: there might be repetitions in the nodeLists, e.g., the same Hurricane state can be reached at different times
     T = self.T;
     nodeScenList = {}
     nodeScenWeights = {}
