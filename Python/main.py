@@ -20,6 +20,7 @@ if __name__ == "__main__":
     parser.add_argument("-t", "--tau", type = float, help = "cost-scaling factor")
     parser.add_argument("-s", "--solution_option", type = int, choices = [0,1,2,3,4,5], help = "solution options: 0. CV, 1. FA, 2. static2SSP, 3. RH2SSP, 4. WS, 5. All")
     parser.add_argument("-i", "--instance_option", type = int, choices = [0,1], help = "instance option: 0 -- Synthetic, 1 -- Case Study")
+    parser.add_argument("-w", "--write_option", type = int, choices = [0,1], help = "0 -- do not write to CSV, 1 -- write results to CSV")
     args = parser.parse_args()
     solveparam_file = args.solveparam
     dissipate_option = args.dissipate_option
@@ -29,6 +30,7 @@ if __name__ == "__main__":
     # absorbing_option = 0: do not allow shipping at the period that hurricane reaches an absorbing state
     # absorbing_option = 1: still allows shipping at the period that hurricane reaches an absorbing state 
     instance_option = args.instance_option
+    write_option = args.write_option
     k_init = args.k_init
     if instance_option == 1:
         # case-study instance, k_init is always 1 regardless
@@ -97,32 +99,37 @@ if __name__ == "__main__":
     if option == 0 or option == 5:
         CV = CV(inputParams,hurricaneInstance,networkInstance)
         obj, CI, elapsed_time = CV.clairvoyant_eval(osfname)
-        with open('output/CVresults.csv', 'a') as myfile:
-            writer = csv.writer(myfile, delimiter =',')
-            writer.writerow([instance_option,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,obj,CI,elapsed_time])
+        if write_option == 1:
+            with open('output/CVresults.csv', 'a') as myfile:
+                writer = csv.writer(myfile, delimiter =',')
+                writer.writerow([instance_option,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,obj,CI,elapsed_time])
     if option == 1 or option == 5:
         FA = FA(inputParams,solveParams,hurricaneInstance,networkInstance)
         obj, CI, train_time, test_time = FA.FOSDDP_eval(osfname)
-        with open('output/FAresults.csv', 'a') as myfile:
-            writer = csv.writer(myfile, delimiter =',')
-            writer.writerow([instance_option,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,obj, CI, train_time, test_time])
+        if write_option == 1:
+            with open('output/FAresults.csv', 'a') as myfile:
+                writer = csv.writer(myfile, delimiter =',')
+                writer.writerow([instance_option,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,obj, CI, train_time, test_time])
     if option == 2 or option == 5:
         TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance)
         obj, CI, train_time, test_time = TwoStageSP.static_2SSP_eval(osfname)
-        with open('output/static2SSPresults.csv', 'a') as myfile:
-            writer = csv.writer(myfile, delimiter =',')
-            writer.writerow([instance_option,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,obj, CI, train_time, test_time])
+        if write_option == 1:
+            with open('output/static2SSPresults.csv', 'a') as myfile:
+                writer = csv.writer(myfile, delimiter =',')
+                writer.writerow([instance_option,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,obj, CI, train_time, test_time])
     if option == 3 or option == 5:
         if option == 3:
             TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance)
         obj, CI, elapsed_time = TwoStageSP.RH_2SSP_eval(osfname)
-        with open('output/rolling2SSPresults.csv', 'a') as myfile:
-            writer = csv.writer(myfile, delimiter =',')
-            writer.writerow([instance_option,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,obj,CI,elapsed_time])
+        if write_option == 1:
+            with open('output/rolling2SSPresults.csv', 'a') as myfile:
+                writer = csv.writer(myfile, delimiter =',')
+                writer.writerow([instance_option,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,obj,CI,elapsed_time])
     if option == 4 or option == 5:
         if option == 4:
             TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance)
         obj, CI, train_time, test_time = TwoStageSP.WS_eval(osfname)
-        with open('output/WSresults.csv', 'a') as myfile:
-            writer = csv.writer(myfile, delimiter =',')
-            writer.writerow([instance_option,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,obj, CI, train_time, test_time])
+        if write_option == 1:
+            with open('output/WSresults.csv', 'a') as myfile:
+                writer = csv.writer(myfile, delimiter =',')
+                writer.writerow([instance_option,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,obj, CI, train_time, test_time])
