@@ -511,7 +511,7 @@ class TwoStageSP:
         print("static 2SSP....")
         print("μ ± 1.96*σ/√NS =", st2SSP_bar, "±", CI)
         timeTest = time.time() - start_time
-        return [objs, st2SSP_bar, st2SSP_low, st2SSP_high, timeTrain, timeTest]
+        return [st2SSP_bar, CI, timeTrain, timeTest]
 
     def RH_2SSP_eval(self, osfname):
         T = self.hurricaneData.T;
@@ -665,7 +665,7 @@ class TwoStageSP:
         CI = 1.96 * RH2SSP_std / np.sqrt(nbOS)
         print("RH 2SSP....")
         print("μ ± 1.96*σ/√NS =", RH2SSP_bar, "±", CI)
-        return [objs_RH2SSP, RH2SSP_bar, RH2SSP_low, RH2SSP_high, elapsed_RH2SSP]
+        return [RH2SSP_bar, CI, elapsed_RH2SSP]
 
     def WS_eval(self, osfname):
         T = self.hurricaneData.T;
@@ -835,4 +835,4 @@ class TwoStageSP:
         CI = WS_bar-WS_low;
         print("WS....")
         print(f"μ ± 1.96*σ/√NS = {WS_bar} ± {CI}")
-        return [objs_OOS, WS_bar, WS_low, WS_high, train_time, test_time]
+        return [WS_bar, CI, train_time, test_time]

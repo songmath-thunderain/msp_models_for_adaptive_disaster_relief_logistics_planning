@@ -163,4 +163,5 @@ class CV:
         print(f"μ ± 1.96*σ/√NS = {cv_bar} ± {CI}")
 
         elapsed_cv = time.time() - start
-        return [objs_cv, cv_bar, cv_low, cv_high, elapsed_cv]
+        return [cv_bar, CI, elapsed_cv]
+

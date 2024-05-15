@@ -355,4 +355,4 @@ class FA:
         print(f"μ ± 1.96*σ/√NS = {fa_bar} ± {CI}")
         test_time = time.time() - start
         #vals = [xval_fa, fval_fa, yval_fa, zval_fa, vval_fa]
-        return [objs_fa, fa_bar, fa_low, fa_high, train_time, test_time]
+        return [fa_bar, CI, train_time, test_time]
