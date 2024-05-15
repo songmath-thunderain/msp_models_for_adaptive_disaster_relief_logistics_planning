@@ -1,0 +1,3 @@
+instance_option,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,obj,CI,train_time,test_time
+
+0,1,1,57,3,10,0.05,4810.062959405766,593.7837195156727,1.3780617713928223,0.17979073524475098
