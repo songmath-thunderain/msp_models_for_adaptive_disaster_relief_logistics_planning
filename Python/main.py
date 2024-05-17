@@ -17,7 +17,9 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--oos", type = int, help = "number of out-of-sample scenarios")
     parser.add_argument("-ni", "--Ni", type = int, choices = [3,6,9], help = "number of SPs")
     parser.add_argument("-nj", "--Nj", type = int, choices = [10,20,30], help = "number of DPs")
+    parser.add_argument("-c", "--cost_structure", type = int, choices = [0,1], help = "cost structure option")
     parser.add_argument("-t", "--tau", type = float, help = "cost-scaling factor")
+    parser.add_argument("-st", "--safe_time", required = False, type = int, help = "safe time parameter to determine cost surge")
     parser.add_argument("-s", "--solution_option", type = int, choices = [0,1,2,3,4,5], help = "solution options: 0. CV, 1. FA, 2. static2SSP, 3. RH2SSP, 4. WS, 5. All")
     parser.add_argument("-i", "--instance_option", type = int, choices = [0,1], help = "instance option: 0 -- Synthetic, 1 -- Case Study")
     parser.add_argument("-w", "--write_option", type = int, choices = [0,1], help = "0 -- do not write to CSV, 1 -- write results to CSV")
@@ -42,6 +44,17 @@ if __name__ == "__main__":
     Ni = args.Ni
     Nj = args.Nj
     tau = args.tau
+    cost_structure = args.cost_structure
+    # cost_structure = 0: original cost structure: cost increases by tau in every period
+    # cost_structure = 1: modified cost structure: cost stays the same until the expected landfall time is within the safe time threshold
+    # safe_time is optional
+    safe_time = None
+    if args.safe_time is not None:
+        safe_time = args.safe_time
+    else:
+        if cost_structure == 1:
+            print("Error! safe_time parameter is not defined for cost_structure == 1!")
+            exit(0);
 
     with open(solveparam_file, "r") as f:
         params = yaml.safe_load(f)
@@ -70,7 +83,7 @@ if __name__ == "__main__":
 
         netNodesFile = 'data/synthetic/nodes.csv';
         netParamsFile = 'data/synthetic/netParams.csv';
-        networkInstance.input_from_Syn(tau,netNodesFile,netParamsFile,hurricaneInstance)
+        networkInstance.input_from_Syn(cost_structure,tau,netNodesFile,netParamsFile,hurricaneInstance)
 
         osfname = "./data/synthetic/OOS" + str(inputParams.k_init) + ".csv"
     elif instance_option == 1:
@@ -84,7 +97,7 @@ if __name__ == "__main__":
 
         netFolderPath = 'data/case-study';
         netParamsFile = 'data/case-study/netParams.csv';
-        networkInstance.input_from_Case(tau, netFolderPath, netParamsFile, hurricaneInstance);
+        networkInstance.input_from_Case(cost_structure,tau,netFolderPath,netParamsFile,hurricaneInstance);
 
         osfname = "./data/case-study/OOS1_deterministic.csv"
         #osfname = "./data/case-study/OOS1.csv"

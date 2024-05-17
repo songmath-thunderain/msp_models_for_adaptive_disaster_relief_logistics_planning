@@ -54,6 +54,7 @@ class hurricaneData:
     T = self.T;
     nodeScenList = {}
     nodeScenWeights = {}
+    nodeTime2Go = {}
 
     for t in range(T - 2, -1, -1):
         # Starting from T-2 since at T-1, all states should be absorbing
@@ -61,7 +62,6 @@ class hurricaneData:
             if nodeLists[t][k] not in absorbing_states:
                 nodeScenList[(t, nodeLists[t][k])] = []
                 nodeScenWeights[(t, nodeLists[t][k])] = []
-
                 for kk in range(len(nodeLists[t + 1])):
                     if P_joint[nodeLists[t][k]][nodeLists[t + 1][kk]] > smallestTransProb:
                         if nodeLists[t + 1][kk] in absorbing_states:
@@ -84,8 +84,13 @@ class hurricaneData:
                     print("Wrong!")
                     sys.exit(0)
 
+                time2Go = 0;
+                for l in range(len(nodeScenList[(t, nodeLists[t][k])])):
+                    time2Go += (nodeScenList[(t, nodeLists[t][k])][l][0]-t)*nodeScenWeights[(t, nodeLists[t][k])][l];
+                nodeTime2Go[(t, nodeLists[t][k])] = time2Go;
     self.nodeScenList = nodeScenList; 
     self.nodeScenWeights = nodeScenWeights; 
+    self.nodeTime2Go = nodeTime2Go;
 
   def input_from_Syn(self, intensityFile, locationFile, landfallFile, inputParams):
     # hurricane data class generator from synthetic instances
@@ -263,7 +268,7 @@ class networkData:
     self.Nj = Nj;
     self.N0 = self.Ni+1;
 
-  def input_from_Syn(self,costScalingFactor,netNodesFile,netParamsFile,hurricaneDataSet):
+  def input_from_Syn(self,cost_structure,costScalingFactor,netNodesFile,netParamsFile,hurricaneDataSet):
     # network data class generator from synthetic instances
     nodes = pd.read_csv(netNodesFile);
     states = hurricaneDataSet.states;
@@ -320,39 +325,53 @@ class networkData:
         for ii in range(1, self.Ni + 1):
             for t in range(1, T + 1):
                 if i < self.N0:
-                    cb[i - 1, ii - 1, t - 1] = (
+                    if cost_structure == 0:
+                        cb[i - 1, ii - 1, t - 1] = (
                         fuel * np.linalg.norm(np.array(SP[i - 1]) - np.array(SP[ii - 1]), 2)
                         * (1 + costScalingFactor * (t - 1))
-                    )
+                        )
+                    if cost_structure == 1:
+                        cb[i - 1, ii - 1, t - 1] = fuel * np.linalg.norm(np.array(SP[i - 1]) - np.array(SP[ii - 1]), 2)
                 else:
-                    cb[i - 1, ii - 1, t - 1] = (
+                    if cost_structure == 0:
+                        cb[i - 1, ii - 1, t - 1] = (
                         fuel
                         * np.linalg.norm(np.array(MDC) - np.array(SP[ii - 1]), 2)
                         * (1 + costScalingFactor * (t - 1))
-                    )
-
+                        )
+                    if cost_structure == 1:
+                        cb[i - 1, ii - 1, t - 1] = fuel * np.linalg.norm(np.array(MDC) - np.array(SP[ii - 1]), 2)
     # Unit cost of transporting items from MDC/SP i to/between a demand point j
     ca = np.empty((self.N0, self.Nj, T))
     for i in range(1, self.N0 + 1):
         for j in range(1, self.Nj + 1):
             for t in range(1, T + 1):
                 if i < self.N0:
-                    ca[i - 1, j - 1, t - 1] = (
+                    if cost_structure == 0:
+                        ca[i - 1, j - 1, t - 1] = (
                         fuel
                         * np.linalg.norm(np.array(SP[i - 1]) - np.array(DP[j - 1]), 2)
                         * (1 + costScalingFactor * (t - 1))
-                    )
+                        )
+                    if cost_structure == 1:
+                        ca[i - 1, j - 1, t - 1] = fuel * np.linalg.norm(np.array(SP[i - 1]) - np.array(DP[j - 1]), 2)
                 else:
-                    ca[i - 1, j - 1, t - 1] = (
+                    if cost_structure == 0:
+                        ca[i - 1, j - 1, t - 1] = (
                         fuel
                         * np.linalg.norm(np.array(MDC) - np.array(DP[j - 1]), 2)
                         * (1 + costScalingFactor * (t - 1))
-                    )
+                        )
+                    if cost_structure == 1:
+                        ca[i - 1, j - 1, t - 1] = fuel * np.linalg.norm(np.array(MDC) - np.array(DP[j - 1]), 2)
 
     cp = np.empty(T)
     ch = np.empty((self.Ni, T))
     for t in range(1, T + 1):
-        cp[t - 1] = base * (1 + costScalingFactor * (t - 1))
+        if cost_structure == 0:
+            cp[t - 1] = base * (1 + costScalingFactor * (t - 1))
+        if cost_structure == 1:
+            cp[t - 1] = base
         ch[:, t - 1] = np.full(self.Ni, invCostRatio * base)
 
     p = penCostRatio * base
@@ -395,7 +414,7 @@ class networkData:
     self.x_0 = x_0;
     self.SCEN = SCEN;
 
-  def input_from_Case(self,costScalingFactor,netFolderPath,netParamsFile,hurricaneDataSet):
+  def input_from_Case(self,cost_structure,costScalingFactor,netFolderPath,netParamsFile,hurricaneDataSet):
     # network data class generator from synthetic instances
     d_JI = pd.read_csv(netFolderPath+"/d_JI.csv").values;
     d_II = pd.read_csv(netFolderPath+"/d_II.csv").values;
@@ -446,9 +465,15 @@ class networkData:
         for ii in range(Ni):
             for t in range(T):
                 if i < N0-1:
-                    cb[i, ii, t] = fuel * d_II[i,ii] * (1 + costScalingFactor * t)
+                    if cost_structure == 0:
+                        cb[i, ii, t] = fuel * d_II[i,ii] * (1 + costScalingFactor * t)
+                    if cost_structure == 1:
+                        cb[i, ii, t] = fuel * d_II[i,ii]
                 else:
-                    cb[i, ii, t] = fuel * d_KI[0,ii] * (1 + costScalingFactor * t)
+                    if cost_structure == 0:
+                        cb[i, ii, t] = fuel * d_KI[0,ii] * (1 + costScalingFactor * t)
+                    if cost_structure == 1:
+                        cb[i, ii, t] = fuel * d_KI[0,ii]
 
     # Unit cost of transporting items from MDC/SP i to/between a demand point j
     ca = np.empty((N0, Nj, T))
@@ -456,14 +481,23 @@ class networkData:
         for j in range(Nj):
             for t in range(T):
                 if i < N0-1:
-                    ca[i, j, t] = fuel * d_JI[j,i] * (1 + costScalingFactor * t)
+                    if cost_structure == 0:
+                        ca[i, j, t] = fuel * d_JI[j,i] * (1 + costScalingFactor * t)
+                    if cost_structure == 1:
+                        ca[i, j, t] = fuel * d_JI[j,i] 
                 else:
-                    ca[i, j, t] = fuel * d_KJ[0,j] * (1 + costScalingFactor * t)
+                    if cost_structure == 0:
+                        ca[i, j, t] = fuel * d_KJ[0,j] * (1 + costScalingFactor * t)
+                    if cost_structure == 1:
+                        ca[i, j, t] = fuel * d_KJ[0,j]
 
     cp = np.empty(T)
     ch = np.empty((Ni, T))
     for t in range(1, T + 1):
-        cp[t - 1] = base * (1 + costScalingFactor * (t - 1))
+        if cost_structure == 0:
+            cp[t - 1] = base * (1 + costScalingFactor * (t - 1))
+        if cost_structure == 1:
+            cp[t - 1] = base
         ch[:, t - 1] = np.full(Ni, invCostRatio * base)
 
     p = penCostRatio * base
