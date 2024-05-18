@@ -64,7 +64,7 @@ if __name__ == "__main__":
         time_limit = params['TIME_LIMIT']
         cutviol = params['CUTVIOL']
 
-    inputParams = inputParams(dissipate_option, absorbing_option, k_init, oos);
+    inputParams = inputParams(dissipate_option, absorbing_option, cost_structure, safe_time, tau, k_init, oos);
     solveParams = solveParams(max_iter, stall, cutviol_maxiter, time_limit, cutviol);
 
     hurricaneInstance = hurricaneData();

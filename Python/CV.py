@@ -12,7 +12,7 @@ class CV:
         self.networkData = networkData;
 
     # Define the model
-    def deterministic_model(self):
+    def deterministic_model(self, sample_path):
         # Define the model
         m = gp.Model("claivoyant");
 
@@ -27,6 +27,27 @@ class CV:
         cp = self.networkData.cp;
         p = self.networkData.p;
         q = self.networkData.q;
+        
+        # Need to supply the sample path data here. 
+        # Given the sample path data, find the right cost parameters after the surge
+
+        if self.inputParams.cost_structure == 1:
+            # if self.inputParams.cost_structure == 0, no need to change anything
+            # if self.inputParams.cost_structure == 1: ramp up cost when the safe time is achieved by the time2Go
+            for t in range(len(sample_path)):
+                k = sample_path[t]-1;
+                if (t,k) in self.hurricaneData.nodeTime2Go:
+                    if self.hurricaneData.nodeTime2Go[(t,k)] <= self.inputParams.safe_time + 1e-5:
+                        # cost surge by tau
+                        for i in range(N0):
+                            for ii in range(Ni):
+                                cb[i,ii,t] = cb[i,ii,t]*self.inputParams.tau;
+                        for i in range(Ni):
+                            cp[t] = cp[t]*self.inputParams.tau;
+                        for i in range(Ni):
+                            for j in range(Nj):
+                                ca[i,j,t] = ca[i,j,t]*self.inputParams.tau;
+
         x_0 = self.networkData.x_0;
         x_cap = self.networkData.x_cap;
 
@@ -128,9 +149,9 @@ class CV:
                 continue
             else:
                 # Define the clairvoyant model
-                m_cv, x_cv, f_cv, y_cv, z_cv, v_cv, dCons_cv = self.deterministic_model()
+                m_cv, x_cv, f_cv, y_cv, z_cv, v_cv, dCons_cv = self.deterministic_model(OS_paths[s, 0:T])
                 k_t = OS_paths[s, absorbingT]  # State corresponding to the landfall
-
+                
                 for j in range(Nj):
                     for t in range(T):
                         if t == absorbingT:

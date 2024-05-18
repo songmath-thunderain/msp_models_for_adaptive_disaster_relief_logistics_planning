@@ -15,7 +15,7 @@ class FA:
 
 
     # Define stage-t problem
-    def stage_t_state_k_problem(self,t):
+    def stage_t_state_k_problem(self,t,k):
         # Create a new model
         m = gp.Model()
 
@@ -52,6 +52,20 @@ class FA:
 
         for j in range(Nj):
             z[j] = m.addVar(lb=0)
+
+        if self.inputParams.cost_structure == 1:
+            # if self.inputParams.cost_structure == 0, no need to change anything
+            # if self.inputParams.cost_structure == 1: ramp up cost when the safe time is achieved by the time2Go
+            if self.hurricaneData.nodeTime2Go[(t,k)] <= self.inputParams.safe_time + 1e-5:
+                # cost surge by tau
+                for i in range(N0):
+                    for ii in range(Ni):
+                        cb[i,ii,t] = cb[i,ii,t]*self.inputParams.tau;
+                for i in range(Ni):
+                    cp[t] = cp[t]*self.inputParams.tau;
+                for i in range(Ni):
+                    for j in range(Nj):
+                        ca[i,j,t] = ca[i,j,t]*self.inputParams.tau;
 
         # Set objective
         m.setObjective(
@@ -135,7 +149,7 @@ class FA:
                     self.dCons[t, ind],
                     self.FB1Cons[t, ind],
                     self.FB2Cons[t, ind]
-                ) = self.stage_t_state_k_problem(t)
+                ) = self.stage_t_state_k_problem(t,k)
                 if ind in self.hurricaneData.absorbing_states:
                     self.theta[t, ind].setAttr(GRB.Attr.UB, 0);
                     if self.inputParams.absorbing_option == 0:

@@ -7,10 +7,13 @@ import sys;
 import csv;
 
 class inputParams:
-  def __init__(self,dissipate_option,absorbing_option,k_init,nbOS):
+  def __init__(self,dissipate_option,absorbing_option,cost_structure,safe_time,tau,k_init,nbOS):
     self.dissipate_option = dissipate_option;
     self.absorbing_option = absorbing_option;
+    self.cost_structure = cost_structure;
+    self.safe_time = safe_time;
     self.k_init = k_init;
+    self.tau = tau;
     self.nbOS = nbOS;
 
 class solveParams:
