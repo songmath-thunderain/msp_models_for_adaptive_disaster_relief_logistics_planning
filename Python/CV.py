@@ -4,6 +4,7 @@ from gurobipy import GRB
 import pandas as pd
 import numpy as np
 import sys
+import copy
 
 class CV:
     def __init__(self,inputParams,hurricaneData,networkData):
@@ -21,10 +22,10 @@ class CV:
         N0 = self.networkData.N0;
         Nj = self.networkData.Nj;
         T = self.hurricaneData.T;
-        ca = self.networkData.ca;
-        cb = self.networkData.cb;
+        ca = copy.deepcopy(self.networkData.ca);
+        cb = copy.deepcopy(self.networkData.cb);
+        cp = copy.deepcopy(self.networkData.cp);
         ch = self.networkData.ch;
-        cp = self.networkData.cp;
         p = self.networkData.p;
         q = self.networkData.q;
         
@@ -36,18 +37,22 @@ class CV:
             # if self.inputParams.cost_structure == 1: ramp up cost when the safe time is achieved by the time2Go
             for t in range(len(sample_path)):
                 k = sample_path[t]-1;
+                surgeFlag = False;
                 if (t,k) in self.hurricaneData.nodeTime2Go:
                     if self.hurricaneData.nodeTime2Go[(t,k)] <= self.inputParams.safe_time + 1e-5:
-                        # cost surge by tau
-                        for i in range(N0):
-                            for ii in range(Ni):
-                                cb[i,ii,t] = cb[i,ii,t]*self.inputParams.tau;
-                        for i in range(Ni):
-                            cp[t] = cp[t]*self.inputParams.tau;
-                        for i in range(Ni):
-                            for j in range(Nj):
-                                ca[i,j,t] = ca[i,j,t]*self.inputParams.tau;
-
+                        surgeFlag = True;
+                else:
+                    surgeFlag = True;
+                if surgeFlag:
+                    # cost surge by tau
+                    for i in range(N0):
+                        for ii in range(Ni):
+                            cb[i,ii,t] = cb[i,ii,t]*self.inputParams.tau;
+                    cp[t] = cp[t]*self.inputParams.tau;
+                    
+                    for i in range(Ni):
+                        for j in range(Nj):
+                            ca[i,j,t] = ca[i,j,t]*self.inputParams.tau;
         x_0 = self.networkData.x_0;
         x_cap = self.networkData.x_cap;
 
