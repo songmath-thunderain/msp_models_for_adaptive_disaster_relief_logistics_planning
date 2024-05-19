@@ -83,7 +83,7 @@ if __name__ == "__main__":
 
         netNodesFile = 'data/synthetic/nodes.csv';
         netParamsFile = 'data/synthetic/netParams.csv';
-        networkInstance.input_from_Syn(cost_structure,tau,netNodesFile,netParamsFile,hurricaneInstance)
+        networkInstance.input_from_Syn(cost_structure,safe_time,tau,netNodesFile,netParamsFile,hurricaneInstance)
 
         osfname = "./data/synthetic/OOS" + str(inputParams.k_init) + ".csv"
     elif instance_option == 1:
@@ -97,7 +97,7 @@ if __name__ == "__main__":
 
         netFolderPath = 'data/case-study';
         netParamsFile = 'data/case-study/netParams.csv';
-        networkInstance.input_from_Case(cost_structure,tau,netFolderPath,netParamsFile,hurricaneInstance);
+        networkInstance.input_from_Case(cost_structure,safe_time,tau,netFolderPath,netParamsFile,hurricaneInstance);
 
         osfname = "./data/case-study/OOS1_deterministic.csv"
         #osfname = "./data/case-study/OOS1.csv"

@@ -4,7 +4,6 @@ from gurobipy import GRB
 import pandas as pd
 import numpy as np
 import sys
-import copy
 
 class CV:
     def __init__(self,inputParams,hurricaneData,networkData):
@@ -22,37 +21,13 @@ class CV:
         N0 = self.networkData.N0;
         Nj = self.networkData.Nj;
         T = self.hurricaneData.T;
-        ca = copy.deepcopy(self.networkData.ca);
-        cb = copy.deepcopy(self.networkData.cb);
-        cp = copy.deepcopy(self.networkData.cp);
+        ca = self.networkData.ca;
+        cb = self.networkData.cb;
+        cp = self.networkData.cp;
         ch = self.networkData.ch;
         p = self.networkData.p;
         q = self.networkData.q;
         
-        # Need to supply the sample path data here. 
-        # Given the sample path data, find the right cost parameters after the surge
-
-        if self.inputParams.cost_structure == 1:
-            # if self.inputParams.cost_structure == 0, no need to change anything
-            # if self.inputParams.cost_structure == 1: ramp up cost when the safe time is achieved by the time2Go
-            for t in range(len(sample_path)):
-                k = sample_path[t]-1;
-                surgeFlag = False;
-                if (t,k) in self.hurricaneData.nodeTime2Go:
-                    if self.hurricaneData.nodeTime2Go[(t,k)] <= self.inputParams.safe_time + 1e-5:
-                        surgeFlag = True;
-                else:
-                    surgeFlag = True;
-                if surgeFlag:
-                    # cost surge by tau
-                    for i in range(N0):
-                        for ii in range(Ni):
-                            cb[i,ii,t] = cb[i,ii,t]*self.inputParams.tau;
-                    cp[t] = cp[t]*self.inputParams.tau;
-                    
-                    for i in range(Ni):
-                        for j in range(Nj):
-                            ca[i,j,t] = ca[i,j,t]*self.inputParams.tau;
         x_0 = self.networkData.x_0;
         x_cap = self.networkData.x_cap;
 
@@ -82,11 +57,11 @@ class CV:
 
         # Define the objective
         m.setObjective(
-            gp.quicksum(gp.quicksum(gp.quicksum(cb[i, ii, t] * f[i, ii, t] for ii in range(Ni))
+            gp.quicksum(gp.quicksum(gp.quicksum(cb[i, ii, t, sample_path[t]-1] * f[i, ii, t] for ii in range(Ni))
                             for i in range(N0)) for t in range(T))
             + gp.quicksum(gp.quicksum(ch[i, t] * x[i, t] for i in range(Ni)) for t in range(T))
-            + gp.quicksum(gp.quicksum(f[N0-1, i, t] for i in range(Ni)) * cp[t] for t in range(T))
-            + gp.quicksum(gp.quicksum(gp.quicksum(ca[i, j, t] * y[i, j, t] for j in range(Nj))
+            + gp.quicksum(gp.quicksum(f[N0-1, i, t] for i in range(Ni)) * cp[t, sample_path[t]-1] for t in range(T))
+            + gp.quicksum(gp.quicksum(gp.quicksum(ca[i, j, t, sample_path[t]-1] * y[i, j, t] for j in range(Nj))
                                 for i in range(Ni)) for t in range(T))
             + gp.quicksum(gp.quicksum(z[j, t] for j in range(Nj)) * p for t in range(T))
             + gp.quicksum(gp.quicksum(v[i, t] for i in range(Ni)) * q for t in range(T)),

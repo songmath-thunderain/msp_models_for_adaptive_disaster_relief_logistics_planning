@@ -5,7 +5,6 @@ import pandas as pd
 import numpy as np
 from misc import *
 import sys
-import copy
 
 class FA:
     def __init__(self,inputParams,solveParams,hurricaneData,networkData):
@@ -25,9 +24,9 @@ class FA:
         N0 = self.networkData.N0;
         Nj = self.networkData.Nj;
         T = self.hurricaneData.T;
-        ca = copy.deepcopy(self.networkData.ca);
-        cb = copy.deepcopy(self.networkData.cb);
-        cp = copy.deepcopy(self.networkData.cp);
+        ca = self.networkData.ca;
+        cb = self.networkData.cb;
+        cp = self.networkData.cp;
         ch = self.networkData.ch;
         p = self.networkData.p;
         q = self.networkData.q;
@@ -54,31 +53,12 @@ class FA:
         for j in range(Nj):
             z[j] = m.addVar(lb=0)
 
-        if self.inputParams.cost_structure == 1:
-            # if self.inputParams.cost_structure == 0, no need to change anything
-            # if self.inputParams.cost_structure == 1: ramp up cost when the safe time is achieved by the time2Go
-            surgeFlag = False;
-            if (t,k) in self.hurricaneData.nodeTime2Go:
-                if self.hurricaneData.nodeTime2Go[(t,k)] <= self.inputParams.safe_time + 1e-5:
-                    surgeFlag = True;
-            else:
-                surgeFlag = True;
-            if surgeFlag:
-                # cost surge by tau
-                for i in range(N0):
-                    for ii in range(Ni):
-                        cb[i,ii,t] = cb[i,ii,t]*self.inputParams.tau;
-                cp[t] = cp[t]*self.inputParams.tau;
-                for i in range(Ni):
-                    for j in range(Nj):
-                        ca[i,j,t] = ca[i,j,t]*self.inputParams.tau;
-
         # Set objective
         m.setObjective(
-            gp.quicksum(cb[i,ii,t] * f[i, ii] for i in range(N0) for ii in range(Ni))
+            gp.quicksum(cb[i,ii,t,k] * f[i, ii] for i in range(N0) for ii in range(Ni))
             + gp.quicksum(ch[i,t] * x[i] for i in range(Ni))
-            + gp.quicksum(f[N0-1,i] for i in range(Ni)) * cp[t]
-            + gp.quicksum(ca[i,j,t] * y[i, j] for i in range(Ni) for j in range(Nj))
+            + gp.quicksum(f[N0-1,i] for i in range(Ni)) * cp[t,k]
+            + gp.quicksum(ca[i,j,t,k] * y[i, j] for i in range(Ni) for j in range(Nj))
             + gp.quicksum(z[j] for j in range(Nj)) * p
             + gp.quicksum(v[i] for i in range(Ni)) * q
             + theta,
