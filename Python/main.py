@@ -3,6 +3,7 @@ import argparse
 import sys
 import csv
 import time
+import pickle
 from dataClass import *
 from CV import *
 from TwoStageSP import *
@@ -73,6 +74,7 @@ if __name__ == "__main__":
     print("Reading data...");
     start_time = time.time()
 
+    ISpaths = None
     if instance_option == 0:
         # synthetic instance family
         intensityFile = 'data/synthetic/intensity.csv';
@@ -86,6 +88,11 @@ if __name__ == "__main__":
         networkInstance.input_from_Syn(cost_structure,safe_time,tau,netNodesFile,netParamsFile,hurricaneInstance)
 
         osfname = "./data/synthetic/OOS" + str(inputParams.k_init) + ".csv"
+
+        if cost_structure == 1:
+            ISfile = open('data/synthetic/in_sample_100.dat', 'rb')
+            ISpaths = pickle.load(ISfile)
+            ISfile.close()
     elif instance_option == 1:
         # case-study instance
         intensityFile = 'data/case-study/mc_int_transition_prob.csv';
@@ -101,6 +108,12 @@ if __name__ == "__main__":
 
         osfname = "./data/case-study/OOS1_deterministic.csv"
         #osfname = "./data/case-study/OOS1.csv"
+
+        if cost_structure == 1:
+            ISfile = open('data/case-study/in_sample_100.dat', 'rb')
+            ISpaths = pickle.load(ISfile)
+            ISfile.close()
+
     else:
         print("ERROR: instance_option has to be 0 or 1!")
         exit(0);
@@ -124,7 +137,7 @@ if __name__ == "__main__":
                 writer = csv.writer(myfile, delimiter =',')
                 writer.writerow([instance_option,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,obj, CI, train_time, test_time])
     if option == 2 or option == 5:
-        TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance)
+        TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance,ISpaths)
         obj, CI, train_time, test_time = TwoStageSP.static_2SSP_eval(osfname)
         if write_option == 1:
             with open('output/static2SSPresults.csv', 'a') as myfile:
@@ -132,7 +145,7 @@ if __name__ == "__main__":
                 writer.writerow([instance_option,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,obj, CI, train_time, test_time])
     if option == 3 or option == 5:
         if option == 3:
-            TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance)
+            TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance,ISpaths)
         obj, CI, elapsed_time = TwoStageSP.RH_2SSP_eval(osfname)
         if write_option == 1:
             with open('output/rolling2SSPresults.csv', 'a') as myfile:
@@ -140,7 +153,7 @@ if __name__ == "__main__":
                 writer.writerow([instance_option,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,obj,CI,elapsed_time])
     if option == 4 or option == 5:
         if option == 4:
-            TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance)
+            TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance,ISpaths)
         obj, CI, train_time, test_time = TwoStageSP.WS_eval(osfname)
         if write_option == 1:
             with open('output/WSresults.csv', 'a') as myfile:

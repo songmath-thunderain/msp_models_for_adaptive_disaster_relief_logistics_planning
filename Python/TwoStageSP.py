@@ -8,15 +8,18 @@ import sys
 import copy
 
 class TwoStageSP:
-    def __init__(self,inputParams,solveParams,hurricaneData,networkData):
+    def __init__(self,inputParams,solveParams,hurricaneData,networkData,ISpaths):
         self.inputParams = inputParams;
         self.solveParams = solveParams;
         self.hurricaneData = hurricaneData;
         self.networkData = networkData;
+        self.ISpaths = ISpaths;
 
     # Define the terminal-stage problem: only used when absorbing_option = 1, i.e., MDC/SP operation is allowed to occur
-    def terminal_model(self, t_roll, x_init):
-        # Define the model
+    def terminal_model(self, t_roll, k_t, x_init):
+        # Define the model:
+        # t_roll: terminal time
+        # k_t: terminal state
         m = gp.Model()
         # Data instantiation
         Ni = self.networkData.Ni;
@@ -52,10 +55,10 @@ class TwoStageSP:
         
         # Define the objective
         m.setObjective(
-            gp.quicksum(cb[i,ii,t_roll] * f[i, ii] for ii in range(Ni) for i in range(N0))
+            gp.quicksum(cb[i,ii,t_roll,k_t] * f[i, ii] for ii in range(Ni) for i in range(N0))
             + gp.quicksum(ch[i,t_roll] * x[i] for i in range(Ni))
-            + gp.quicksum(f[N0-1, i] for i in range(Ni)) * cp[t_roll]
-            + gp.quicksum(ca[i,j,t_roll] * y[i, j] for i in range(Ni) for j in range(Nj))
+            + gp.quicksum(f[N0-1, i] for i in range(Ni)) * cp[t_roll,k_t]
+            + gp.quicksum(ca[i,j,t_roll,k_t] * y[i, j] for i in range(Ni) for j in range(Nj))
             + gp.quicksum(z[j] for j in range(Nj)) * p
             + gp.quicksum(v[i] for i in range(Ni)) * q,
             GRB.MINIMIZE)
@@ -80,7 +83,7 @@ class TwoStageSP:
 
     # Define first-stage master problem
     def RH_2SSP_first_stage(self, t_roll, k_t, x_init):
-        # Note that the static 2SSP corresponds to the case when t_roll = 0
+        # Note that the static 2SSP corresponds to the case when t_roll = 0 and k_t = k_init
         # Data instantiation
         Ni = self.networkData.Ni;
         N0 = self.networkData.N0;
@@ -96,6 +99,7 @@ class TwoStageSP:
         absorbing_option = self.inputParams.absorbing_option;
         nodeScenList = self.hurricaneData.nodeScenList;
         nodeScenWeights = self.hurricaneData.nodeScenWeights;
+        ISpaths = self.ISpaths;
 
         nbstages1 = T - t_roll
         if absorbing_option == 0:
@@ -104,9 +108,6 @@ class TwoStageSP:
         
         # Define the model
         m = gp.Model()
-        nbScens = len(nodeScenList[(t_roll,k_t)])
-        pbScens = nodeScenWeights[(t_roll,k_t)]
-        
         # Define the variables
         x = {}
         f = {}
@@ -120,22 +121,52 @@ class TwoStageSP:
                 for ii in range(Ni):
                     f[i, ii, t] = m.addVar(lb=0)
 
-        for n in range(nbScens):
-            theta[n] = m.addVar(lb=-1e8)
-        
-        # Define the objective
-        m.setObjective(
-                gp.quicksum(
-                    gp.quicksum(cb[i,ii,t+t_roll] * f[i, ii, t] for ii in range(Ni) for i in range(N0))
+        if self.inputParams.cost_structure == 0:
+            # cost is only time-dependent
+            nbScens = len(nodeScenList[(t_roll,k_t)])
+            pbScens = nodeScenWeights[(t_roll,k_t)]
+       
+            for n in range(nbScens):
+                theta[n] = m.addVar(lb=-1e8)
+            
+            # Define the objective
+            m.setObjective(
+                    gp.quicksum(
+                        gp.quicksum(cb[i,ii,t+t_roll,0] * f[i, ii, t] for ii in range(Ni) for i in range(N0))
+                        for t in range(nbstages1))
+                + gp.quicksum(
+                    gp.quicksum(ch[i,t_roll+t] * x[i, t] for i in range(Ni))
                     for t in range(nbstages1))
-            + gp.quicksum(
-                gp.quicksum(ch[i,t_roll+t] * x[i, t] for i in range(Ni))
-                for t in range(nbstages1))
-            + gp.quicksum(
-                gp.quicksum(cp[t_roll+t] * f[N0-1, i, t] for i in range(Ni))
-                for t in range(nbstages1))
-            + gp.quicksum(theta[n] * pbScens[n] for n in range(nbScens)),
-            GRB.MINIMIZE)
+                + gp.quicksum(
+                    gp.quicksum(cp[t_roll+t,0] * f[N0-1, i, t] for i in range(Ni))
+                    for t in range(nbstages1))
+                + gp.quicksum(theta[n] * pbScens[n] for n in range(nbScens)),
+                GRB.MINIMIZE)
+            
+        if self.inputParams.cost_structure == 1:
+            # cost is state-dependent
+            sample_path = ISpaths[k_t];
+            nbScens = len(sample_path);
+            pbScens = 1.0/nbScens;
+       
+            for n in range(nbScens):
+                theta[n] = m.addVar(lb=-1e8)
+            
+            # Define the objective
+            m.setObjective(
+                pbScens*gp.quicksum(
+                  (gp.quicksum(
+                        gp.quicksum(cb[i,ii,t+t_roll,sample_path[t]] * f[i, ii, t] for ii in range(Ni) for i in range(N0))
+                        for t in range(nbstages1))
+                + gp.quicksum(
+                    gp.quicksum(ch[i,t_roll+t] * x[i, t] for i in range(Ni))
+                    for t in range(nbstages1))
+                + gp.quicksum(
+                    gp.quicksum(cp[t_roll+t,sample_path[t]] * f[N0-1, i, t] for i in range(Ni))
+                    for t in range(nbstages1))
+                + theta[n]) for n in range(nbScens)
+                ),
+                GRB.MINIMIZE)
         
         # Define the constraints
         for t in range(nbstages1):
@@ -188,7 +219,7 @@ class TwoStageSP:
         
         # Define the objective
         m.setObjective(
-            gp.quicksum(ca[i,j,0] * y[i, j] for i in range(Ni) for j in range(Nj))
+            gp.quicksum(ca[i,j,0] * y[i, j] for i in range(Ni) for j in range(Nj)) # ca[i,j,0] is just temporary here
             + gp.quicksum(z[j] for j in range(Nj)) * p
             + gp.quicksum(v[i] for i in range(Ni)) * q
             + reimbursement,

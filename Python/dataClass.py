@@ -146,6 +146,7 @@ class hurricaneData:
     
                 #if k == 6 and l == 2 and f == 1:
                 #    print("k1 = ", k1); 253
+    print("Total # of absorbing stages = ", len(absorbing_states));
 
     # normalize the probabilities
     P_temp = np.copy(P_joint);

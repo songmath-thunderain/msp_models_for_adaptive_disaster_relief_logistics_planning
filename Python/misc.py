@@ -4,6 +4,7 @@ import numpy as np
 import time
 import os
 from dataClass import inputParams, solveParams, hurricaneData, networkData
+import pickle
 
 #miscellaneous functions 
 
@@ -50,6 +51,33 @@ def create_OSpaths(k_init,hurricaneDataSet):
             OS_paths[s][t] = MC_sample(OS_paths[s][t-1],hurricaneDataSet)+1
     df = pd.DataFrame(OS_paths)
     df.to_csv(osfname, index=False)
+
+
+# function to create a set of in-sample sample paths for each starting state k
+def create_ISpaths(hurricaneDataSets,sample_size,filename):
+    # open a file, where you stored the pickled data
+    # file = open('data/synthetic/in_sample_100.dat', 'rb')
+    # in_sample_dict = pickle.load(file)
+    # file.close()
+    ISpaths = {};
+    K = hurricaneDataSets.K;
+    for k in range(K):
+        if k not in hurricaneDataSets.absorbing_states:
+            in_sample = [];
+            for s in range(sample_size):
+                sample = [];
+                sample.append(k);
+                k_init = k
+                while k_init not in hurricaneDataSets.absorbing_states:
+                    k_next = MC_sample(k_init+1,hurricaneDataSets);
+                    sample.append(k_next);
+                    k_init = k_next;
+                in_sample.append(sample);
+            ISpaths[k] = in_sample;
+    dbfile = open(filename, 'ab')
+    # source, destination
+    pickle.dump(ISpaths, dbfile)                    
+    dbfile.close()
 
 #function to save lp files
 def save_lp(lp, name):
