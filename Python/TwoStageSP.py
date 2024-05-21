@@ -152,20 +152,12 @@ class TwoStageSP:
             for n in range(nbScens):
                 theta[n] = m.addVar(lb=-1e8)
             
-            # Define the objective
+            # Define the objective: just include the state-independent cost, which is the inventory cost, here in the first stage
             m.setObjective(
-                pbScens*gp.quicksum(
-                  (gp.quicksum(
-                        gp.quicksum(cb[i,ii,t+t_roll,sample_path[t]] * f[i, ii, t] for ii in range(Ni) for i in range(N0))
-                        for t in range(nbstages1))
-                + gp.quicksum(
+                gp.quicksum(
                     gp.quicksum(ch[i,t_roll+t] * x[i, t] for i in range(Ni))
                     for t in range(nbstages1))
-                + gp.quicksum(
-                    gp.quicksum(cp[t_roll+t,sample_path[t]] * f[N0-1, i, t] for i in range(Ni))
-                    for t in range(nbstages1))
-                + theta[n]) for n in range(nbScens)
-                ),
+                + pbScens*gp.quicksum(theta[n] for n in range(nbScens)),
                 GRB.MINIMIZE)
         
         # Define the constraints
@@ -258,13 +250,24 @@ class TwoStageSP:
         absorbing_option = self.inputParams.absorbing_option;
         nodeScenList = self.hurricaneData.nodeScenList;
         nodeScenWeights = self.hurricaneData.nodeScenWeights;
+        ISpaths = self.ISpaths;
 
         nbstages1 = T - t_roll
         if absorbing_option == 0:
             # If no MDC/SP operation is allowed in the absorbing state, do not plan for stage T since we know for sure that all states are absorbing
             nbstages1 = T - t_roll - 1
-        nbScens = len(nodeScenList[(t_roll,k_t)])
-        pbScens = nodeScenWeights[(t_roll,k_t)]
+
+        if self.inputParams.cost_structure == 0:
+            # cost is only time-dependent
+            nbScens = len(nodeScenList[(t_roll,k_t)])
+            pbScens = nodeScenWeights[(t_roll,k_t)]
+
+        if self.inputParams.cost_structure == 1:
+            # cost is state-dependent
+            sample_path = ISpaths[k_t];
+            nbScens = len(sample_path);
+            pbScens = [1.0/nbScens]*nbScens;
+
         LB = -1e10
         UB = 1e10
         thetaval = [0] * nbScens
@@ -319,9 +322,19 @@ class TwoStageSP:
         absorbing_option = self.inputParams.absorbing_option;
         nodeScenList = self.hurricaneData.nodeScenList;
         nodeScenWeights = self.hurricaneData.nodeScenWeights;
+        ISpaths = self.ISpaths;
         
-        nbScens = len(nodeScenList[(t_roll,k_t)])
-        pbScens = nodeScenWeights[(t_roll,k_t)]
+        if self.inputParams.cost_structure == 0:
+            # cost is only time-dependent
+            nbScens = len(nodeScenList[(t_roll,k_t)])
+            pbScens = nodeScenWeights[(t_roll,k_t)]
+
+        if self.inputParams.cost_structure == 1:
+            # cost is state-dependent
+            sample_path = ISpaths[k_t];
+            nbScens = len(sample_path);
+            pbScens = [1.0/nbScens]*nbScens;
+
         flag = 0
         nbstages1 = T - t_roll
         
@@ -334,72 +347,74 @@ class TwoStageSP:
         pi3 = [0] * nbScens
         Qbar = 0
         
-        for n in range(nbScens):
-            absorbingT = nodeScenList[(t_roll,k_t)][n][0]
-            absorbingState = nodeScenList[(t_roll,k_t)][n][1]
-            self.RH_2SSP_update_RHS(absorbingT, absorbingState, xval, fval, t_roll)
-            Q[n], pi1[n], pi2[n], pi3[n], flag = self.solve_scen_subproblem()
-            
-            if flag == -1:
-                print("Subproblem status is infeasible?!")
-                exit(0)
-        
-        Qbar = sum(Q[n] * pbScens[n] for n in range(nbScens))
-        
-        # Cut generation: multi-cut version
-        for n in range(nbScens):
-            #print("Q[%d] = %f, (%d, %d)" %(n, Q[n], nodeScenList[(t_roll,k_t)][n][0], nodeScenList[(t_roll,k_t)][n][1]))
-            if (Q[n] - thetaval[n]) / max(1e-10, abs(Q[n])) > self.solveParams.cutviol and Q[n] - thetaval[n] > self.solveParams.cutviol:
-                #print("pi1[n] = ", pi1[n]);
-                #print("pi3[n] = %f" % pi3[n])
-                tt = nodeScenList[(t_roll,k_t)][n][0]
-                # tt is the terminal stage
-                if absorbing_option == 0:
-                    reimbursement = -sum(
-                            sum(sum(
-                                cb[i,ii,t_roll + t] * fval[i][ii][t]
-                                for ii in range(Ni)
-                            ) for i in range(N0))
-                        + sum(ch[i,t_roll + t] * xval[i][t] for i in range(Ni))
-                        + sum(fval[N0-1][i][t] for i in range(Ni)) * cp[t_roll + t]
-                        for t in range(tt - t_roll, nbstages1));
-                    #print("reimbursement[%d] = %f" %(n,reimbursement));
-                    self.master.addConstr(
-                        self.theta[n] - sum(pi1[n][i] * self.x[i, tt - t_roll - 1] for i in range(Ni))
-                        + pi3[n] * (-sum(
-                            sum(sum(
-                                cb[i,ii,t_roll + t] * self.f[i,ii,t]
-                                for ii in range(Ni)
-                            ) for i in range(N0))
-                        + sum(ch[i,t_roll + t] * self.x[i, t] for i in range(Ni))
-                        + sum(self.f[N0-1,i,t] for i in range(Ni)) * cp[t_roll + t]
-                        for t in range(tt - t_roll, nbstages1)
-                        )) >= Q[n] - sum(pi1[n][i] * xval[i][tt - t_roll -1] for i in range(Ni)) + pi3[n]*reimbursement
-                    )
-                else:
-                    reimbursement = -sum(
-                            sum(sum(
-                                cb[i,ii,t_roll + t] * fval[i][ii][t]
-                                for ii in range(Ni)
-                            ) for i in range(N0))
-                        + sum(ch[i,t_roll + t] * xval[i][t] for i in range(Ni))
-                        + sum(fval[N0-1][i][t] for i in range(Ni)) * cp[t_roll + t]
-                        for t in range(tt + 1 - t_roll, nbstages1));
-                    #print("reimbursement[%d] = %f" %(n,reimbursement));
-                    self.master.addConstr(
-                        self.theta[n] - sum(pi1[n][i] * self.x[i, tt - t_roll] for i in range(Ni))
-                        + pi3[n] * (-sum(
-                            sum(sum(
-                                cb[i,ii,t_roll + t] * self.f[i,ii,t]
-                                for ii in range(Ni)
-                            ) for i in range(N0))
-                        + sum(ch[i,t_roll + t] * self.x[i, t] for i in range(Ni))
-                        + sum(self.f[N0-1,i,t] for i in range(Ni)) * cp[t_roll + t]
-                        for t in range(tt + 1 - t_roll, nbstages1)
-                        )) >= Q[n] - sum(pi1[n][i] * xval[i][tt - t_roll] for i in range(Ni)) + pi3[n]*reimbursement
-                    )
+        if self.inputParams.cost_structure == 0:
+            # cost is only time-dependent
+            for n in range(nbScens):
+                absorbingT = nodeScenList[(t_roll,k_t)][n][0]
+                absorbingState = nodeScenList[(t_roll,k_t)][n][1]
+                self.RH_2SSP_update_RHS(absorbingT, absorbingState, xval, fval, t_roll)
+                Q[n], pi1[n], pi2[n], pi3[n], flag = self.solve_scen_subproblem()
                 
-                flag = 1
+                if flag == -1:
+                    print("Subproblem status is infeasible?!")
+                    exit(0)
+            
+            Qbar = sum(Q[n] * pbScens[n] for n in range(nbScens))
+            
+            # Cut generation: multi-cut version
+            for n in range(nbScens):
+                #print("Q[%d] = %f, (%d, %d)" %(n, Q[n], nodeScenList[(t_roll,k_t)][n][0], nodeScenList[(t_roll,k_t)][n][1]))
+                if (Q[n] - thetaval[n]) / max(1e-10, abs(Q[n])) > self.solveParams.cutviol and Q[n] - thetaval[n] > self.solveParams.cutviol:
+                    #print("pi1[n] = ", pi1[n]);
+                    #print("pi3[n] = %f" % pi3[n])
+                    tt = nodeScenList[(t_roll,k_t)][n][0]
+                    # tt is the terminal stage
+                    if absorbing_option == 0:
+                        reimbursement = -sum(
+                                sum(sum(
+                                    cb[i,ii,t_roll + t,0] * fval[i][ii][t]
+                                    for ii in range(Ni)
+                                ) for i in range(N0))
+                            + sum(ch[i,t_roll + t] * xval[i][t] for i in range(Ni))
+                            + sum(fval[N0-1][i][t] for i in range(Ni)) * cp[t_roll + t,0]
+                            for t in range(tt - t_roll, nbstages1));
+                        #print("reimbursement[%d] = %f" %(n,reimbursement));
+                        self.master.addConstr(
+                            self.theta[n] - sum(pi1[n][i] * self.x[i, tt - t_roll - 1] for i in range(Ni))
+                            + pi3[n] * (-sum(
+                                sum(sum(
+                                    cb[i,ii,t_roll + t,0] * self.f[i,ii,t]
+                                    for ii in range(Ni)
+                                ) for i in range(N0))
+                            + sum(ch[i,t_roll + t] * self.x[i, t] for i in range(Ni))
+                            + sum(self.f[N0-1,i,t] for i in range(Ni)) * cp[t_roll + t,0]
+                            for t in range(tt - t_roll, nbstages1)
+                            )) >= Q[n] - sum(pi1[n][i] * xval[i][tt - t_roll -1] for i in range(Ni)) + pi3[n]*reimbursement
+                        )
+                    else:
+                        reimbursement = -sum(
+                                sum(sum(
+                                    cb[i,ii,t_roll + t,0] * fval[i][ii][t]
+                                    for ii in range(Ni)
+                                ) for i in range(N0))
+                            + sum(ch[i,t_roll + t] * xval[i][t] for i in range(Ni))
+                            + sum(fval[N0-1][i][t] for i in range(Ni)) * cp[t_roll + t,0]
+                            for t in range(tt + 1 - t_roll, nbstages1));
+                        #print("reimbursement[%d] = %f" %(n,reimbursement));
+                        self.master.addConstr(
+                            self.theta[n] - sum(pi1[n][i] * self.x[i, tt - t_roll] for i in range(Ni))
+                            + pi3[n] * (-sum(
+                                sum(sum(
+                                    cb[i,ii,t_roll + t,0] * self.f[i,ii,t]
+                                    for ii in range(Ni)
+                                ) for i in range(N0))
+                            + sum(ch[i,t_roll + t] * self.x[i, t] for i in range(Ni))
+                            + sum(self.f[N0-1,i,t] for i in range(Ni)) * cp[t_roll + t,0]
+                            for t in range(tt + 1 - t_roll, nbstages1)
+                            )) >= Q[n] - sum(pi1[n][i] * xval[i][tt - t_roll] for i in range(Ni)) + pi3[n]*reimbursement
+                        )
+                    
+                    flag = 1
         
         return flag, Qbar
 
@@ -429,6 +444,7 @@ class TwoStageSP:
 
     # Updates the RHS of the 2nd-stage constraints and objective coefficients
     def RH_2SSP_update_RHS(self, absorbingT, k_t, xval, fval, t_roll):
+        # WARNING: only works when the cost is only time-dependent
         Ni = self.networkData.Ni;
         Nj = self.networkData.Nj;
         N0 = self.networkData.N0;
@@ -466,20 +482,20 @@ class TwoStageSP:
             if absorbing_option == 0:
                 # reimburse the operational cost starting from the terminal stage, since the terminal stage does not allow operation
                 updatedRHS = -sum((
-                    sum(sum(cb[i,ii,t_roll + t] * fval[i][ii][t] for ii in range(Ni)) for i in range(N0))
-                    + sum(ch[i,t_roll + t] * xval[i][t] for i in range(Ni)) + sum(fval[N0-1][i][t] for i in range(Ni)) * cp[t_roll + t])
+                    sum(sum(cb[i,ii,t_roll + t,0] * fval[i][ii][t] for ii in range(Ni)) for i in range(N0))
+                    + sum(ch[i,t_roll + t] * xval[i][t] for i in range(Ni)) + sum(fval[N0-1][i][t] for i in range(Ni)) * cp[t_roll + t,0])
                     for t in range(absorbingT-t_roll,nbstages1))
             else:
                 # reimburse the operational cost if they occur after the terminal stage: starting from stage (τ+1)-t_roll
                 updatedRHS = -sum((
-                    sum(sum(cb[i,ii,t_roll + t] * fval[i][ii][t] for ii in range(Ni)) for i in range(N0))
-                    + sum(ch[i,t_roll + t] * xval[i][t] for i in range(Ni)) + sum(fval[N0-1][i][t] for i in range(Ni)) * cp[t_roll + t])
+                    sum(sum(cb[i,ii,t_roll + t,0] * fval[i][ii][t] for ii in range(Ni)) for i in range(N0))
+                    + sum(ch[i,t_roll + t] * xval[i][t] for i in range(Ni)) + sum(fval[N0-1][i][t] for i in range(Ni)) * cp[t_roll + t,0])
                     for t in range(absorbingT-t_roll+1,nbstages1))
             self.rCons.setAttr(GRB.Attr.RHS, updatedRHS);
         # Also need to update the coefficients of y[i,j] variables in the 2nd stage
         for i in range(Ni):
             for j in range(Nj):
-                self.y2[i,j].setAttr(GRB.Attr.Obj, ca[i,j,absorbingT]);
+                self.y2[i,j].setAttr(GRB.Attr.Obj, ca[i,j,absorbingT,0]);
 
 
     def static_2SSP_eval(self,osfname):
