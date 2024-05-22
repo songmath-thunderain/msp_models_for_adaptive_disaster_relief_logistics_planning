@@ -211,7 +211,7 @@ class TwoStageSP:
         
         # Define the objective
         m.setObjective(
-            gp.quicksum(ca[i,j,0] * y[i, j] for i in range(Ni) for j in range(Nj)) # ca[i,j,0] is just temporary here
+            gp.quicksum(ca[i,j,0,0] * y[i, j] for i in range(Ni) for j in range(Nj)) # ca[i,j,0] is just temporary here
             + gp.quicksum(z[j] for j in range(Nj)) * p
             + gp.quicksum(v[i] for i in range(Ni)) * q
             + reimbursement,
@@ -505,6 +505,7 @@ class TwoStageSP:
         dissipate_option = self.inputParams.dissipate_option;
         nodeScenList = self.hurricaneData.nodeScenList;
         nodeScenWeights = self.hurricaneData.nodeScenWeights;
+        ISpaths = self.ISpaths;
         S = self.hurricaneData.states;
         x_0 = self.networkData.x_0;
 
@@ -521,9 +522,16 @@ class TwoStageSP:
         LB, UB, xval, fval, thetaval = self.RH_2SSP_solve_roll(OS_paths[s, t_roll]-1, t_roll)
         timeTrain = time.time() - start_time
 
-        nbScens = len(nodeScenList[t_roll, OS_paths[s, t_roll]-1])
-
-        f1cost = LB - sum(thetaval[n] * nodeScenWeights[t_roll, OS_paths[s, t_roll]-1][n] for n in range(0, nbScens))
+        if self.inputParams.cost_structure == 0:
+            # cost is only time-dependent
+            nbScens = len(nodeScenList[t_roll, OS_paths[s, t_roll]-1])
+            f1cost = LB - sum(thetaval[n] * nodeScenWeights[t_roll, OS_paths[s, t_roll]-1][n] for n in range(0, nbScens))
+        if self.inputParams.cost_structure == 1:
+            # cost is state-dependent
+            sample_path = ISpaths[OS_paths[s, t_roll]-1];
+            nbScens = len(sample_path);
+            pbScens = 1.0/nbScens;
+            f1cost = LB - pbScens*sum(thetaval[n] for n in range(0, nbScens))
 
         print("training LB =", LB)
         print("training UB =", UB)
@@ -544,7 +552,8 @@ class TwoStageSP:
             else:
                 absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if S[x-1][2] == T), None))
 
-            self.RH_2SSP_update_RHS(absorbingT, OS_paths[s, absorbingT]-1, xval, fval, t_roll)
+            if self.inputParams.cost_structure == 0:
+                self.RH_2SSP_update_RHS(absorbingT, OS_paths[s, absorbingT]-1, xval, fval, t_roll)
             
             Q[s], pi1[s], pi2[s], pi3[s], flag = self.solve_scen_subproblem()
             objs[s] = objs[s] + Q[s]
@@ -567,6 +576,7 @@ class TwoStageSP:
         dissipate_option = self.inputParams.dissipate_option;
         nodeScenList = self.hurricaneData.nodeScenList;
         nodeScenWeights = self.hurricaneData.nodeScenWeights;
+        ISpaths = self.ISpaths;
         S = self.hurricaneData.states;
         x_0 = self.networkData.x_0;
         SCEN = self.networkData.SCEN;
@@ -596,10 +606,10 @@ class TwoStageSP:
         for s in range(nbOS):
             for i in range(N0):
                 for ii in range(Ni):
-                    objs_RH2SSP[s, 0] += cb[i, ii, 0] * fval_1[i][ii][0]
+                    objs_RH2SSP[s, 0] += cb[i, ii, 0, OS_paths[s, t_roll]-1] * fval_1[i][ii][0]
 
             for i in range(Ni):
-                objs_RH2SSP[s, 0] += (ch[i, 0] * xval_1[i][0] + cp[0] * fval_1[N0 - 1][i][0])
+                objs_RH2SSP[s, 0] += (ch[i, 0] * xval_1[i][0] + cp[0,OS_paths[s, t_roll]-1] * fval_1[N0 - 1][i][0])
 
         for s in range(nbOS):
             absorbingT = -1
@@ -624,10 +634,10 @@ class TwoStageSP:
 
                     for i in range(N0):
                         for ii in range(Ni):
-                            objs_RH2SSP[s, t_roll] += cb[i, ii, t_roll] * fval_Roll[i][ii][0]
+                            objs_RH2SSP[s, t_roll] += cb[i, ii, t_roll, OS_paths[s, t_roll]-1] * fval_Roll[i][ii][0]
 
                     for i in range(Ni):
-                        objs_RH2SSP[s, t_roll] += (ch[i, t_roll] * xval_Roll[i][0] + cp[t_roll] * fval_Roll[N0 - 1][i][0])
+                        objs_RH2SSP[s, t_roll] += (ch[i, t_roll] * xval_Roll[i][0] + cp[t_roll,OS_paths[s, t_roll]-1] * fval_Roll[N0 - 1][i][0])
 
                     if t_roll == (absorbingT - 1):
                         # Now we get the realization, do the recourse now and finish the rolling procedure
@@ -651,10 +661,10 @@ class TwoStageSP:
 
                     for i in range(N0):
                         for ii in range(Ni):
-                            objs_RH2SSP[s, t_roll] += cb[i, ii, t_roll] * fval_Roll[i][ii][0]
+                            objs_RH2SSP[s, t_roll] += cb[i, ii, t_roll, OS_paths[s, t_roll]-1] * fval_Roll[i][ii][0]
 
                     for i in range(Ni):
-                        objs_RH2SSP[s, t_roll] += (ch[i, t_roll] * xval_Roll[i][0] + cp[t_roll] * fval_Roll[N0 - 1][i][0])
+                        objs_RH2SSP[s, t_roll] += (ch[i, t_roll] * xval_Roll[i][0] + cp[t_roll, OS_paths[s, t_roll]-1] * fval_Roll[N0 - 1][i][0])
 
                     if t_roll == (absorbingT - 1):
                         t_roll += 1
@@ -675,7 +685,7 @@ class TwoStageSP:
                             # Also need to update the coefficients of y2[i,j] variables in the 2nd stage
                             for i in range(Ni):
                                 for j in range(Nj):
-                                    self.y2[i, j].setAttr(GRB.Attr.Obj, ca[i, j, absorbingT])
+                                    self.y2[i, j].setAttr(GRB.Attr.Obj, ca[i, j, absorbingT, OS_paths[s, absorbingT]-1])
 
                             self.subproblem.optimize()
 
@@ -686,8 +696,8 @@ class TwoStageSP:
                                 objs_RH2SSP[s, t_roll] += self.subproblem.objVal
                         else:
                             # Solve a terminal stage problem, just as the FA/MSP version
-                            m_term, x_term, f_term, y_term, z_term, v_term, dCons_term = self.terminal_model(t_roll, x_init)
                             k_t = OS_paths[s, t_roll]-1
+                            m_term, x_term, f_term, y_term, z_term, v_term, dCons_term = self.terminal_model(t_roll, k_t, x_init)
 
                             for j in range(Nj):
                                 if S[k_t][0] != 1:
@@ -723,6 +733,7 @@ class TwoStageSP:
         nodeLists = self.hurricaneData.nodeLists;
         nodeScenList = self.hurricaneData.nodeScenList;
         nodeScenWeights = self.hurricaneData.nodeScenWeights;
+        ISpaths = self.ISpaths;
         smallestTransProb = self.hurricaneData.smallestTransProb; 
         P_joint = self.hurricaneData.P_joint; 
         S = self.hurricaneData.states;
@@ -771,7 +782,7 @@ class TwoStageSP:
                             decisionNodes[t_roll][k] = 0
                         else:
                             #define terminal stage optimality model
-                            m_term, x_term, f_term, y_term, z_term, v_term, dCons_term = self.terminal_model(t_roll, x_0)
+                            m_term, x_term, f_term, y_term, z_term, v_term, dCons_term = self.terminal_model(t_roll, nodeLists[t_roll][k], x_0)
                             for j in range(Nj):
                                 dCons_term[j].setAttr(GRB.Attr.RHS, SCEN[nodeLists[t_roll][k]][j])
 
@@ -846,7 +857,7 @@ class TwoStageSP:
                         
                         for i in range(Ni):
                             for j in range(Nj):
-                                self.y2[i, j].setAttr(GRB.Attr.Obj, ca[i, j, absorbingT])
+                                self.y2[i, j].setAttr(GRB.Attr.Obj, ca[i, j, absorbingT, OS_paths[s,absorbingT]-1])
 
                         self.subproblem.optimize()
 
@@ -859,17 +870,17 @@ class TwoStageSP:
                             if absorbing_option == 0:
                                 for tt in range(absorbingT - t):
                                     objs_OOS[s] += sum(sum(
-                                        cb[i, ii, t + tt] * solutionNodes[(t, ind)][1][i][ii][tt] for ii in range(Ni)) for i in range(N0)
+                                        cb[i, ii, t + tt, OS_paths[s,t+tt]-1] * solutionNodes[(t, ind)][1][i][ii][tt] for ii in range(Ni)) for i in range(N0)
                                     ) + sum(ch[i, t + tt] * solutionNodes[(t, ind)][0][i][tt] for i in range(Ni)) + sum(
                                         solutionNodes[(t, ind)][1][N0-1][i][tt] for i in range(Ni)
-                                    ) * cp[t + tt]
+                                    ) * cp[t + tt, OS_paths[s,t+tt]-1]
                             else:
                                 for tt in range(absorbingT + 1 - t):
                                     objs_OOS[s] += sum(sum(
-                                        cb[i, ii, t + tt] * solutionNodes[(t, ind)][1][i][ii][tt] for ii in range(Ni)) for i in range(N0)
+                                        cb[i, ii, t + tt, OS_paths[s,t+tt]-1] * solutionNodes[(t, ind)][1][i][ii][tt] for ii in range(Ni)) for i in range(N0)
                                     ) + sum(ch[i, t + tt] * solutionNodes[(t, ind)][0][i][tt] for i in range(Ni)) + sum(
                                         solutionNodes[(t, ind)][1][N0-1][i][tt] for i in range(Ni)
-                                    ) * cp[t + tt]
+                                    ) * cp[t + tt, OS_paths[s,t+tt]-1]
                         #print("Go! obj = ", objs_OOS[s], "\n");
                         break
 
