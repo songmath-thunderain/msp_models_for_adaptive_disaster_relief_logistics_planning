@@ -440,44 +440,44 @@ class TwoStageSP:
                     if absorbing_option == 0:
                         reimbursement = sum(
                                 sum(sum(
-                                    cb[i,ii,t_roll + t,sample_path[t]] * fval[i][ii][t]
+                                    cb[i,ii,t_roll + t,sample_path[n][t]] * fval[i][ii][t]
                                     for ii in range(Ni)
                                 ) for i in range(N0))
                             + sum(ch[i,t_roll + t] * xval[i][t] for i in range(Ni))
-                            + sum(fval[N0-1][i][t] for i in range(Ni)) * cp[t_roll + t,sample_path[t]]
+                            + sum(fval[N0-1][i][t] for i in range(Ni)) * cp[t_roll + t,sample_path[n][t]]
                             for t in range(tt - t_roll));
                         #print("reimbursement[%d] = %f" %(n,reimbursement));
                         self.master.addConstr(
                             self.theta[n] - sum(pi1[n][i] * self.x[i, tt - t_roll - 1] for i in range(Ni))
                             + pi3[n] * (sum(
                                 sum(sum(
-                                    cb[i,ii,t_roll + t,sample_path[t]] * self.f[i,ii,t]
+                                    cb[i,ii,t_roll + t,sample_path[n][t]] * self.f[i,ii,t]
                                     for ii in range(Ni)
                                 ) for i in range(N0))
                             + sum(ch[i,t_roll + t] * self.x[i, t] for i in range(Ni))
-                            + sum(self.f[N0-1,i,t] for i in range(Ni)) * cp[t_roll + t,sample_path[t]]
+                            + sum(self.f[N0-1,i,t] for i in range(Ni)) * cp[t_roll + t,sample_path[n][t]]
                             for t in range(tt - t_roll)
                             )) >= Q[n] - sum(pi1[n][i] * xval[i][tt - t_roll -1] for i in range(Ni)) + pi3[n]*reimbursement
                         )
                     else:
                         reimbursement = sum(
                                 sum(sum(
-                                    cb[i,ii,t_roll + t,sample_path[t]] * fval[i][ii][t]
+                                    cb[i,ii,t_roll + t,sample_path[n][t]] * fval[i][ii][t]
                                     for ii in range(Ni)
                                 ) for i in range(N0))
                             + sum(ch[i,t_roll + t] * xval[i][t] for i in range(Ni))
-                            + sum(fval[N0-1][i][t] for i in range(Ni)) * cp[t_roll + t,sample_path[t]]
+                            + sum(fval[N0-1][i][t] for i in range(Ni)) * cp[t_roll + t,sample_path[n][t]]
                             for t in range(tt + 1 - t_roll));
                         #print("reimbursement[%d] = %f" %(n,reimbursement));
                         self.master.addConstr(
                             self.theta[n] - sum(pi1[n][i] * self.x[i, tt - t_roll] for i in range(Ni))
                             + pi3[n] * (sum(
                                 sum(sum(
-                                    cb[i,ii,t_roll + t,sample_path[t]] * self.f[i,ii,t]
+                                    cb[i,ii,t_roll + t,sample_path[n][t]] * self.f[i,ii,t]
                                     for ii in range(Ni)
                                 ) for i in range(N0))
                             + sum(ch[i,t_roll + t] * self.x[i, t] for i in range(Ni))
-                            + sum(self.f[N0-1,i,t] for i in range(Ni)) * cp[t_roll + t,sample_path[t]]
+                            + sum(self.f[N0-1,i,t] for i in range(Ni)) * cp[t_roll + t,sample_path[n][t]]
                             for t in range(tt + 1 - t_roll)
                             )) >= Q[n] - sum(pi1[n][i] * xval[i][tt - t_roll] for i in range(Ni)) + pi3[n]*reimbursement
                         )
@@ -671,7 +671,10 @@ class TwoStageSP:
                 self.RH_2SSP_update_RHS(absorbingT, OS_paths[s, absorbingT]-1, xval, fval, t_roll)
 
             if self.inputParams.cost_structure == 1:
-                self.RH_2SSP_update_RHS_path(absorbingT, OS_paths[s, absorbingT]-1, OS_paths[s, 0:T], xval, fval, t_roll)
+                sample_path = copy.deepcopy(OS_paths[s, 0:T]);
+                for t in range(len(sample_path)):
+                    sample_path[t] -= 1
+                self.RH_2SSP_update_RHS_path(absorbingT, OS_paths[s, absorbingT]-1, sample_path, xval, fval, t_roll)
 
             Q[s], pi1[s], pi2[s], pi3[s], flag = self.solve_scen_subproblem()
             objs[s] = objs[s] + Q[s]
