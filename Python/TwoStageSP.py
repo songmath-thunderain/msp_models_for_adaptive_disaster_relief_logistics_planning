@@ -285,6 +285,7 @@ class TwoStageSP:
             
             # Solve second stage
             flag, Qbar = self.solve_second_stage(k_t, t_roll, xval, fval, thetaval)
+
             if flag != -1:
                 UB = min(firstCost + Qbar, UB)
         
@@ -419,7 +420,7 @@ class TwoStageSP:
             # cost is both time- and state-dependent
             for n in range(nbScens):
                 absorbingT = t_roll + len(sample_path[n]) - 1
-                absorbingState = sample_path[n][-1]
+                absorbingState = sample_path[n][-1] # WARNING: This is potentially problematic for OOS test
                 self.RH_2SSP_update_RHS_path(absorbingT, absorbingState, sample_path[n], xval, fval, t_roll)
                 Q[n], pi1[n], pi2[n], pi3[n], flag = self.solve_scen_subproblem()
                 
@@ -449,7 +450,7 @@ class TwoStageSP:
                         #print("reimbursement[%d] = %f" %(n,reimbursement));
                         self.master.addConstr(
                             self.theta[n] - sum(pi1[n][i] * self.x[i, tt - t_roll - 1] for i in range(Ni))
-                            + pi3[n] * (sum(
+                            - pi3[n] * (sum(
                                 sum(sum(
                                     cb[i,ii,t_roll + t,sample_path[n][t]] * self.f[i,ii,t]
                                     for ii in range(Ni)
@@ -457,7 +458,7 @@ class TwoStageSP:
                             + sum(ch[i,t_roll + t] * self.x[i, t] for i in range(Ni))
                             + sum(self.f[N0-1,i,t] for i in range(Ni)) * cp[t_roll + t,sample_path[n][t]]
                             for t in range(tt - t_roll)
-                            )) >= Q[n] - sum(pi1[n][i] * xval[i][tt - t_roll -1] for i in range(Ni)) + pi3[n]*reimbursement
+                            )) >= Q[n] - sum(pi1[n][i] * xval[i][tt - t_roll -1] for i in range(Ni)) - pi3[n]*reimbursement
                         )
                     else:
                         reimbursement = sum(
@@ -471,7 +472,7 @@ class TwoStageSP:
                         #print("reimbursement[%d] = %f" %(n,reimbursement));
                         self.master.addConstr(
                             self.theta[n] - sum(pi1[n][i] * self.x[i, tt - t_roll] for i in range(Ni))
-                            + pi3[n] * (sum(
+                            - pi3[n] * (sum(
                                 sum(sum(
                                     cb[i,ii,t_roll + t,sample_path[n][t]] * self.f[i,ii,t]
                                     for ii in range(Ni)
@@ -479,7 +480,7 @@ class TwoStageSP:
                             + sum(ch[i,t_roll + t] * self.x[i, t] for i in range(Ni))
                             + sum(self.f[N0-1,i,t] for i in range(Ni)) * cp[t_roll + t,sample_path[n][t]]
                             for t in range(tt + 1 - t_roll)
-                            )) >= Q[n] - sum(pi1[n][i] * xval[i][tt - t_roll] for i in range(Ni)) + pi3[n]*reimbursement
+                            )) >= Q[n] - sum(pi1[n][i] * xval[i][tt - t_roll] for i in range(Ni)) - pi3[n]*reimbursement
                         )
                     flag = 1
 
