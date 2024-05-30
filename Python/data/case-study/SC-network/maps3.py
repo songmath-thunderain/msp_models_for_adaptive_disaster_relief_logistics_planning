@@ -31,13 +31,6 @@ G, gdf = get_map(place_name)
 # coastal counties in South Carolina
 counties = ['Horry County', 'Georgetown County', 'Charleston County', 'Beaufort County', 'Jasper County', 'Colleton County', 'Dorchester County', 'Berkeley County']
 
-
-
-
-
-
-
-
 def get_data(save_data=False):
     # let's create a DataFrame to store the airports
     airports_df          = gpd.GeoDataFrame()
