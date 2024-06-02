@@ -39,7 +39,7 @@ def termination_check(iter, relative_gap, LB, start, cutviol_iter, solveParams):
 
 # function to create an out-of-sample for given initial state k_init
 def create_OSpaths(k_init,hurricaneDataSet):
-    osfname = f"./data/case-study/OOS{k_init}.csv"
+    osfname = f"./data/synthetic/OOS{k_init}-D.csv"
     OS_paths = pd.read_csv(osfname, header=0).to_numpy()
     rr = OS_paths.shape[0]
     cc = OS_paths.shape[1]
