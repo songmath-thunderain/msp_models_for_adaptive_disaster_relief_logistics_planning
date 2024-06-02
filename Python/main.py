@@ -18,11 +18,11 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--oos", type = int, help = "number of out-of-sample scenarios")
     parser.add_argument("-ni", "--Ni", type = int, choices = [3,6,9], help = "number of SPs")
     parser.add_argument("-nj", "--Nj", type = int, choices = [10,20,30], help = "number of DPs")
-    parser.add_argument("-c", "--cost_structure", type = int, choices = [0,1], help = "cost structure option")
+    parser.add_argument("-c", "--cost_structure", type = int, choices = [-1,0,1], help = "cost structure option: -1: safe time but time dependent only, 0: time increasing, 1: safe time but state dependent")
     parser.add_argument("-t", "--tau", type = float, help = "cost-scaling factor")
     parser.add_argument("-st", "--safe_time", required = False, type = int, help = "safe time parameter to determine cost surge")
     parser.add_argument("-s", "--solution_option", type = int, choices = [0,1,2,3,4,5], help = "solution options: 0. CV, 1. FA, 2. static2SSP, 3. RH2SSP, 4. WS, 5. All")
-    parser.add_argument("-i", "--instance_option", type = int, choices = [0,1], help = "instance option: 0 -- Synthetic, 1 -- Case Study")
+    parser.add_argument("-i", "--instance_option", type = int, choices = [-1,0,1], help = "instance option: -1 -- Synthetic D-landfall 0 -- Synthetic R-landfall, 1 -- Case Study")
     parser.add_argument("-w", "--write_option", type = int, choices = [0,1], help = "0 -- do not write to CSV, 1 -- write results to CSV")
     args = parser.parse_args()
     solveparam_file = args.solveparam
@@ -46,6 +46,7 @@ if __name__ == "__main__":
     Nj = args.Nj
     tau = args.tau
     cost_structure = args.cost_structure
+    # cost_structure = -1: modified cost structure but in the deterministic landfall case
     # cost_structure = 0: original cost structure: cost increases by tau in every period
     # cost_structure = 1: modified cost structure: cost stays the same until the expected landfall time is within the safe time threshold
     # safe_time is optional
@@ -53,8 +54,8 @@ if __name__ == "__main__":
     if args.safe_time is not None:
         safe_time = args.safe_time
     else:
-        if cost_structure == 1:
-            print("Error! safe_time parameter is not defined for cost_structure == 1!")
+        if cost_structure == 1 or cost_structure == -1:
+            print("Error! safe_time parameter is not defined for cost_structure == -1 or 1!")
             exit(0);
 
     with open(solveparam_file, "r") as f:
@@ -75,8 +76,22 @@ if __name__ == "__main__":
     start_time = time.time()
 
     ISpaths = None
-    if instance_option == 0:
-        # synthetic instance family
+    if instance_option == -1:
+        # synthetic instance family: deterministic landfall time
+        intensityFile = 'data/synthetic/intensity.csv';
+        locationFile = 'data/synthetic/location.csv';
+        landfallFile = 'data/synthetic/landfall-D.csv';
+        
+        hurricaneInstance.input_from_Syn(intensityFile, locationFile, landfallFile, inputParams)
+
+        netNodesFile = 'data/synthetic/nodes.csv';
+        netParamsFile = 'data/synthetic/netParams.csv';
+        networkInstance.input_from_Syn(cost_structure,safe_time,tau,netNodesFile,netParamsFile,hurricaneInstance)
+
+        osfname = "./data/synthetic/OOS" + str(inputParams.k_init) + "-D.csv"
+
+    elif instance_option == 0:
+        # synthetic instance family: random landfall time
         intensityFile = 'data/synthetic/intensity.csv';
         locationFile = 'data/synthetic/location.csv';
         landfallFile = 'data/synthetic/landfall.csv';
@@ -115,7 +130,7 @@ if __name__ == "__main__":
             ISfile.close()
 
     else:
-        print("ERROR: instance_option has to be 0 or 1!")
+        print("ERROR: instance_option has to be -1, 0 or 1!")
         exit(0);
 
     elapse_time = time.time() - start_time

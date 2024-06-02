@@ -121,7 +121,7 @@ class TwoStageSP:
                 for ii in range(Ni):
                     f[i, ii, t] = m.addVar(lb=0)
 
-        if self.inputParams.cost_structure == 0:
+        if self.inputParams.cost_structure == 0 or self.inputParams.cost_structure == -1:
             # cost is only time-dependent: the index (0) used in the cost definition is just a placeholder
             nbScens = len(nodeScenList[(t_roll,k_t)])
             pbScens = nodeScenWeights[(t_roll,k_t)]
@@ -257,7 +257,7 @@ class TwoStageSP:
             # If no MDC/SP operation is allowed in the absorbing state, do not plan for stage T since we know for sure that all states are absorbing
             nbstages1 = T - t_roll - 1
 
-        if self.inputParams.cost_structure == 0:
+        if self.inputParams.cost_structure == 0 or self.inputParams.cost_structure == -1:
             # cost is only time-dependent
             nbScens = len(nodeScenList[(t_roll,k_t)])
             pbScens = nodeScenWeights[(t_roll,k_t)]
@@ -325,7 +325,7 @@ class TwoStageSP:
         nodeScenWeights = self.hurricaneData.nodeScenWeights;
         ISpaths = self.ISpaths;
         
-        if self.inputParams.cost_structure == 0:
+        if self.inputParams.cost_structure == 0 or self.inputParams.cost_structure == -1:
             # cost is only time-dependent
             nbScens = len(nodeScenList[(t_roll,k_t)])
             pbScens = nodeScenWeights[(t_roll,k_t)]
@@ -348,7 +348,7 @@ class TwoStageSP:
         pi3 = [0] * nbScens
         Qbar = 0
 
-        if self.inputParams.cost_structure == 0:
+        if self.inputParams.cost_structure == 0 or self.inputParams.cost_structure == -1:
             # cost is only time-dependent
             for n in range(nbScens):
                 absorbingT = nodeScenList[(t_roll,k_t)][n][0]
@@ -638,7 +638,7 @@ class TwoStageSP:
         LB, UB, xval, fval, thetaval = self.RH_2SSP_solve_roll(OS_paths[s, t_roll]-1, t_roll)
         timeTrain = time.time() - start_time
 
-        if self.inputParams.cost_structure == 0:
+        if self.inputParams.cost_structure == 0 or self.inputParams.cost_structure == -1:
             # cost is only time-dependent
             nbScens = len(nodeScenList[t_roll, OS_paths[s, t_roll]-1])
             f1cost = LB - sum(thetaval[n] * nodeScenWeights[t_roll, OS_paths[s, t_roll]-1][n] for n in range(nbScens))
@@ -668,7 +668,7 @@ class TwoStageSP:
             else:
                 absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if S[x-1][2] == T), None))
 
-            if self.inputParams.cost_structure == 0:
+            if self.inputParams.cost_structure == 0 or self.inputParams.cost_structure == -1:
                 self.RH_2SSP_update_RHS(absorbingT, OS_paths[s, absorbingT]-1, xval, fval, t_roll)
 
             if self.inputParams.cost_structure == 1:
