@@ -5,6 +5,8 @@ import numpy as np;
 import pandas as pd;
 import sys;
 import csv;
+import json;
+import ast;
 
 class inputParams:
   def __init__(self,dissipate_option,absorbing_option,cost_structure,safe_time,tau,k_init,nbOS):
@@ -265,6 +267,82 @@ class hurricaneData:
     # Create a complete set of reachable nodes over time, starting from the initial state k_init = 1
     k_init = 1
     self.createNodes(k_init); # List of MC states in each stage
+  
+  def input_from_Case_new(self, forecastFile, MCFile):
+    # hurricane data class generator from synthetic instances
+    # Default: trackProbFile = "data/case-study/mc_track_transition_prob_at_t"
+    # Default: trackErrorFile = "data/case-study/mc_track_mean_error_at_t"
+
+    with open(MCFile, 'r') as file:
+        MC = json.load(file)
+    T = len(list(MC.keys()));  # define T_max
+
+    ########################################################################################
+    # Data processing into a joint MC
+    # First, count the total number of possible states
+    K = 1;
+    for t in range(T-1):
+	    K += len(list(MC[str(t+1)].keys()));
+
+    print("Total # of states K = ", K);
+    print("Total # of MC states = [", end = "");
+    for t in range(T-1):
+        print(len(list(MC[str(t+1)].keys())), end = ""); 
+        if t != T-2:
+            print(",", end="");
+        else:
+            print("]");
+    print("Total # of stages = ", T);
+    
+    P_joint = np.zeros((K, K));  # initialize the joint probability distribution MC
+    S = [None] * K;  # list with elements [intensity, location] (actual state labels) 
+    absorbing_states = [];  # list of absorbing states (their indices, starting from 0)
+
+    k1 = 0;  # counter for the number of states
+    initS = ast.literal_eval(list(MC['0'].keys())[0])
+    S[0] = [initS[1],initS[0],0];
+ 
+    for t in range(2,T+1):
+        for k in list(MC[str(t-1)].keys()):
+            k1 += 1;
+            tempS = ast.literal_eval(k);
+            S[k1] = [tempS[1], tempS[0], t-1]
+            if t == T:
+                absorbing_states.append(k1);
+ 
+    for k in range(K):
+        if S[k][2] == (T-1):
+            P_joint[k,k] = 1; # absorbing
+        else:
+            for kk in range(K):
+                if S[kk][2] == S[k][2] + 1:
+                    P_joint[k,kk] = MC[str(S[k][2])]['('+str(S[k][1])+', '+str(S[k][0])+')']['('+str(S[kk][1])+', '+str(S[kk][0])+')']
+                else:
+                    P_joint[k,kk] = 0;    
+
+    '''
+    # normalize the probabilities
+    P_temp = np.copy(P_joint);
+    for k in range(K):
+        for kk in range(K):
+            P_joint[k, kk] = P_temp[k, kk] / np.sum(P_temp[k, :]);
+    '''
+    # Get the smallest transition probability that is nonzero to give us a correct threshold to filter out impossible transitions
+    P_jointVec = np.copy(P_joint);
+    nonzero_probs = P_jointVec[P_jointVec != 0];
+    smallestTransProb = np.min(nonzero_probs) * 0.5;
+
+    # now store everything in the class
+    self.K = K;
+    self.T = T;
+    self.P_joint = P_joint;
+    self.states = S;
+    self.absorbing_states = absorbing_states;
+    self.smallestTransProb = smallestTransProb;
+    
+    # Create a complete set of reachable nodes over time, starting from the initial state k_init = 1
+    k_init = 1
+    self.createNodes(k_init); # List of MC states in each stage
 
 class networkData:
   def __init__(self, Ni, Nj):
@@ -483,7 +561,7 @@ class networkData:
     self.SCEN = SCEN;
 
   def input_from_Case(self,cost_structure,safe_time,costScalingFactor,netFolderPath,netParamsFile,hurricaneDataSet):
-    # network data class generator from synthetic instances
+    # data input interface for case study (old format)
     d_JI = pd.read_csv(netFolderPath+"/d_JI.csv").values;
     d_II = pd.read_csv(netFolderPath+"/d_II.csv").values;
     d_KI = pd.read_csv(netFolderPath+"/d_KI.csv").values;
@@ -669,10 +747,10 @@ class networkData:
     print("# of DPs = ", self.Nj);
 
   def input_from_Case_new(self,cost_structure,safe_time,costScalingFactor,netFolderPath,netParamsFile,hurricaneDataSet):
-    # network data class generator from synthetic instances
+    # data input interface for case study (new format)
     df = pd.read_excel(netFolderPath+'locations.xlsx');
-    Nj = 0; # # of DPs
-    Ni = 0; # # of SPs
+    Nj = 0; # of DPs
+    Ni = 0; # of SPs
     for i in range(df.shape[0]):
         if df['Type'][i] == 'RSA':
             Ni += 1;
@@ -683,7 +761,6 @@ class networkData:
     states = hurricaneDataSet.states;
     K = hurricaneDataSet.K;
     T = hurricaneDataSet.T;
-    Na = hurricaneDataSet.Na;
 
     # Create an empty dictionary to store the data
     netParams = {}
@@ -715,10 +792,28 @@ class networkData:
     d_JI = {};
     d_KI = {};
     d_KJ = {};
-    d_SJ = {};
 
     # now propagate these dictionaries from the dataframe data and distance matrix
+    # Read in the distance matrix
+    distanceMatrix = np.loadtxt(netFolderPath+'distanceMatrix.txt');
 
+    # WARNING: hardcode on the indices of the distance matrix
+    for i in range(Ni):
+        for ii in range(Ni):
+            if i == ii:
+                d_II[i,ii] = 0;
+            else:
+                d_II[i,ii] = distanceMatrix[i+1][ii+1];
+    
+    for j in range(Nj):
+        for i in range(Ni):
+            d_JI[j,i] = distanceMatrix[j+1+Ni][i+1];
+    
+    for i in range(Ni):
+        d_KI[i] = distanceMatrix[0][i+1];
+    
+    for j in range(Nj):
+        d_KJ[j] = distanceMatrix[0][j+1+Ni];
         
     # Unit cost of transporting/rerouting items from MDC/SP i to/between SP i'
     cb = np.empty((N0, Ni, T, K))
@@ -829,15 +924,17 @@ class networkData:
 
     for k in range(1, K + 1):
         scen = np.zeros(Nj)
-        a = states[k - 1][0]
-        l = states[k - 1][1]
+        if states[k-1][2] == (T-1):
+            a = states[k - 1][0]
+            l = states[k - 1][1]
+            dLandfall = XXXX
 
-        for j in range(1, Nj + 1):
-            dLandfall = d_SJ[l-1,j-1]
-            if dLandfall <= cMax:
-                scen[j - 1] = max_D[0,j-1] * (1 - (dLandfall / cMax)) * (a - 1) ** 2 / ((Na - 1) ** 2)
-            else:
-                scen[j - 1] = 0
+            for j in range(1, Nj + 1):
+                dLandfall = d_SJ[l-1,j-1]
+                if dLandfall <= cMax:
+                    scen[j - 1] = max_D[0,j-1] * (1 - (dLandfall / cMax)) * (a - 1) ** 2 / ((Na - 1) ** 2)
+                else:
+                    scen[j - 1] = 0
 
         SCEN.append(scen)
 

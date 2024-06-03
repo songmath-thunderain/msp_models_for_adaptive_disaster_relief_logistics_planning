@@ -18,12 +18,12 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--oos", type = int, help = "number of out-of-sample scenarios")
     parser.add_argument("-ni", "--Ni", type = int, choices = [3,6,9], help = "number of SPs")
     parser.add_argument("-nj", "--Nj", type = int, choices = [10,20,30], help = "number of DPs")
-    parser.add_argument("-c", "--cost_structure", type = int, choices = [-1,0,1], help = "cost structure option: -1: safe time but time dependent only, 0: time increasing, 1: safe time but state dependent")
+    parser.add_argument("-c", "--cost_structure", type = int, choices = [-1,0,1], help = "cost structure option: -1. safe time but time dependent only, 0. time increasing, 1. safe time but state dependent")
     parser.add_argument("-t", "--tau", type = float, help = "cost-scaling factor")
     parser.add_argument("-st", "--safe_time", required = False, type = int, help = "safe time parameter to determine cost surge")
     parser.add_argument("-s", "--solution_option", type = int, choices = [0,1,2,3,4,5], help = "solution options: 0. CV, 1. FA, 2. static2SSP, 3. RH2SSP, 4. WS, 5. All")
-    parser.add_argument("-i", "--instance_option", type = int, choices = [-1,0,1], help = "instance option: -1 -- Synthetic D-landfall 0 -- Synthetic R-landfall, 1 -- Case Study")
-    parser.add_argument("-w", "--write_option", type = int, choices = [0,1], help = "0 -- do not write to CSV, 1 -- write results to CSV")
+    parser.add_argument("-i", "--instance_option", type = int, choices = [-1,0,1], help = "instance option: -1. Synthetic D-landfall, 0. Synthetic R-landfall, 1. Case Study D-landfall")
+    parser.add_argument("-w", "--write_option", type = int, choices = [0,1], help = "0. do not write to CSV, 1. write results to CSV")
     args = parser.parse_args()
     solveparam_file = args.solveparam
     dissipate_option = args.dissipate_option
@@ -108,8 +108,9 @@ if __name__ == "__main__":
             ISfile = open('data/synthetic/in_sample_100.dat', 'rb')
             ISpaths = pickle.load(ISfile)
             ISfile.close()
+
     elif instance_option == 1:
-        # case-study instance
+        # case-study instance: deterministic landfall time
         '''
         # old case study input interface
         intensityFile = 'data/case-study/mc_int_transition_prob.csv';
@@ -132,6 +133,11 @@ if __name__ == "__main__":
             ISfile.close()
         '''
         # new case study input interface
+
+        forecastFile = 'data/case-study/SC-network/Florence_forecast.csv';
+        MCFile = 'data/case-study/SC-network/deterministic/pi_mssp_d.json';
+        hurricaneInstance.input_from_Case_new(forecastFile, MCFile);
+
         netFolderPath = 'data/case-study/SC-network';
         netParamsFile = 'data/case-study/SC-network/netParams.csv';
         networkInstance.input_from_Case_new(cost_structure,safe_time,tau,netFolderPath,netParamsFile,hurricaneInstance);
