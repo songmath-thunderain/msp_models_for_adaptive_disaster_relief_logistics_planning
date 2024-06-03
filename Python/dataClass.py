@@ -668,6 +668,199 @@ class networkData:
     print("# of SPs = ", self.Ni);
     print("# of DPs = ", self.Nj);
 
+  def input_from_Case_new(self,cost_structure,safe_time,costScalingFactor,netFolderPath,netParamsFile,hurricaneDataSet):
+    # network data class generator from synthetic instances
+    df = pd.read_excel(netFolderPath+'locations.xlsx');
+    Nj = 0; # # of DPs
+    Ni = 0; # # of SPs
+    for i in range(df.shape[0]):
+        if df['Type'][i] == 'RSA':
+            Ni += 1;
+        if df['Type'][i] == 'PoD':
+            Nj += 1;
+    N0 = Ni + 1;
+
+    states = hurricaneDataSet.states;
+    K = hurricaneDataSet.K;
+    T = hurricaneDataSet.T;
+    Na = hurricaneDataSet.Na;
+
+    # Create an empty dictionary to store the data
+    netParams = {}
+
+    # Open the CSV file and read its contents
+    with open(netParamsFile, mode='r') as file:
+        csv_reader = csv.reader(file)
+        
+        # Iterate through each row in the CSV file
+        for row in csv_reader:
+            # The first element in each row is the key, and the rest are values
+            key = row[0]
+            values = row[1:]
+            
+            # Store the data in the dictionary
+            netParams[key] = values
+
+    # Now translate the csv data into parameters to use here:
+    # 'other': [fuel, base, invCostRatio, penCostRatio, salvageCostRatio, cmax]
+    fuel = float(netParams['other'][0]);
+    base = float(netParams['other'][1]);
+    invCostRatio = float(netParams['other'][2]);
+    penCostRatio = float(netParams['other'][3]);
+    salvageCostRatio = float(netParams['other'][4]);
+    cMax = float(netParams['other'][5]);
+    f_cap = float(netParams['other'][6]);
+
+    d_II = {};
+    d_JI = {};
+    d_KI = {};
+    d_KJ = {};
+    d_SJ = {};
+
+    # now propagate these dictionaries from the dataframe data and distance matrix
+
+        
+    # Unit cost of transporting/rerouting items from MDC/SP i to/between SP i'
+    cb = np.empty((N0, Ni, T, K))
+    for i in range(N0):
+        for ii in range(Ni):
+            for t in range(T):
+                if i < N0-1:
+                    if cost_structure == 0:
+                        # cost_structure is only time dependent
+                        for k in range(K):
+                            cb[i, ii, t, k] = fuel * d_II[i,ii] * (1 + costScalingFactor * t)
+                    if cost_structure == -1 or cost_structure == 1:
+                        for k in range(K):
+                            surgeFlag = False;
+                            if (t,k) in hurricaneDataSet.nodeTime2Go:
+                                if hurricaneDataSet.nodeTime2Go[(t,k)] <= safe_time + 1e-5:
+                                    surgeFlag = True;
+                            else:
+                                surgeFlag = True;
+                            if not surgeFlag:
+                                cb[i, ii, t, k] = fuel * d_II[i,ii]
+                            else:
+                                cb[i, ii, t, k] = fuel * d_II[i,ii]*costScalingFactor
+                else:
+                    if cost_structure == 0:
+                        # cost_structure is only time dependent
+                        for k in range(K):
+                            cb[i, ii, t, k] = fuel * d_KI[0,ii] * (1 + costScalingFactor * t)
+                    if cost_structure == -1 or cost_structure == 1:
+                        for k in range(K):
+                            surgeFlag = False;
+                            if (t,k) in hurricaneDataSet.nodeTime2Go:
+                                if hurricaneDataSet.nodeTime2Go[(t,k)] <= safe_time + 1e-5:
+                                    surgeFlag = True;
+                            else:
+                                surgeFlag = True;
+                            if not surgeFlag:
+                                cb[i, ii, t, k] = fuel * d_KI[0,ii]
+                            else:
+                                cb[i, ii, t, k] = fuel * d_KI[0,ii]*costScalingFactor
+    # Unit cost of transporting items from MDC/SP i to/between a demand point j
+    ca = np.empty((N0, Nj, T, K))
+    for i in range(N0):
+        for j in range(Nj):
+            for t in range(T):
+                if i < N0-1:
+                    if cost_structure == 0:
+                        # cost_structure is only time dependent
+                        for k in range(K):
+                            ca[i, j, t, k] = fuel * d_JI[j,i] * (1 + costScalingFactor * t)
+                    if cost_structure == -1 or cost_structure == 1:
+                        for k in range(K):
+                            surgeFlag = False;
+                            if (t,k) in hurricaneDataSet.nodeTime2Go:
+                                if hurricaneDataSet.nodeTime2Go[(t,k)] <= safe_time + 1e-5:
+                                    surgeFlag = True;
+                            else:
+                                surgeFlag = True;
+                            if not surgeFlag:
+                                ca[i, j, t, k] = fuel * d_JI[j,i]
+                            else:
+                                ca[i, j, t, k] = fuel * d_JI[j,i]*costScalingFactor
+                else:
+                    if cost_structure == 0:
+                        # cost_structure is only time dependent
+                        for k in range(K):
+                            ca[i, j, t, k] = fuel * d_KJ[0,j] * (1 + costScalingFactor * t)
+                    if cost_structure == -1 or cost_structure == 1:
+                        for k in range(K):
+                            surgeFlag = False;
+                            if (t,k) in hurricaneDataSet.nodeTime2Go:
+                                if hurricaneDataSet.nodeTime2Go[(t,k)] <= safe_time + 1e-5:
+                                    surgeFlag = True;
+                            else:
+                                surgeFlag = True;
+                            if not surgeFlag:
+                                ca[i, j, t, k] = fuel * d_KJ[0,j]
+                            else:
+                                ca[i, j, t, k] = fuel * d_KJ[0,j]*costScalingFactor
+
+    cp = np.empty((T, K))
+    ch = np.empty((Ni, T))
+    for t in range(1, T + 1):
+        if cost_structure == 0:
+            # cost_structure is only time dependent
+            for k in range(K):
+                cp[t - 1, k] = base * (1 + costScalingFactor * (t - 1))
+        if cost_structure == -1 or cost_structure == 1:
+            for k in range(K):
+                surgeFlag = False;
+                if (t-1,k) in hurricaneDataSet.nodeTime2Go:
+                    if hurricaneDataSet.nodeTime2Go[(t-1,k)] <= safe_time + 1e-5:
+                        surgeFlag = True;
+                else:
+                    surgeFlag = True;
+                if not surgeFlag:
+                    cp[t - 1, k] = base
+                else:
+                    cp[t - 1, k] = base*costScalingFactor
+        ch[:, t - 1] = np.full(Ni, invCostRatio * base)
+
+    p = penCostRatio * base
+    q = salvageCostRatio * base
+    x_0 = np.zeros(Ni)
+
+    # Demand data
+    SCEN = []
+
+    for k in range(1, K + 1):
+        scen = np.zeros(Nj)
+        a = states[k - 1][0]
+        l = states[k - 1][1]
+
+        for j in range(1, Nj + 1):
+            dLandfall = d_SJ[l-1,j-1]
+            if dLandfall <= cMax:
+                scen[j - 1] = max_D[0,j-1] * (1 - (dLandfall / cMax)) * (a - 1) ** 2 / ((Na - 1) ** 2)
+            else:
+                scen[j - 1] = 0
+
+        SCEN.append(scen)
+
+    # now store everything in the class
+    self.fuel = fuel;
+    self.cb = cb;
+    self.ca = ca;
+    self.ch = ch;
+    self.cp = cp;
+    self.p = p;
+    self.q = q;
+    self.x_cap = x_cap;
+    self.x_0 = x_0;
+    self.SCEN = SCEN;
+
+    # Note: need to update Ni, Nj, N0 since this is from the datafile
+    self.Ni = Ni;
+    self.Nj = Nj;
+    self.N0 = self.Ni+1;
+
+    print("# of SPs = ", self.Ni);
+    print("# of DPs = ", self.Nj);  
+
 #Ni: number of supply points (without MDC).
 #Nj: number of demand points.
 #N0: number of supply points including MDC.

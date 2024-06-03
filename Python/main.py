@@ -110,6 +110,8 @@ if __name__ == "__main__":
             ISfile.close()
     elif instance_option == 1:
         # case-study instance
+        '''
+        # old case study input interface
         intensityFile = 'data/case-study/mc_int_transition_prob.csv';
         trackProbFile = 'data/case-study/mc_track_transition_prob_at_t';
         trackErrorFile = 'data/case-study/mc_track_mean_error_at_t';
@@ -128,6 +130,11 @@ if __name__ == "__main__":
             ISfile = open('data/case-study/in_sample_100.dat', 'rb')
             ISpaths = pickle.load(ISfile)
             ISfile.close()
+        '''
+        # new case study input interface
+        netFolderPath = 'data/case-study/SC-network';
+        netParamsFile = 'data/case-study/SC-network/netParams.csv';
+        networkInstance.input_from_Case_new(cost_structure,safe_time,tau,netFolderPath,netParamsFile,hurricaneInstance);
 
     else:
         print("ERROR: instance_option has to be -1, 0 or 1!")
