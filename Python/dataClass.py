@@ -7,6 +7,7 @@ import sys;
 import csv;
 import json;
 import ast;
+from shapely.geometry import Point, LineString
 
 class inputParams:
   def __init__(self,dissipate_option,absorbing_option,cost_structure,safe_time,tau,k_init,nbOS):
@@ -922,21 +923,33 @@ class networkData:
     # Demand data
     SCEN = []
 
+    # read Hurricane Florence point forecast
+    pf = pd.read_csv(netFolderPath+'Florence_forecast.csv');
+
+    # read some data for the necessary calculation below
+    aux = pd.read_excel(netFolderPath+'hurricane-position.xlsx');
+
+    study_line = LineString([aux['line-1-x'][0],aux['line-1-y'][0]],[aux['line-2-x'][0],aux['line-2-y'][0]]);
     for k in range(1, K + 1):
         scen = np.zeros(Nj)
         if states[k-1][2] == (T-1):
-            a = states[k - 1][0]
-            l = states[k - 1][1]
-            dLandfall = XXXX
+            a = states[k - 1][0] # intensity
+            l = states[k - 1][1] # forecast error (along the coastline w.r.t. the point forecast)
+            hurr_pos = [pf['Latitude'][T-1] + aux['x_rotate'][0]*l/aux['x_miles'][0], pf['Longitude'][T-1] + aux['y_rotate'][0]*l/aux['y_miles'][0]];
+            proj_point = study_line.interpolate(study_line.project(Point(hurr_pos)));
 
             for j in range(1, Nj + 1):
-                dLandfall = d_SJ[l-1,j-1]
+                dLandfall = np.sqrt(pow((df['latitude'][Ni+j]-proj_point.x)*aux['x_miles'][0],2)+pow((df['longitude'][Ni+j]-proj_point.y)*aux['y_miles'][0],2))
                 if dLandfall <= cMax:
-                    scen[j - 1] = max_D[0,j-1] * (1 - (dLandfall / cMax)) * (a - 1) ** 2 / ((Na - 1) ** 2)
+                    scen[j - 1] = df['Demand'][Ni+j] * (1 - (dLandfall / cMax)) * pow(a,2) / pow(5,2)
                 else:
                     scen[j - 1] = 0
 
         SCEN.append(scen)
+
+    x_cap = np.zeros(Ni);
+    for i in range(Ni):
+        x_cap[i] = df['Capacity'][1+i];
 
     # now store everything in the class
     self.fuel = fuel;
