@@ -277,7 +277,14 @@ class hurricaneData:
     if absorbingFile != None:
         with open(absorbingFile, 'r') as file:
             absorbing = json.load(file)
-    T = len(list(MC.keys()));  # define T_max
+        T = -1;
+        for t in list(absorbing.keys()):
+            if False in absorbing[t].values():
+                if int(t) > T:
+                    T = int(t);
+        T += 2; # define T_max
+    else:
+        T = len(list(MC.keys()));  # define T_max
 
     ########################################################################################
     # Data processing into a joint MC

@@ -22,7 +22,7 @@ if __name__ == "__main__":
     parser.add_argument("-t", "--tau", type = float, help = "cost-scaling factor")
     parser.add_argument("-st", "--safe_time", required = False, type = int, help = "safe time parameter to determine cost surge")
     parser.add_argument("-s", "--solution_option", type = int, choices = [0,1,2,3,4,5], help = "solution options: 0. CV, 1. FA, 2. static2SSP, 3. RH2SSP, 4. WS, 5. All")
-    parser.add_argument("-i", "--instance_option", type = int, choices = [-1,0,1], help = "instance option: -1. Synthetic D-landfall, 0. Synthetic R-landfall, 1. Case Study D-landfall")
+    parser.add_argument("-i", "--instance_option", type = int, choices = [-1,0,1,2], help = "instance option: -1. Synthetic D-landfall, 0. Synthetic R-landfall, 1. Case Study D-landfall")
     parser.add_argument("-w", "--write_option", type = int, choices = [0,1], help = "0. do not write to CSV, 1. write results to CSV")
     args = parser.parse_args()
     solveparam_file = args.solveparam
@@ -143,8 +143,28 @@ if __name__ == "__main__":
  
         osfname = "./data/case-study/SC-network/deterministic/OOS" + str(inputParams.k_init) + "-D.csv"
 
+    elif instance_option == 2:
+        # new case study input interface
+        absorbingFile = 'data/case-study/SC-network/random/absorb_mssp_r_fix_along_True.json'; 
+        MCFile = 'data/case-study/SC-network/random/pi_mssp_r_fix_along_True.json';
+        hurricaneInstance.input_from_Case_new(absorbingFile, MCFile);
+
+        print("states = ", hurricaneInstance.states);
+        print("absorbing states = ", hurricaneInstance.absorbing_states);
+
+        netFolderPath = 'data/case-study/SC-network/';
+        netParamsFile = 'data/case-study/SC-network/netParams.csv';
+        networkInstance.input_from_Case_new(cost_structure,safe_time,tau,netFolderPath,netParamsFile,hurricaneInstance);
+ 
+        osfname = "./data/case-study/SC-network/random/OOS" + str(inputParams.k_init) + ".csv"
+
+        if cost_structure == 1:
+            ISfile = open('data/case-study/SC-network/random/in_sample_100.dat', 'rb')
+            ISpaths = pickle.load(ISfile)
+            ISfile.close()
+
     else:
-        print("ERROR: instance_option has to be -1, 0 or 1!")
+        print("ERROR: instance_option has to be -1, 0, 1, or 2!")
         exit(0);
 
     elapse_time = time.time() - start_time
