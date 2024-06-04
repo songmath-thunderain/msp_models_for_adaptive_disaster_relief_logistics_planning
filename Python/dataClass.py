@@ -302,13 +302,13 @@ class hurricaneData:
 
     k1 = 0;  # counter for the number of states
     initS = ast.literal_eval(list(MC['0'].keys())[0])
-    S[0] = [initS[1],initS[0],1];
+    S[0] = [initS[1]+1,initS[0],1]; # note that the intensity state starts from 1
  
     for t in range(2,T+1):
         for k in list(MC[str(t-1)].keys()):
             k1 += 1;
             tempS = ast.literal_eval(k);
-            S[k1] = [tempS[1], tempS[0], t]
+            S[k1] = [tempS[1]+1, tempS[0], t]
             if absorbingFile == None:
                 # absorbingFile is not provided, deterministic case where all states in t = T are absorbing
                 if t == T:
@@ -324,7 +324,7 @@ class hurricaneData:
         else:
             for kk in range(K):
                 if S[kk][2] == S[k][2] + 1:
-                    P_joint[k,kk] = MC[str(S[k][2]-1)]['('+str(S[k][1])+', '+str(S[k][0])+')']['('+str(S[kk][1])+', '+str(S[kk][0])+')']
+                    P_joint[k,kk] = MC[str(S[k][2]-1)]['('+str(S[k][1])+', '+str(S[k][0]-1)+')']['('+str(S[kk][1])+', '+str(S[kk][0]-1)+')']
                 else:
                     P_joint[k,kk] = 0;    
 
@@ -934,12 +934,12 @@ class networkData:
     pf = pd.read_csv(netFolderPath+'Florence_forecast.csv');
 
     # read some data for the necessary calculation below
+    Na = 6; # WARNING: hardcode here!
     aux = pd.read_excel(netFolderPath+'hurricane-position.xlsx');
-
     study_line = LineString([(aux['line-1-x'][0],aux['line-1-y'][0]),(aux['line-2-x'][0],aux['line-2-y'][0])]);
     for k in range(1, K + 1):
         scen = np.zeros(Nj)
-        if states[k-1][2] == (T-1):
+        if states[k-1][2] == T:
             a = states[k - 1][0] # intensity
             l = states[k - 1][1] # forecast error (along the coastline w.r.t. the point forecast)
             hurr_pos = [pf['Longitude'][T-1] + aux['x_rotate'][0]*l/aux['x_miles'][0], pf['Latitude'][T-1] + aux['y_rotate'][0]*l/aux['y_miles'][0]];
@@ -948,11 +948,10 @@ class networkData:
             for j in range(1, Nj + 1):
                 dLandfall = np.sqrt(pow((df['longitude'][Ni+j]-proj_point.x)*aux['x_miles'][0],2)+pow((df['latitude'][Ni+j]-proj_point.y)*aux['y_miles'][0],2))
                 if dLandfall <= cMax:
-                    scen[j - 1] = df['Demand'][Ni+j] * (1 - (dLandfall / cMax)) * pow(a,2) / pow(5,2)
+                    scen[j - 1] = df['Demand'][Ni+j] * (1 - (dLandfall / cMax)) * pow(a-1,2) / pow(Na-1,2)
                 else:
                     scen[j - 1] = 0
         SCEN.append(scen)
-
     x_cap = np.zeros(Ni);
     for i in range(Ni):
         if df['Capacity'].isnull()[1+i]:
