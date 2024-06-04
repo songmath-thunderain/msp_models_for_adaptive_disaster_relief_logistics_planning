@@ -140,9 +140,8 @@ if __name__ == "__main__":
         netFolderPath = 'data/case-study/SC-network/';
         netParamsFile = 'data/case-study/SC-network/netParams.csv';
         networkInstance.input_from_Case_new(cost_structure,safe_time,tau,netFolderPath,netParamsFile,hurricaneInstance);
-    
-        print("Everything works out well so far!")
-        exit(0);
+ 
+        osfname = "./data/case-study/SC-network/deterministic/OOS" + str(inputParams.k_init) + "-D.csv"
 
     else:
         print("ERROR: instance_option has to be -1, 0 or 1!")

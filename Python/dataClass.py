@@ -302,13 +302,13 @@ class hurricaneData:
 
     k1 = 0;  # counter for the number of states
     initS = ast.literal_eval(list(MC['0'].keys())[0])
-    S[0] = [initS[1],initS[0],0];
+    S[0] = [initS[1],initS[0],1];
  
     for t in range(2,T+1):
         for k in list(MC[str(t-1)].keys()):
             k1 += 1;
             tempS = ast.literal_eval(k);
-            S[k1] = [tempS[1], tempS[0], t-1]
+            S[k1] = [tempS[1], tempS[0], t]
             if absorbingFile == None:
                 # absorbingFile is not provided, deterministic case where all states in t = T are absorbing
                 if t == T:
@@ -324,7 +324,7 @@ class hurricaneData:
         else:
             for kk in range(K):
                 if S[kk][2] == S[k][2] + 1:
-                    P_joint[k,kk] = MC[str(S[k][2])]['('+str(S[k][1])+', '+str(S[k][0])+')']['('+str(S[kk][1])+', '+str(S[kk][0])+')']
+                    P_joint[k,kk] = MC[str(S[k][2]-1)]['('+str(S[k][1])+', '+str(S[k][0])+')']['('+str(S[kk][1])+', '+str(S[kk][0])+')']
                 else:
                     P_joint[k,kk] = 0;    
 
@@ -952,7 +952,6 @@ class networkData:
                 else:
                     scen[j - 1] = 0
         SCEN.append(scen)
-
 
     x_cap = np.zeros(Ni);
     for i in range(Ni):
