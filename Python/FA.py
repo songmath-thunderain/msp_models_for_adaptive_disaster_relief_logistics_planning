@@ -41,7 +41,10 @@ class FA:
         theta = m.addVar(lb = 0)
 
         for i in range(Ni):
-            x[i] = m.addVar(lb=0, ub=x_cap[i])
+            if x_cap[i] == 1e8:
+                x[i] = m.addVar(lb=0);
+            else:
+                x[i] = m.addVar(lb=0, ub=x_cap[i])
             v[i] = m.addVar(lb=0)
             for j in range(Nj):
                 y[i, j] = m.addVar(lb=0)

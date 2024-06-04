@@ -176,7 +176,7 @@ class hurricaneData:
     self.createNodes(k_init); # List of MC states in each stage
 
   def input_from_Case(self, intensityFile, trackProbFile, trackErrorFile, landfallFile):
-    # hurricane data class generator from synthetic instances
+    # hurricane data class generator from case study instances
     # Default: trackProbFile = "data/case-study/mc_track_transition_prob_at_t"
     # Default: trackErrorFile = "data/case-study/mc_track_mean_error_at_t"
 
@@ -269,13 +269,14 @@ class hurricaneData:
     k_init = 1
     self.createNodes(k_init); # List of MC states in each stage
   
-  def input_from_Case_new(self, forecastFile, MCFile):
-    # hurricane data class generator from synthetic instances
-    # Default: trackProbFile = "data/case-study/mc_track_transition_prob_at_t"
-    # Default: trackErrorFile = "data/case-study/mc_track_mean_error_at_t"
-
+  def input_from_Case_new(self, absorbingFile, MCFile):
+    # hurricane data class generator from case study instances
     with open(MCFile, 'r') as file:
         MC = json.load(file)
+
+    if absorbingFile != None:
+        with open(absorbingFile, 'r') as file:
+            absorbing = json.load(file)
     T = len(list(MC.keys()));  # define T_max
 
     ########################################################################################
@@ -308,11 +309,17 @@ class hurricaneData:
             k1 += 1;
             tempS = ast.literal_eval(k);
             S[k1] = [tempS[1], tempS[0], t-1]
-            if t == T:
-                absorbing_states.append(k1);
+            if absorbingFile == None:
+                # absorbingFile is not provided, deterministic case where all states in t = T are absorbing
+                if t == T:
+                    absorbing_states.append(k1);
+            else:
+                # absorbingFile is provided, get the absorbing states accordingly
+                if absorbing[str(t-1)][k]:
+                    absorbing_states.append(k1);
  
     for k in range(K):
-        if S[k][2] == (T-1):
+        if k in absorbing_states:
             P_joint[k,k] = 1; # absorbing
         else:
             for kk in range(K):
@@ -842,7 +849,7 @@ class networkData:
                     if cost_structure == 0:
                         # cost_structure is only time dependent
                         for k in range(K):
-                            cb[i, ii, t, k] = fuel * d_KI[0,ii] * (1 + costScalingFactor * t)
+                            cb[i, ii, t, k] = fuel * d_KI[ii] * (1 + costScalingFactor * t)
                     if cost_structure == -1 or cost_structure == 1:
                         for k in range(K):
                             surgeFlag = False;
@@ -852,9 +859,9 @@ class networkData:
                             else:
                                 surgeFlag = True;
                             if not surgeFlag:
-                                cb[i, ii, t, k] = fuel * d_KI[0,ii]
+                                cb[i, ii, t, k] = fuel * d_KI[ii]
                             else:
-                                cb[i, ii, t, k] = fuel * d_KI[0,ii]*costScalingFactor
+                                cb[i, ii, t, k] = fuel * d_KI[ii]*costScalingFactor
     # Unit cost of transporting items from MDC/SP i to/between a demand point j
     ca = np.empty((N0, Nj, T, K))
     for i in range(N0):
@@ -881,7 +888,7 @@ class networkData:
                     if cost_structure == 0:
                         # cost_structure is only time dependent
                         for k in range(K):
-                            ca[i, j, t, k] = fuel * d_KJ[0,j] * (1 + costScalingFactor * t)
+                            ca[i, j, t, k] = fuel * d_KJ[j] * (1 + costScalingFactor * t)
                     if cost_structure == -1 or cost_structure == 1:
                         for k in range(K):
                             surgeFlag = False;
@@ -891,9 +898,9 @@ class networkData:
                             else:
                                 surgeFlag = True;
                             if not surgeFlag:
-                                ca[i, j, t, k] = fuel * d_KJ[0,j]
+                                ca[i, j, t, k] = fuel * d_KJ[j]
                             else:
-                                ca[i, j, t, k] = fuel * d_KJ[0,j]*costScalingFactor
+                                ca[i, j, t, k] = fuel * d_KJ[j]*costScalingFactor
 
     cp = np.empty((T, K))
     ch = np.empty((Ni, T))
@@ -929,27 +936,30 @@ class networkData:
     # read some data for the necessary calculation below
     aux = pd.read_excel(netFolderPath+'hurricane-position.xlsx');
 
-    study_line = LineString([aux['line-1-x'][0],aux['line-1-y'][0]],[aux['line-2-x'][0],aux['line-2-y'][0]]);
+    study_line = LineString([(aux['line-1-x'][0],aux['line-1-y'][0]),(aux['line-2-x'][0],aux['line-2-y'][0])]);
     for k in range(1, K + 1):
         scen = np.zeros(Nj)
         if states[k-1][2] == (T-1):
             a = states[k - 1][0] # intensity
             l = states[k - 1][1] # forecast error (along the coastline w.r.t. the point forecast)
-            hurr_pos = [pf['Latitude'][T-1] + aux['x_rotate'][0]*l/aux['x_miles'][0], pf['Longitude'][T-1] + aux['y_rotate'][0]*l/aux['y_miles'][0]];
+            hurr_pos = [pf['Longitude'][T-1] + aux['x_rotate'][0]*l/aux['x_miles'][0], pf['Latitude'][T-1] + aux['y_rotate'][0]*l/aux['y_miles'][0]];
             proj_point = study_line.interpolate(study_line.project(Point(hurr_pos)));
 
             for j in range(1, Nj + 1):
-                dLandfall = np.sqrt(pow((df['latitude'][Ni+j]-proj_point.x)*aux['x_miles'][0],2)+pow((df['longitude'][Ni+j]-proj_point.y)*aux['y_miles'][0],2))
+                dLandfall = np.sqrt(pow((df['longitude'][Ni+j]-proj_point.x)*aux['x_miles'][0],2)+pow((df['latitude'][Ni+j]-proj_point.y)*aux['y_miles'][0],2))
                 if dLandfall <= cMax:
                     scen[j - 1] = df['Demand'][Ni+j] * (1 - (dLandfall / cMax)) * pow(a,2) / pow(5,2)
                 else:
                     scen[j - 1] = 0
-
         SCEN.append(scen)
+
 
     x_cap = np.zeros(Ni);
     for i in range(Ni):
-        x_cap[i] = df['Capacity'][1+i];
+        if df['Capacity'].isnull()[1+i]:
+            x_cap[i] = 1e8; # hardcode as infinity
+        else:
+            x_cap[i] = df['Capacity'][1+i];
 
     # now store everything in the class
     self.fuel = fuel;

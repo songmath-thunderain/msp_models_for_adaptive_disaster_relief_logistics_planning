@@ -34,8 +34,12 @@ class CV:
         # Define the variables
         x = {};
         for i in range(Ni):
-            for t in range(T):
-                x[i,t] = m.addVar(lb=0, ub=x_cap[i]);
+            if x_cap[i] == 1e8:
+                for t in range(T):
+                    x[i,t] = m.addVar(lb=0);
+            else:
+                for t in range(T):
+                    x[i,t] = m.addVar(lb=0, ub=x_cap[i]);
         f = {};
         for i in range(N0):
             for ii in range(Ni):

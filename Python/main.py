@@ -133,14 +133,16 @@ if __name__ == "__main__":
             ISfile.close()
         '''
         # new case study input interface
-
-        forecastFile = 'data/case-study/SC-network/Florence_forecast.csv';
+        absorbingFile = None; # deterministic landfall case: no need to supply the absorbingFile
         MCFile = 'data/case-study/SC-network/deterministic/pi_mssp_d.json';
-        hurricaneInstance.input_from_Case_new(forecastFile, MCFile);
+        hurricaneInstance.input_from_Case_new(absorbingFile, MCFile);
 
-        netFolderPath = 'data/case-study/SC-network';
+        netFolderPath = 'data/case-study/SC-network/';
         netParamsFile = 'data/case-study/SC-network/netParams.csv';
         networkInstance.input_from_Case_new(cost_structure,safe_time,tau,netFolderPath,netParamsFile,hurricaneInstance);
+    
+        print("Everything works out well so far!")
+        exit(0);
 
     else:
         print("ERROR: instance_option has to be -1, 0 or 1!")
