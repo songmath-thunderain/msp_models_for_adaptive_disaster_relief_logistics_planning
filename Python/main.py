@@ -18,11 +18,11 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--oos", type = int, help = "number of out-of-sample scenarios")
     parser.add_argument("-ni", "--Ni", type = int, choices = [3,6,9], help = "number of SPs")
     parser.add_argument("-nj", "--Nj", type = int, choices = [10,20,30], help = "number of DPs")
-    parser.add_argument("-c", "--cost_structure", type = int, choices = [-1,0,1], help = "cost structure option: -1. safe time but time dependent only, 0. time increasing, 1. safe time but state dependent")
+    parser.add_argument("-c", "--cost_structure", type = int, choices = [0,1], help = "cost structure option: 0. time increasing, 1. safe time")
     parser.add_argument("-t", "--tau", type = float, help = "cost-scaling factor")
     parser.add_argument("-st", "--safe_time", required = False, type = int, help = "safe time parameter to determine cost surge")
     parser.add_argument("-s", "--solution_option", type = int, choices = [0,1,2,3,4,5], help = "solution options: 0. CV, 1. FA, 2. static2SSP, 3. RH2SSP, 4. WS, 5. All")
-    parser.add_argument("-i", "--instance_option", type = int, choices = [-1,0,1,2], help = "instance option: -1. Synthetic D-landfall, 0. Synthetic R-landfall, 1. Case Study D-landfall")
+    parser.add_argument("-i", "--instance_option", type = int, choices = [-1,0,1,2], help = "instance option: -1. Synthetic D-landfall, 0. Synthetic R-landfall, 1. Case Study D-landfall, 2. Case Study R-landfall")
     parser.add_argument("-w", "--write_option", type = int, choices = [0,1], help = "0. do not write to CSV, 1. write results to CSV")
     args = parser.parse_args()
     solveparam_file = args.solveparam
@@ -46,7 +46,6 @@ if __name__ == "__main__":
     Nj = args.Nj
     tau = args.tau
     cost_structure = args.cost_structure
-    # cost_structure = -1: modified cost structure but in the deterministic landfall case
     # cost_structure = 0: original cost structure: cost increases by tau in every period
     # cost_structure = 1: modified cost structure: cost stays the same until the expected landfall time is within the safe time threshold
     # safe_time is optional
@@ -54,8 +53,8 @@ if __name__ == "__main__":
     if args.safe_time is not None:
         safe_time = args.safe_time
     else:
-        if cost_structure == 1 or cost_structure == -1:
-            print("Error! safe_time parameter is not defined for cost_structure == -1 or 1!")
+        if cost_structure == 1:
+            print("Error! safe_time parameter is not defined for cost_structure == 1!")
             exit(0);
 
     with open(solveparam_file, "r") as f:
@@ -171,27 +170,29 @@ if __name__ == "__main__":
     print("Elapse time = ", elapse_time);
 
     option = args.solution_option
+    if safe_time is None:
+        safe_time = 0; # just print out something trivial
     if option == 0 or option == 5:
         CV = CV(inputParams,hurricaneInstance,networkInstance)
         obj, CI, elapsed_time = CV.clairvoyant_eval(osfname)
         if write_option == 1:
             with open('output/CVresults.csv', 'a') as myfile:
                 writer = csv.writer(myfile, delimiter =',')
-                writer.writerow([instance_option,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,obj,CI,elapsed_time])
+                writer.writerow([instance_option,cost_structure,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,safe_time,obj,CI,elapsed_time])
     if option == 1 or option == 5:
         FA = FA(inputParams,solveParams,hurricaneInstance,networkInstance)
         obj, CI, train_time, test_time = FA.FOSDDP_eval(osfname)
         if write_option == 1:
             with open('output/FAresults.csv', 'a') as myfile:
                 writer = csv.writer(myfile, delimiter =',')
-                writer.writerow([instance_option,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,obj, CI, train_time, test_time])
+                writer.writerow([instance_option,cost_structure,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,safe_time,obj,CI,train_time,test_time])
     if option == 2 or option == 5:
         TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance,ISpaths)
         obj, CI, train_time, test_time = TwoStageSP.static_2SSP_eval(osfname)
         if write_option == 1:
             with open('output/static2SSPresults.csv', 'a') as myfile:
                 writer = csv.writer(myfile, delimiter =',')
-                writer.writerow([instance_option,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,obj, CI, train_time, test_time])
+                writer.writerow([instance_option,cost_structure,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,safe_time,obj,CI,train_time,test_time])
     if option == 3 or option == 5:
         if option == 3:
             TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance,ISpaths)
@@ -199,7 +200,7 @@ if __name__ == "__main__":
         if write_option == 1:
             with open('output/rolling2SSPresults.csv', 'a') as myfile:
                 writer = csv.writer(myfile, delimiter =',')
-                writer.writerow([instance_option,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,obj,CI,elapsed_time])
+                writer.writerow([instance_option,cost_structure,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,safe_time,obj,CI,elapsed_time])
     if option == 4 or option == 5:
         if option == 4:
             TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance,ISpaths)
@@ -207,4 +208,4 @@ if __name__ == "__main__":
         if write_option == 1:
             with open('output/WSresults.csv', 'a') as myfile:
                 writer = csv.writer(myfile, delimiter =',')
-                writer.writerow([instance_option,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,obj, CI, train_time, test_time])
+                writer.writerow([instance_option,cost_structure,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,safe_time,obj,CI,train_time,test_time])

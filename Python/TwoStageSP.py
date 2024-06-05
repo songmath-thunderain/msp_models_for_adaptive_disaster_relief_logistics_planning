@@ -127,7 +127,7 @@ class TwoStageSP:
                 for ii in range(Ni):
                     f[i, ii, t] = m.addVar(lb=0)
 
-        if self.inputParams.cost_structure == 0 or self.inputParams.cost_structure == -1:
+        if ISpaths is None:
             # cost is only time-dependent: the index (0) used in the cost definition is just a placeholder
             nbScens = len(nodeScenList[(t_roll,k_t)])
             pbScens = nodeScenWeights[(t_roll,k_t)]
@@ -148,8 +148,7 @@ class TwoStageSP:
                     for t in range(nbstages1))
                 + gp.quicksum(theta[n] * pbScens[n] for n in range(nbScens)),
                 GRB.MINIMIZE)
-            
-        if self.inputParams.cost_structure == 1:
+        else:
             # cost is state-dependent
             sample_path = ISpaths[k_t];
             nbScens = len(sample_path);
@@ -263,12 +262,11 @@ class TwoStageSP:
             # If no MDC/SP operation is allowed in the absorbing state, do not plan for stage T since we know for sure that all states are absorbing
             nbstages1 = T - t_roll - 1
 
-        if self.inputParams.cost_structure == 0 or self.inputParams.cost_structure == -1:
+        if ISpaths is None:
             # cost is only time-dependent
             nbScens = len(nodeScenList[(t_roll,k_t)])
             pbScens = nodeScenWeights[(t_roll,k_t)]
-
-        if self.inputParams.cost_structure == 1:
+        else:
             # cost is state-dependent
             sample_path = ISpaths[k_t];
             nbScens = len(sample_path);
@@ -331,12 +329,11 @@ class TwoStageSP:
         nodeScenWeights = self.hurricaneData.nodeScenWeights;
         ISpaths = self.ISpaths;
         
-        if self.inputParams.cost_structure == 0 or self.inputParams.cost_structure == -1:
+        if ISpaths is None:
             # cost is only time-dependent
             nbScens = len(nodeScenList[(t_roll,k_t)])
             pbScens = nodeScenWeights[(t_roll,k_t)]
-
-        if self.inputParams.cost_structure == 1:
+        else:
             # cost is state-dependent
             sample_path = ISpaths[k_t];
             nbScens = len(sample_path);
@@ -354,7 +351,7 @@ class TwoStageSP:
         pi3 = [0] * nbScens
         Qbar = 0
 
-        if self.inputParams.cost_structure == 0 or self.inputParams.cost_structure == -1:
+        if ISpaths is None:
             # cost is only time-dependent
             for n in range(nbScens):
                 absorbingT = nodeScenList[(t_roll,k_t)][n][0]
@@ -421,8 +418,7 @@ class TwoStageSP:
                             )) >= Q[n] - sum(pi1[n][i] * xval[i][tt - t_roll] for i in range(Ni)) + pi3[n]*reimbursement
                         )
                     flag = 1
-        
-        if self.inputParams.cost_structure == 1:
+        else:
             # cost is both time- and state-dependent
             for n in range(nbScens):
                 absorbingT = t_roll + len(sample_path[n]) - 1
@@ -644,11 +640,11 @@ class TwoStageSP:
         LB, UB, xval, fval, thetaval = self.RH_2SSP_solve_roll(OS_paths[s, t_roll]-1, t_roll)
         timeTrain = time.time() - start_time
 
-        if self.inputParams.cost_structure == 0 or self.inputParams.cost_structure == -1:
+        if ISpaths is None:
             # cost is only time-dependent
             nbScens = len(nodeScenList[t_roll, OS_paths[s, t_roll]-1])
             f1cost = LB - sum(thetaval[n] * nodeScenWeights[t_roll, OS_paths[s, t_roll]-1][n] for n in range(nbScens))
-        if self.inputParams.cost_structure == 1:
+        else:
             # cost is state-dependent
             sample_path = ISpaths[OS_paths[s, t_roll]-1];
             nbScens = len(sample_path);
@@ -670,10 +666,9 @@ class TwoStageSP:
         for s in range(nbOS):
             absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if (x-1) in self.hurricaneData.absorbing_states), None))
 
-            if self.inputParams.cost_structure == 0 or self.inputParams.cost_structure == -1:
+            if ISpaths is None:
                 self.RH_2SSP_update_RHS(absorbingT, OS_paths[s, absorbingT]-1, xval, fval, t_roll)
-
-            if self.inputParams.cost_structure == 1:
+            else:
                 sample_path = copy.deepcopy(OS_paths[s, 0:T]);
                 for t in range(len(sample_path)):
                     sample_path[t] -= 1
@@ -698,9 +693,6 @@ class TwoStageSP:
         absorbing_option = self.inputParams.absorbing_option;
         nbOS = self.inputParams.nbOS;
         dissipate_option = self.inputParams.dissipate_option;
-        nodeScenList = self.hurricaneData.nodeScenList;
-        nodeScenWeights = self.hurricaneData.nodeScenWeights;
-        ISpaths = self.ISpaths;
         S = self.hurricaneData.states;
         x_0 = self.networkData.x_0;
         SCEN = self.networkData.SCEN;
@@ -850,9 +842,6 @@ class TwoStageSP:
         absorbing_states = self.hurricaneData.absorbing_states;
         dissipate_option = self.inputParams.dissipate_option;
         nodeLists = self.hurricaneData.nodeLists;
-        nodeScenList = self.hurricaneData.nodeScenList;
-        nodeScenWeights = self.hurricaneData.nodeScenWeights;
-        ISpaths = self.ISpaths;
         smallestTransProb = self.hurricaneData.smallestTransProb; 
         P_joint = self.hurricaneData.P_joint; 
         S = self.hurricaneData.states;
