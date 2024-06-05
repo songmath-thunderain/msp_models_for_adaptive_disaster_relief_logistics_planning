@@ -761,8 +761,14 @@ class networkData:
     print("# of SPs = ", self.Ni);
     print("# of DPs = ", self.Nj);
 
-  def input_from_Case_new(self,cost_structure,safe_time,costScalingFactor,netFolderPath,netParamsFile,hurricaneDataSet):
+  def input_from_Case_new(self,cost_structure,safe_time,costScalingFactor,netFolderPath,netParamsFile,hurricaneDataSet,option):
     # data input interface for case study (new format)
+    # option = 0: deterministic landfall time in case study
+    # option = 1: random landfall time in case study
+    # hurricane position calculation is different for these two options
+    if option != 0 and option != 1:
+        print("Option in function input_from_Case_new() must be 0 or 1!")
+        exit(0); 
     df = pd.read_excel(netFolderPath+'locations.xlsx');
     Nj = 0; # of DPs
     Ni = 0; # of SPs
@@ -946,18 +952,42 @@ class networkData:
     study_line = LineString([(aux['line-1-x'][0],aux['line-1-y'][0]),(aux['line-2-x'][0],aux['line-2-y'][0])]);
     for k in range(1, K + 1):
         scen = np.zeros(Nj)
-        if states[k-1][2] == T:
+        if (k-1) in hurricaneDataSet.absorbing_states:
             a = states[k - 1][0] # intensity
             l = states[k - 1][1] # forecast error (along the coastline w.r.t. the point forecast)
-            hurr_pos = [pf['Longitude'][T-1] + aux['x_rotate'][0]*l/aux['x_miles'][0], pf['Latitude'][T-1] + aux['y_rotate'][0]*l/aux['y_miles'][0]];
-            proj_point = study_line.interpolate(study_line.project(Point(hurr_pos)));
+            if option == 0:
+                # deterministic landfall time case: the absorbing state must occur at time t
+                hurr_pos = [pf['Longitude'][T-1] + aux['x_rotate'][0]*l/aux['x_miles'][0], pf['Latitude'][T-1] + aux['y_rotate'][0]*l/aux['y_miles'][0]];
+                proj_point = study_line.interpolate(study_line.project(Point(hurr_pos)));
 
-            for j in range(1, Nj + 1):
-                dLandfall = np.sqrt(pow((df['longitude'][Ni+j]-proj_point.x)*aux['x_miles'][0],2)+pow((df['latitude'][Ni+j]-proj_point.y)*aux['y_miles'][0],2))
-                if dLandfall <= cMax:
-                    scen[j - 1] = df['Demand'][Ni+j] * (1 - (dLandfall / cMax)) * pow(a-1,2) / pow(Na-1,2)
-                else:
-                    scen[j - 1] = 0
+                for j in range(1, Nj + 1):
+                    dLandfall = np.sqrt(pow((df['longitude'][Ni+j]-proj_point.x)*aux['x_miles'][0],2)+pow((df['latitude'][Ni+j]-proj_point.y)*aux['y_miles'][0],2))
+                    if dLandfall <= cMax:
+                        scen[j - 1] = df['Demand'][Ni+j] * (1 - (dLandfall / cMax)) * pow(a-1,2) / pow(Na-1,2)
+                    else:
+                        scen[j - 1] = 0
+            if option == 1:
+                # random landfall time case
+                # copied from transform_gis_random_landfall() function
+                t = states[k - 1][2] # time
+                point1 = np.array([pf['Longitude'][t-1],pf['Latitude'][t-1]]);
+                point2 = np.array([pf['Longitude'][t-2],pf['Latitude'][t-2]]);
+                vector = (point1 - point2);
+                miles_convert = np.array([aux['x_miles'], aux['y_miles']]);
+                # along error is assumed to be 0
+                # Shift point according to "cross" error
+                ortho_vector = np.array([vector[1], -vector[0]]);
+                vector_diff = ortho_vector / np.linalg.norm(ortho_vector);
+                fp_x = point1[0] + l*vector_diff[0]/aux['x_miles'][0];
+                fp_y = point1[1] + l*vector_diff[1]/aux['y_miles'][0];         
+                hurr_pos = [fp_x,fp_y]
+                #print("hurr_pos = ", hurr_pos);
+                for j in range(1, Nj + 1):
+                    dLandfall = np.sqrt(pow((df['longitude'][Ni+j]-hurr_pos[0])*aux['x_miles'][0],2)+pow((df['latitude'][Ni+j]-hurr_pos[1])*aux['y_miles'][0],2))
+                    if dLandfall <= cMax:
+                        scen[j - 1] = df['Demand'][Ni+j] * (1 - (dLandfall / cMax)) * pow(a-1,2) / pow(Na-1,2)
+                    else:
+                        scen[j - 1] = 0
         SCEN.append(scen)
     x_cap = np.zeros(Ni);
     for i in range(Ni):

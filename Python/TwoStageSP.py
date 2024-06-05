@@ -668,11 +668,7 @@ class TwoStageSP:
         pi3 = np.zeros(nbOS)
 
         for s in range(nbOS):
-            absorbingT = -1
-            if dissipate_option == 1:
-                absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if S[x-1][2] == T or S[x-1][0] == 1), None))
-            else:
-                absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if S[x-1][2] == T), None))
+            absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if (x-1) in self.hurricaneData.absorbing_states), None))
 
             if self.inputParams.cost_structure == 0 or self.inputParams.cost_structure == -1:
                 self.RH_2SSP_update_RHS(absorbingT, OS_paths[s, absorbingT]-1, xval, fval, t_roll)
@@ -740,12 +736,7 @@ class TwoStageSP:
                 objs_RH2SSP[s, 0] += (ch[i, 0] * xval_1[i][0] + cp[0,OS_paths[s, 0]-1] * fval_1[N0 - 1][i][0])
 
         for s in range(nbOS):
-            absorbingT = -1
-            if dissipate_option == 1:
-                absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if S[x-1][2] == T or S[x-1][0] == 1), None))
-            else:
-                absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if S[x-1][2] == T), None))
-
+            absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if (x-1) in self.hurricaneData.absorbing_states), None))
             #x_init = [item[0] for item in xval_1]
             x_init = np.array(xval_1)[:,0]
             if dissipate_option == 1 and S[OS_paths[s, absorbingT]-1][0] == 1:
@@ -964,11 +955,7 @@ class TwoStageSP:
                         continue
                     else:
                         # Decision is Go!
-                        absorbingT = -1
-                        if dissipate_option == 1:
-                            absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if S[x-1][2] == T or S[x-1][0] == 1), None))
-                        else:
-                            absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if S[x-1][2] == T), None))
+                        absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if (x-1) in self.hurricaneData.absorbing_states), None))
 
                         #define second stage (subproblem) optimality model
                         self.subproblem, self.y2, self.xCons, self.dCons, self.rCons = self.RH_2SSP_second_stage()

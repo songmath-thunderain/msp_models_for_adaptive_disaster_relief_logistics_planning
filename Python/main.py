@@ -139,7 +139,7 @@ if __name__ == "__main__":
 
         netFolderPath = 'data/case-study/SC-network/';
         netParamsFile = 'data/case-study/SC-network/netParams.csv';
-        networkInstance.input_from_Case_new(cost_structure,safe_time,tau,netFolderPath,netParamsFile,hurricaneInstance);
+        networkInstance.input_from_Case_new(cost_structure,safe_time,tau,netFolderPath,netParamsFile,hurricaneInstance,0);
  
         osfname = "./data/case-study/SC-network/deterministic/OOS" + str(inputParams.k_init) + "-D.csv"
 
@@ -154,8 +154,8 @@ if __name__ == "__main__":
 
         netFolderPath = 'data/case-study/SC-network/';
         netParamsFile = 'data/case-study/SC-network/netParams.csv';
-        networkInstance.input_from_Case_new(cost_structure,safe_time,tau,netFolderPath,netParamsFile,hurricaneInstance);
- 
+        networkInstance.input_from_Case_new(cost_structure,safe_time,tau,netFolderPath,netParamsFile,hurricaneInstance,1);
+
         osfname = "./data/case-study/SC-network/random/OOS" + str(inputParams.k_init) + ".csv"
 
         if cost_structure == 1:

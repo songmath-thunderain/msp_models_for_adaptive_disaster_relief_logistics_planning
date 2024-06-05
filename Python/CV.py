@@ -122,12 +122,7 @@ class CV:
         objs_cv = np.zeros(nbOS)
 
         for s in range(nbOS):
-            absorbingT = -1
-
-            if dissipate_option == 1:
-                absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if S[x-1][2] == T or S[x-1][0] == 1), None))
-            else:
-                absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if S[x-1][2] == T), None))
+            absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if (x-1) in self.hurricaneData.absorbing_states), None))
 
             if S[OS_paths[s, absorbingT]-1][0] == 1:
                 continue
