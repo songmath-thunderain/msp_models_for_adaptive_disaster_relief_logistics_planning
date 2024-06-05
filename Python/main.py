@@ -181,7 +181,8 @@ if __name__ == "__main__":
                 writer.writerow([instance_option,cost_structure,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,safe_time,obj,CI,elapsed_time])
     if option == 1 or option == 5:
         FA = FA(inputParams,solveParams,hurricaneInstance,networkInstance)
-        obj, CI, train_time, test_time = FA.FOSDDP_eval(osfname)
+        [obj, CI, train_time, test_time], KPIvec = FA.FOSDDP_eval(osfname)
+        print("KPIvec = ", KPIvec);
         if write_option == 1:
             with open('output/FAresults.csv', 'a') as myfile:
                 writer = csv.writer(myfile, delimiter =',')
