@@ -143,9 +143,6 @@ class FA:
                     self.theta[t, ind].setAttr(GRB.Attr.UB, 0);
                     if self.inputParams.absorbing_option == 0:
                         for i in range(Ni):
-                            for j in range(Ni):
-                                if j != i:
-                                    self.f[t, ind][i,j].setAttr(GRB.Attr.UB, 0);
                             for j in range(N0):
                                 if j != i:
                                     self.f[t, ind][j,i].setAttr(GRB.Attr.UB, 0);

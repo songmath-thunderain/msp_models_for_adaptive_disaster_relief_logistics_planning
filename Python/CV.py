@@ -106,7 +106,6 @@ class CV:
     def clairvoyant_eval(self,osfname):
         start = time.time()
 
-        dissipate_option = self.inputParams.dissipate_option;
         absorbing_option = self.inputParams.absorbing_option;
         nbOS = self.inputParams.nbOS;
 
