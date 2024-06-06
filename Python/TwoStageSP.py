@@ -618,6 +618,8 @@ class TwoStageSP:
 
     def static_2SSP_eval(self,osfname):
         T = self.hurricaneData.T;
+        Ni = self.networkData.Ni;
+        N0 = self.networkData.N0;
         absorbing_option = self.inputParams.absorbing_option;
         nbOS = self.inputParams.nbOS;
         dissipate_option = self.inputParams.dissipate_option;
@@ -663,6 +665,15 @@ class TwoStageSP:
         pi2 = [None] * nbOS
         pi3 = np.zeros(nbOS)
 
+        procurmnt_amount = np.zeros(T); 
+
+        if absorbing_option == 0:
+            for t in range(T-1):
+                procurmnt_amount[t] = sum(fval[N0-1][i][t] for i in range(Ni));
+        else:
+            for t in range(T):
+                procurmnt_amount[t] = sum(fval[N0-1][i][t] for i in range(Ni));
+
         for s in range(nbOS):
             absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if (x-1) in self.hurricaneData.absorbing_states), None))
 
@@ -683,10 +694,11 @@ class TwoStageSP:
         st2SSP_high = st2SSP_bar + 1.96 * st2SSP_std / np.sqrt(nbOS)
         CI = 1.96 * st2SSP_std / np.sqrt(nbOS)
 
+        KPIvec = procurmnt_amount.tolist()
         print("static 2SSP....")
         print("μ ± 1.96*σ/√NS =", st2SSP_bar, "±", CI)
         timeTest = time.time() - start_time
-        return [st2SSP_bar, CI, timeTrain, timeTest]
+        return [st2SSP_bar, CI, timeTrain, timeTest],KPIvec
 
     def RH_2SSP_eval(self, osfname):
         T = self.hurricaneData.T;
@@ -930,6 +942,13 @@ class TwoStageSP:
         OS_paths = pd.read_csv(osfname).values 
         objs_OOS = np.zeros(nbOS)
 
+        # key KPIs
+        procurmnt_amount = np.zeros(T); 
+        count_goTime = np.zeros(T);
+        count_noabsorbing_goTime = np.zeros(T);
+        Go_percentage = np.zeros(T); 
+        Go_noabsorbing_percentage = np.zeros(T);
+
         for s in range(nbOS):
             for t in range(T):
                 ind = list(nodeLists[t]).index(next((x for x in nodeLists[t] if x == (OS_paths[s,t]-1)), None))
@@ -937,6 +956,8 @@ class TwoStageSP:
                     # if absorbing, just take whatever that is the best, which has been computed above
                     objs_OOS[s] = objvalNodes[t][ind]
                     #print("absorbed! obj = ", objs_OOS[s], "\n");
+                    if decisionNodes[t][ind] == 1:
+                        count_goTime[t] += 1;
                     break
                 else:
                     if decisionNodes[t][ind] == 0:
@@ -978,6 +999,7 @@ class TwoStageSP:
                                     ) + sum(ch[i, t + tt] * solutionNodes[(t, ind)][0][i][tt] for i in range(Ni)) + sum(
                                         solutionNodes[(t, ind)][1][N0-1][i][tt] for i in range(Ni)
                                     ) * cp[t + tt, OS_paths[s,t+tt]-1]
+                                    procurmnt_amount[t+tt] += sum(solutionNodes[(t, ind)][1][N0-1][ii][tt] for ii in range(Ni)) 
                             else:
                                 for tt in range(absorbingT + 1 - t):
                                     objs_OOS[s] += sum(sum(
@@ -985,8 +1007,16 @@ class TwoStageSP:
                                     ) + sum(ch[i, t + tt] * solutionNodes[(t, ind)][0][i][tt] for i in range(Ni)) + sum(
                                         solutionNodes[(t, ind)][1][N0-1][i][tt] for i in range(Ni)
                                     ) * cp[t + tt, OS_paths[s,t+tt]-1]
+                                    procurmnt_amount[t+tt] += sum(solutionNodes[(t, ind)][1][N0-1][ii][tt] for ii in range(Ni)) 
                         #print("Go! obj = ", objs_OOS[s], "\n");
+                        count_goTime[t] += 1;
+                        count_noabsorbing_goTime[t] += 1;
                         break
+
+        for t in range(T):
+            procurmnt_amount[t] = procurmnt_amount[t]/nbOS;
+            Go_percentage[t] = count_goTime[t]*1.0/nbOS; 
+            Go_noabsorbing_percentage[t] = count_noabsorbing_goTime[t]*1.0/nbOS;
 
         test_time = time.time() - start_time
 
@@ -997,4 +1027,9 @@ class TwoStageSP:
         CI = WS_bar-WS_low;
         print("WS....")
         print(f"μ ± 1.96*σ/√NS = {WS_bar} ± {CI}")
-        return [WS_bar, CI, train_time, test_time]
+
+        print("Go_percentage = ", Go_percentage);
+        print("Go_noabsorbing_percentage = ", Go_noabsorbing_percentage);
+
+        KPIvec = procurmnt_amount.tolist()+Go_percentage.tolist()+Go_noabsorbing_percentage.tolist();
+        return [WS_bar, CI, train_time, test_time], KPIvec

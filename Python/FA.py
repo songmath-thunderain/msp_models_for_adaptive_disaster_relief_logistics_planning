@@ -395,15 +395,5 @@ class FA:
         print("avgSalvageAmount = ", avgSalvageAmount);
         print("avgPenaltyAmount = ", avgPenaltyAmount);
 
-        KPIvec = procurmnt_amount.tolist();
-        for i in procurmnt_percentage:
-            KPIvec.append(i);
-        for i in procurmnt_posExpect:
-            KPIvec.append(i);
-        for i in flow_amount:
-            KPIvec.append(i);
-        KPIvec.append(avgInvAmount);
-        KPIvec.append(avgSalvageAmount);
-        KPIvec.append(avgPenaltyAmount);
-
+        KPIvec = procurmnt_amount.tolist()+procurmnt_percentage.tolist()+procurmnt_posExpect.tolist()+flow_amount.tolist()+[avgInvAmount,avgSalvageAmount,avgPenaltyAmount]
         return [fa_bar, CI, train_time, test_time], KPIvec
