@@ -298,7 +298,6 @@ class FA:
         Nj = self.networkData.Nj;
         N0 = self.networkData.N0;
         T = self.hurricaneData.T;
-        absorbing_option = self.inputParams.absorbing_option;
         nbOS = self.inputParams.nbOS;
         absorbing_states = self.hurricaneData.absorbing_states;
 
