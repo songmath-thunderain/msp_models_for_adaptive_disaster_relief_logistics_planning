@@ -32,6 +32,7 @@ class TwoStageSP:
         p = self.networkData.p;
         q = self.networkData.q;
         x_cap = self.networkData.x_cap;
+        forbiddenArcs = self.networkData.forbiddenArcs;
 
         x = {}
         f = {}
@@ -49,6 +50,12 @@ class TwoStageSP:
             for j in range(Nj):
                 y[i, j] = m.addVar(lb=0)
         
+        for i in range(Ni):
+            for j in range(Nj):
+                if (i,j) in forbiddenArcs:
+                    y[i,j].setAttr(GRB.Attr.UB, 0);
+
+
         for i in range(N0):
             for ii in range(Ni):
                 f[i, ii] = m.addVar(lb=0)
@@ -196,6 +203,7 @@ class TwoStageSP:
         #cp = self.networkData.cp;
         p = self.networkData.p;
         q = self.networkData.q;
+        forbiddenArcs = self.networkData.forbiddenArcs;
         # Define the model
         m = gp.Model()
         
@@ -206,6 +214,11 @@ class TwoStageSP:
         for i in range(Ni):
             for j in range(Nj):
                 y[i,j] = m.addVar(lb=0)
+
+        for i in range(Ni):
+            for j in range(Nj):
+                if (i,j) in forbiddenArcs:
+                    y[i,j].setAttr(GRB.Attr.UB, 0);
 
         for j in range(Nj):
             z[j] = m.addVar(lb = 0)

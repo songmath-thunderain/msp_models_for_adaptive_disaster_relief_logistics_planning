@@ -761,8 +761,9 @@ class networkData:
     print("# of SPs = ", self.Ni);
     print("# of DPs = ", self.Nj);
 
-  def input_from_Case_new(self,cost_structure,safe_time,costScalingFactor,netFolderPath,netParamsFile,hurricaneDataSet,option):
+  def input_from_Case_new(self,cost_structure,safe_time,costScalingFactor,netFolderPath,netParamsFile,hurricaneDataSet,arc_option,option):
     # data input interface for case study (new format)
+    # If arc_option = true: read from a file that contains arc information (currently only between SPs and DPs)
     # option = 0: deterministic landfall time in case study
     # option = 1: random landfall time in case study
     # hurricane position calculation is different for these two options
@@ -812,7 +813,7 @@ class networkData:
     d_II = {};
     d_JI = {};
     d_KI = {};
-    d_KJ = {};
+    #d_KJ = {};
 
     # now propagate these dictionaries from the dataframe data and distance matrix
     # Read in the distance matrix
@@ -833,8 +834,8 @@ class networkData:
     for i in range(Ni):
         d_KI[i] = distanceMatrix[0][i+1];
     
-    for j in range(Nj):
-        d_KJ[j] = distanceMatrix[0][j+1+Ni];
+    #for j in range(Nj):
+    #    d_KJ[j] = distanceMatrix[0][j+1+Ni];
         
     # Unit cost of transporting/rerouting items from MDC/SP i to/between SP i'
     cb = np.empty((N0, Ni, T, K))
@@ -897,6 +898,7 @@ class networkData:
                                 ca[i, j, t, k] = fuel * d_JI[j,i]
                             else:
                                 ca[i, j, t, k] = fuel * d_JI[j,i]*costScalingFactor
+                '''
                 else:
                     if cost_structure == 0:
                         # cost_structure is only time dependent
@@ -914,7 +916,7 @@ class networkData:
                                 ca[i, j, t, k] = fuel * d_KJ[j]
                             else:
                                 ca[i, j, t, k] = fuel * d_KJ[j]*costScalingFactor
-
+                '''
     cp = np.empty((T, K))
     ch = np.empty((Ni, T))
     for t in range(1, T + 1):
@@ -936,6 +938,18 @@ class networkData:
                     cp[t - 1, k] = base*costScalingFactor
         ch[:, t - 1] = np.full(Ni, invCostRatio * base)
 
+    forbiddenArcs = []; # note that the forbidden arcs only occur from SPs to DPs
+    if arc_option:
+        # read the arc information from a file
+        arcf = pd.read_excel(netFolderPath+'arcs.xlsx');
+        for i in range(arcf['From'].size):
+            arc_from = arcf['From'][i]-1;
+            toList = arcf['To'][i].split(',')
+            for j in range(len(toList)):
+                toList[j] = int(toList[j]);
+            for j in range(Nj):
+                if (j+1+Ni) not in toList:
+                    forbiddenArcs.append((arc_from,j))
     p = penCostRatio * base
     q = salvageCostRatio * base
     x_0 = np.zeros(Ni)
@@ -1007,7 +1021,7 @@ class networkData:
     self.x_cap = x_cap;
     self.x_0 = x_0;
     self.SCEN = SCEN;
-
+    self.forbiddenArcs = forbiddenArcs;
     # Note: need to update Ni, Nj, N0 since this is from the datafile
     self.Ni = Ni;
     self.Nj = Nj;
