@@ -24,6 +24,7 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--solution_option", type = int, choices = [0,1,2,3,4,5], help = "solution options: 0. CV, 1. FA, 2. static2SSP, 3. RH2SSP, 4. WS, 5. All")
     parser.add_argument("-i", "--instance_option", type = int, choices = [-1,0,1,2], help = "instance option: -1. Synthetic D-landfall, 0. Synthetic R-landfall, 1. Case Study D-landfall, 2. Case Study R-landfall")
     parser.add_argument("-w", "--write_option", type = int, choices = [0,1], help = "0. do not write to CSV, 1. write results to CSV")
+    parser.add_argument("-arc", "--arc_option", required = False, type = int, choices = [0,1], help = "whether to impose restriction on arcs")
     args = parser.parse_args()
     solveparam_file = args.solveparam
     dissipate_option = args.dissipate_option
@@ -56,7 +57,12 @@ if __name__ == "__main__":
         if cost_structure == 1:
             print("Error! safe_time parameter is not defined for cost_structure == 1!")
             exit(0);
-
+    arc_option = False
+    if args.arc_option is not None:
+        if args.arc_option == 1:
+            arc_option = True
+    # arc_option = 0: no arc restriction is imposed
+    # arc_option = 1: arc restriction is imposed according to a file that specifies the set of allowed arcs (currently only between SPs and DPs)
     with open(solveparam_file, "r") as f:
         params = yaml.safe_load(f)
         max_iter = params['MAX_ITER']
@@ -138,7 +144,7 @@ if __name__ == "__main__":
 
         netFolderPath = 'data/case-study/SC-network/';
         netParamsFile = 'data/case-study/SC-network/netParams.csv';
-        networkInstance.input_from_Case_new(cost_structure,safe_time,tau,netFolderPath,netParamsFile,hurricaneInstance,0);
+        networkInstance.input_from_Case_new(cost_structure,safe_time,tau,netFolderPath,netParamsFile,hurricaneInstance,arc_option,0);
  
         osfname = "./data/case-study/SC-network/deterministic/OOS" + str(inputParams.k_init) + "-D.csv"
 
@@ -153,7 +159,7 @@ if __name__ == "__main__":
 
         netFolderPath = 'data/case-study/SC-network/';
         netParamsFile = 'data/case-study/SC-network/netParams.csv';
-        networkInstance.input_from_Case_new(cost_structure,safe_time,tau,netFolderPath,netParamsFile,hurricaneInstance,1);
+        networkInstance.input_from_Case_new(cost_structure,safe_time,tau,netFolderPath,netParamsFile,hurricaneInstance,arc_option,1);
 
         osfname = "./data/case-study/SC-network/random/OOS" + str(inputParams.k_init) + ".csv"
 

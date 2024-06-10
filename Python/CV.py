@@ -30,6 +30,7 @@ class CV:
         
         x_0 = self.networkData.x_0;
         x_cap = self.networkData.x_cap;
+        forbiddenArcs = self.networkData.forbiddenArcs;
 
         # Define the variables
         x = {};
@@ -96,6 +97,12 @@ class CV:
                     m.addConstr(gp.quicksum(f[i,j,t] for j in range(Ni) if j != i) <= x[i,t-1])
             for j in range(Nj):
                 dCons[t,j] = m.addConstr(z[j,t]+gp.quicksum(y[i,j,t] for i in range(Ni)) >= 0)
+
+        for i in range(Ni):
+            for j in range(Nj):
+                if (i,j) in forbiddenArcs:
+                    for t in range(T):
+                        y[i,j,t].setAttr(GRB.Attr.UB, 0);
 
         m.update();
         m.setParam("OutputFlag", 0);
