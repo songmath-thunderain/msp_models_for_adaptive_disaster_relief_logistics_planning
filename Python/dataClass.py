@@ -365,7 +365,7 @@ class networkData:
     self.Nj = Nj;
     self.N0 = self.Ni+1;
 
-  def input_from_Syn(self,cost_structure,safe_time,costScalingFactor,netNodesFile,netParamsFile,hurricaneDataSet):
+  def input_from_Syn(self,cost_structure,safe_time,costScalingFactor,netNodesFile,netParamsFile,hurricaneDataSet,arc_option):
     # network data class generator from synthetic instances
     nodes = pd.read_csv(netNodesFile);
     states = hurricaneDataSet.states;
@@ -535,6 +535,11 @@ class networkData:
                     cp[t-1, k] = base*costScalingFactor;
         ch[:, t - 1] = np.full(self.Ni, invCostRatio * base)
 
+    forbiddenArcs = []; # note that the forbidden arcs only occur from SPs to DPs
+    if arc_option:
+        print("ERROR: arc_option has not been implemented for synthetic instances!")
+        exit(0);
+
     p = penCostRatio * base
     q = salvageCostRatio * base
     x_cap = nodes.iloc[:self.Ni, 4].values * (self.Nj / self.Ni)
@@ -574,6 +579,7 @@ class networkData:
     self.x_cap = x_cap;
     self.x_0 = x_0;
     self.SCEN = SCEN;
+    self.forbiddenArcs = forbiddenArcs;
 
   def input_from_Case(self,cost_structure,safe_time,costScalingFactor,netFolderPath,netParamsFile,hurricaneDataSet):
     # data input interface for case study (old format)
