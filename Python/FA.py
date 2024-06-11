@@ -32,6 +32,7 @@ class FA:
         q = self.networkData.q;
         x_0 = self.networkData.x_0;
         x_cap = self.networkData.x_cap;
+        f_cap = self.networkData.f_cap;
         forbiddenArcs = self.networkData.forbiddenArcs;
 
         x = {}
@@ -107,6 +108,9 @@ class FA:
 
         for j in range(Nj):
             dCons[j] = m.addConstr(z[j] + gp.quicksum(y[i, j] for i in range(Ni)) >= 0)
+
+        # flow capacity constraints: total flow per period cannot exceed an upper limit
+        m.addConstr(gp.quicksum(gp.quicksum(f[i,ii] for i in range(N0)) for ii in range(Ni)) <= f_cap);
 
         m.update();
         m.setParam("OutputFlag", 0);

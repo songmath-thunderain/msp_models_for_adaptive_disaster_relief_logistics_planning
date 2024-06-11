@@ -30,6 +30,7 @@ class CV:
         
         x_0 = self.networkData.x_0;
         x_cap = self.networkData.x_cap;
+        f_cap = self.networkData.f_cap;
         forbiddenArcs = self.networkData.forbiddenArcs;
 
         # Define the variables
@@ -74,6 +75,11 @@ class CV:
         )
 
         # Define the constraints
+
+        # flow capacity constraints: total flow per period cannot exceed an upper limit
+        for t in range(T):
+            m.addConstr(gp.quicksum(gp.quicksum(f[i,ii,t] for i in range(N0)) for ii in range(Ni)) <= f_cap);
+
         dCons = {}
         for t in range(T):
             for i in range(Ni):

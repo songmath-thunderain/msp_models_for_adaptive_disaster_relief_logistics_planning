@@ -543,6 +543,7 @@ class networkData:
     p = penCostRatio * base
     q = salvageCostRatio * base
     x_cap = nodes.iloc[:self.Ni, 4].values * (self.Nj / self.Ni)
+    f_cap = 1e8 # Just hardcode a very large value here
     x_0 = np.zeros(self.Ni)
 
     # Demand data
@@ -577,6 +578,7 @@ class networkData:
     self.p = p;
     self.q = q;
     self.x_cap = x_cap;
+    self.f_cap = f_cap;
     self.x_0 = x_0;
     self.SCEN = SCEN;
     self.forbiddenArcs = forbiddenArcs;
@@ -790,31 +792,15 @@ class networkData:
     K = hurricaneDataSet.K;
     T = hurricaneDataSet.T;
 
-    # Create an empty dictionary to store the data
-    netParams = {}
-
-    # Open the CSV file and read its contents
-    with open(netParamsFile, mode='r') as file:
-        csv_reader = csv.reader(file)
-        
-        # Iterate through each row in the CSV file
-        for row in csv_reader:
-            # The first element in each row is the key, and the rest are values
-            key = row[0]
-            values = row[1:]
-            
-            # Store the data in the dictionary
-            netParams[key] = values
-
-    # Now translate the csv data into parameters to use here:
-    # 'other': [fuel, base, invCostRatio, penCostRatio, salvageCostRatio, cmax]
-    fuel = float(netParams['other'][0]);
-    base = float(netParams['other'][1]);
-    invCostRatio = float(netParams['other'][2]);
-    penCostRatio = float(netParams['other'][3]);
-    salvageCostRatio = float(netParams['other'][4]);
-    cMax = float(netParams['other'][5]);
-    f_cap = float(netParams['other'][6]);
+    netParams = pd.read_excel(netFolderPath+'netParams.xlsx');
+    # labels: [fuel, base, invCostRatio, penCostRatio, salvageCostRatio, cmax]
+    fuel = netParams['fuel'][0];
+    base = netParams['base'][0];
+    invCostRatio = netParams['invCostRatio'][0];
+    penCostRatio = netParams['penCostRatio'][0];
+    salvageCostRatio = netParams['salvageCostRatio'][0];
+    cMax = netParams['cMax'][0];
+    f_cap = netParams['f_cap'][0];
 
     d_II = {};
     d_JI = {};
@@ -1025,6 +1011,7 @@ class networkData:
     self.p = p;
     self.q = q;
     self.x_cap = x_cap;
+    self.f_cap = f_cap;
     self.x_0 = x_0;
     self.SCEN = SCEN;
     self.forbiddenArcs = forbiddenArcs;

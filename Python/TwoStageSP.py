@@ -33,6 +33,7 @@ class TwoStageSP:
         q = self.networkData.q;
         x_cap = self.networkData.x_cap;
         forbiddenArcs = self.networkData.forbiddenArcs;
+        f_cap = self.networkData.f_cap;
 
         x = {}
         f = {}
@@ -83,6 +84,9 @@ class TwoStageSP:
                 + v[i] == x_init[i]
             )
             m.addConstr(gp.quicksum(f[i, j] for j in range(Ni) if j != i) <= x_init[i])
+
+        # flow capacity constraints: total flow per period cannot exceed an upper limit
+        m.addConstr(gp.quicksum(gp.quicksum(f[i,ii] for i in range(N0)) for ii in range(Ni)) <= f_cap);
         
         for j in range(Nj):
             dCons[j] = m.addConstr(z[j] + gp.quicksum(y[i, j] for i in range(Ni)) >= 0)
@@ -105,6 +109,7 @@ class TwoStageSP:
         #p = self.networkData.p;
         #q = self.networkData.q;
         x_cap = self.networkData.x_cap;
+        f_cap = self.networkData.f_cap;
         T = self.hurricaneData.T;
         absorbing_option = self.inputParams.absorbing_option;
         nodeScenList = self.hurricaneData.nodeScenList;
@@ -187,6 +192,8 @@ class TwoStageSP:
                         + gp.quicksum(f[j, i, t] for j in range(N0) if j != i) == 0
                     )
                     m.addConstr(gp.quicksum(f[i, j, t] for j in range(Ni) if j != i) <= x[i, t-1])
+            # flow capacity constraints: total flow per period cannot exceed an upper limit
+            m.addConstr(gp.quicksum(gp.quicksum(f[i,ii,t] for i in range(N0)) for ii in range(Ni)) <= f_cap);
         m.update();
         m.setParam("OutputFlag", 0);
         return m, x, f, theta
