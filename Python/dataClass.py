@@ -422,14 +422,14 @@ class networkData:
         for ii in range(1, self.Ni + 1):
             for t in range(1, T + 1):
                 if i < self.N0:
-                    if cost_structure == 0 or cost_structure == 2:
+                    if cost_structure == 0:
                         # cost_structure is only time dependent
                         for k in range(K):
                             cb[i - 1, ii - 1, t - 1, k] = (
                             fuel * np.linalg.norm(np.array(SP[i - 1]) - np.array(SP[ii - 1]), 2)
                             * (1 + costScalingFactor * (t - 1))
                             )
-                    if cost_structure == 1:
+                    if cost_structure == 1 or cost_structure == 2:
                         for k in range(K):
                             surgeFlag = False;
                             if (t-1,k) in hurricaneDataSet.nodeTime2Go:
@@ -442,7 +442,7 @@ class networkData:
                             else:
                                 cb[i - 1, ii - 1, t - 1, k] = fuel * np.linalg.norm(np.array(SP[i - 1]) - np.array(SP[ii - 1]), 2) * costScalingFactor
                 else:
-                    if cost_structure == 0 or cost_structure == 2:
+                    if cost_structure == 0:
                         # cost_structure is only time dependent
                         for k in range(K):
                             cb[i - 1, ii - 1, t - 1, k] = (
@@ -450,7 +450,7 @@ class networkData:
                             * np.linalg.norm(np.array(MDC) - np.array(SP[ii - 1]), 2)
                             * (1 + costScalingFactor * (t - 1))
                             )
-                    if cost_structure == 1:
+                    if cost_structure == 1 or cost_structure == 2:
                         for k in range(K):
                             surgeFlag = False;
                             if (t-1,k) in hurricaneDataSet.nodeTime2Go:
@@ -473,7 +473,7 @@ class networkData:
         for j in range(1, self.Nj + 1):
             for t in range(1, T + 1):
                 if i < self.N0:
-                    if cost_structure == 0 or cost_structure == 2:
+                    if cost_structure == 0:
                         # cost_structure is only time dependent
                         for k in range(K):
                             ca[i - 1, j - 1, t - 1, k] = (
@@ -481,20 +481,21 @@ class networkData:
                             * np.linalg.norm(np.array(SP[i - 1]) - np.array(DP[j - 1]), 2)
                             * (1 + costScalingFactor * (t - 1))
                             )
-                    if cost_structure == 1:
+                    if cost_structure == 1 or cost_structure == 2:
                         for k in range(K):
                             surgeFlag = False;
-                            if (t-1,k) in hurricaneDataSet.nodeTime2Go:
-                                if hurricaneDataSet.nodeTime2Go[(t-1,k)] <= safe_time + 1e-5:
+                            if cost_structure == 1:
+                                if (t-1,k) in hurricaneDataSet.nodeTime2Go:
+                                    if hurricaneDataSet.nodeTime2Go[(t-1,k)] <= safe_time + 1e-5:
+                                        surgeFlag = True;
+                                else:
                                     surgeFlag = True;
-                            else:
-                                surgeFlag = True;
                             if not surgeFlag:
                                 ca[i - 1, j - 1, t - 1, k] = fuel * np.linalg.norm(np.array(SP[i - 1]) - np.array(DP[j - 1]), 2)
                             else:
                                 ca[i - 1, j - 1, t - 1, k] = fuel * np.linalg.norm(np.array(SP[i - 1]) - np.array(DP[j - 1]), 2)*costScalingFactor    
                 else:
-                    if cost_structure == 0 or cost_structure == 2:
+                    if cost_structure == 0:
                         # cost_structure is only time dependent
                         for k in range(K):
                             ca[i - 1, j - 1, t - 1, k] = (
@@ -502,14 +503,15 @@ class networkData:
                             * np.linalg.norm(np.array(MDC) - np.array(DP[j - 1]), 2)
                             * (1 + costScalingFactor * (t - 1))
                             )
-                    if cost_structure == 1:
+                    if cost_structure == 1 or cost_structure == 2:
                         for k in range(K):
                             surgeFlag = False;
-                            if (t-1,k) in hurricaneDataSet.nodeTime2Go:
-                                if hurricaneDataSet.nodeTime2Go[(t-1,k)] <= safe_time + 1e-5:
+                            if cost_structure == 1:
+                                if (t-1,k) in hurricaneDataSet.nodeTime2Go:
+                                    if hurricaneDataSet.nodeTime2Go[(t-1,k)] <= safe_time + 1e-5:
+                                        surgeFlag = True;
+                                else:
                                     surgeFlag = True;
-                            else:
-                                surgeFlag = True;
                             if not surgeFlag:
                                 ca[i - 1, j - 1, t - 1, k] = fuel * np.linalg.norm(np.array(MDC) - np.array(DP[j - 1]), 2)
                             else:
@@ -517,18 +519,19 @@ class networkData:
     cp = np.empty((T, K))
     ch = np.empty((self.Ni, T))
     for t in range(1, T + 1):
-        if cost_structure == 0 or cost_structure == 2:
+        if cost_structure == 0:
             # cost_structure is only time dependent
             for k in range(K):
                 cp[t - 1, k] = base * (1 + costScalingFactor * (t - 1))
-        if cost_structure == 1:
+        if cost_structure == 1 or cost_structure == 2:
             for k in range(K):
                 surgeFlag = False;
-                if (t-1,k) in hurricaneDataSet.nodeTime2Go:
-                    if hurricaneDataSet.nodeTime2Go[(t-1,k)] <= safe_time + 1e-5:
+                if cost_structure == 1:
+                    if (t-1,k) in hurricaneDataSet.nodeTime2Go:
+                        if hurricaneDataSet.nodeTime2Go[(t-1,k)] <= safe_time + 1e-5:
+                            surgeFlag = True;
+                    else:
                         surgeFlag = True;
-                else:
-                    surgeFlag = True;
                 if not surgeFlag:
                     cp[t-1, k] = base
                 else:
@@ -634,11 +637,11 @@ class networkData:
         for ii in range(Ni):
             for t in range(T):
                 if i < N0-1:
-                    if cost_structure == 0 or cost_structure == 2:
+                    if cost_structure == 0:
                         # cost_structure is only time dependent
                         for k in range(K):
                             cb[i, ii, t, k] = fuel * d_II[i,ii] * (1 + costScalingFactor * t)
-                    if cost_structure == 1:
+                    if cost_structure == 1 or cost_structure == 2:
                         for k in range(K):
                             surgeFlag = False;
                             if (t,k) in hurricaneDataSet.nodeTime2Go:
@@ -651,11 +654,11 @@ class networkData:
                             else:
                                 cb[i, ii, t, k] = fuel * d_II[i,ii]*costScalingFactor
                 else:
-                    if cost_structure == 0 or cost_structure == 2:
+                    if cost_structure == 0:
                         # cost_structure is only time dependent
                         for k in range(K):
                             cb[i, ii, t, k] = fuel * d_KI[0,ii] * (1 + costScalingFactor * t)
-                    if cost_structure == 1:
+                    if cost_structure == 1 or cost_structure == 2:
                         for k in range(K):
                             surgeFlag = False;
                             if (t,k) in hurricaneDataSet.nodeTime2Go:
@@ -673,35 +676,37 @@ class networkData:
         for j in range(Nj):
             for t in range(T):
                 if i < N0-1:
-                    if cost_structure == 0 or cost_structure == 2:
+                    if cost_structure == 0:
                         # cost_structure is only time dependent
                         for k in range(K):
                             ca[i, j, t, k] = fuel * d_JI[j,i] * (1 + costScalingFactor * t)
-                    if cost_structure == 1:
+                    if cost_structure == 1 or cost_structure == 2:
                         for k in range(K):
                             surgeFlag = False;
-                            if (t,k) in hurricaneDataSet.nodeTime2Go:
-                                if hurricaneDataSet.nodeTime2Go[(t,k)] <= safe_time + 1e-5:
+                            if cost_structure == 1:
+                                if (t,k) in hurricaneDataSet.nodeTime2Go:
+                                    if hurricaneDataSet.nodeTime2Go[(t,k)] <= safe_time + 1e-5:
+                                        surgeFlag = True;
+                                else:
                                     surgeFlag = True;
-                            else:
-                                surgeFlag = True;
                             if not surgeFlag:
                                 ca[i, j, t, k] = fuel * d_JI[j,i]
                             else:
                                 ca[i, j, t, k] = fuel * d_JI[j,i]*costScalingFactor
                 else:
-                    if cost_structure == 0 or cost_structure == 2:
+                    if cost_structure == 0:
                         # cost_structure is only time dependent
                         for k in range(K):
                             ca[i, j, t, k] = fuel * d_KJ[0,j] * (1 + costScalingFactor * t)
-                    if cost_structure == 1:
+                    if cost_structure == 1 or cost_structure == 2:
                         for k in range(K):
                             surgeFlag = False;
-                            if (t,k) in hurricaneDataSet.nodeTime2Go:
-                                if hurricaneDataSet.nodeTime2Go[(t,k)] <= safe_time + 1e-5:
+                            if cost_structure == 1:
+                                if (t,k) in hurricaneDataSet.nodeTime2Go:
+                                    if hurricaneDataSet.nodeTime2Go[(t,k)] <= safe_time + 1e-5:
+                                        surgeFlag = True;
+                                else:
                                     surgeFlag = True;
-                            else:
-                                surgeFlag = True;
                             if not surgeFlag:
                                 ca[i, j, t, k] = fuel * d_KJ[0,j]
                             else:
@@ -710,18 +715,19 @@ class networkData:
     cp = np.empty((T, K))
     ch = np.empty((Ni, T))
     for t in range(1, T + 1):
-        if cost_structure == 0 or cost_structure == 2:
+        if cost_structure == 0:
             # cost_structure is only time dependent
             for k in range(K):
                 cp[t - 1, k] = base * (1 + costScalingFactor * (t - 1))
-        if cost_structure == 1:
+        if cost_structure == 1 or cost_structure == 2:
             for k in range(K):
                 surgeFlag = False;
-                if (t-1,k) in hurricaneDataSet.nodeTime2Go:
-                    if hurricaneDataSet.nodeTime2Go[(t-1,k)] <= safe_time + 1e-5:
+                if cost_structure == 1:
+                    if (t-1,k) in hurricaneDataSet.nodeTime2Go:
+                        if hurricaneDataSet.nodeTime2Go[(t-1,k)] <= safe_time + 1e-5:
+                            surgeFlag = True;
+                    else:
                         surgeFlag = True;
-                else:
-                    surgeFlag = True;
                 if not surgeFlag:
                     cp[t - 1, k] = base
                 else:
@@ -835,11 +841,11 @@ class networkData:
         for ii in range(Ni):
             for t in range(T):
                 if i < N0-1:
-                    if cost_structure == 0 or cost_structure == 2:
+                    if cost_structure == 0:
                         # cost_structure is only time dependent
                         for k in range(K):
                             cb[i, ii, t, k] = fuel * d_II[i,ii] * (1 + costScalingFactor * t)
-                    if cost_structure == 1:
+                    if cost_structure == 1 or cost_structure == 2:
                         for k in range(K):
                             surgeFlag = False;
                             if (t,k) in hurricaneDataSet.nodeTime2Go:
@@ -852,11 +858,11 @@ class networkData:
                             else:
                                 cb[i, ii, t, k] = fuel * d_II[i,ii]*costScalingFactor
                 else:
-                    if cost_structure == 0 or cost_structure == 2:
+                    if cost_structure == 0:
                         # cost_structure is only time dependent
                         for k in range(K):
                             cb[i, ii, t, k] = fuel * d_KI[ii] * (1 + costScalingFactor * t)
-                    if cost_structure == 1:
+                    if cost_structure == 1 or cost_structure == 2:
                         for k in range(K):
                             surgeFlag = False;
                             if (t,k) in hurricaneDataSet.nodeTime2Go:
@@ -874,18 +880,19 @@ class networkData:
         for j in range(Nj):
             for t in range(T):
                 if i < N0-1:
-                    if cost_structure == 0 or cost_structure == 2:
+                    if cost_structure == 0:
                         # cost_structure is only time dependent
                         for k in range(K):
                             ca[i, j, t, k] = fuel * d_JI[j,i] * (1 + costScalingFactor * t)
-                    if cost_structure == 1:
+                    if cost_structure == 1 or cost_structure == 2:
                         for k in range(K):
                             surgeFlag = False;
-                            if (t,k) in hurricaneDataSet.nodeTime2Go:
-                                if hurricaneDataSet.nodeTime2Go[(t,k)] <= safe_time + 1e-5:
+                            if cost_structure == 1:
+                                if (t,k) in hurricaneDataSet.nodeTime2Go:
+                                    if hurricaneDataSet.nodeTime2Go[(t,k)] <= safe_time + 1e-5:
+                                        surgeFlag = True;
+                                else:
                                     surgeFlag = True;
-                            else:
-                                surgeFlag = True;
                             if not surgeFlag:
                                 ca[i, j, t, k] = fuel * d_JI[j,i]
                             else:
@@ -912,18 +919,19 @@ class networkData:
     cp = np.empty((T, K))
     ch = np.empty((Ni, T))
     for t in range(1, T + 1):
-        if cost_structure == 0 or cost_structure == 2:
+        if cost_structure == 0:
             # cost_structure is only time dependent
             for k in range(K):
                 cp[t - 1, k] = base * (1 + costScalingFactor * (t - 1))
-        if cost_structure == 1:
+        if cost_structure == 1 or cost_structure == 2:
             for k in range(K):
                 surgeFlag = False;
-                if (t-1,k) in hurricaneDataSet.nodeTime2Go:
-                    if hurricaneDataSet.nodeTime2Go[(t-1,k)] <= safe_time + 1e-5:
+                if cost_structure == 1:
+                    if (t-1,k) in hurricaneDataSet.nodeTime2Go:
+                        if hurricaneDataSet.nodeTime2Go[(t-1,k)] <= safe_time + 1e-5:
+                            surgeFlag = True;
+                    else:
                         surgeFlag = True;
-                else:
-                    surgeFlag = True;
                 if not surgeFlag:
                     cp[t - 1, k] = base
                 else:
@@ -936,7 +944,9 @@ class networkData:
         arcf = pd.read_excel(netFolderPath+'arcs.xlsx');
         for i in range(arcf['From'].size):
             arc_from = arcf['From'][i]-1;
-            toList = arcf['To'][i].split(',')
+            toList = [];
+            if not pd.isna(arcf['To'][i]):
+                toList = arcf['To'][i].split(',')
             for j in range(len(toList)):
                 toList[j] = int(toList[j]);
             for j in range(Nj):
