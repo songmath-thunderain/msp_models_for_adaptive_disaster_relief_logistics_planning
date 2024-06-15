@@ -761,6 +761,8 @@ class TwoStageSP:
 
         for s in range(nbOS):
             absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if (x-1) in self.hurricaneData.absorbing_states), None))
+            print("s = ", s);
+            print("absorbingT = ", absorbingT);
             #x_init = [item[0] for item in xval_1]
             x_init = np.array(xval_1)[:,0]
             if dissipate_option == 1 and S[OS_paths[s, absorbingT]-1][0] == 1:
