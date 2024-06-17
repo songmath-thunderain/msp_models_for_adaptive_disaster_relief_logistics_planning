@@ -715,8 +715,10 @@ class TwoStageSP:
         CI = 1.96 * st2SSP_std / np.sqrt(nbOS)
 
         KPIvec = procurmnt_amount.tolist()
+
         print("static 2SSP....")
         print("μ ± 1.96*σ/√NS =", st2SSP_bar, "±", CI)
+        print("procurement amount = ", procurmnt_amount)
         timeTest = time.time() - start_time
         return [st2SSP_bar, CI, timeTrain, timeTest],KPIvec
 
