@@ -109,7 +109,7 @@ if __name__ == "__main__":
 
         osfname = "./data/synthetic/OOS" + str(inputParams.k_init) + ".csv"
 
-        if cost_structure == 1:
+        if cost_structure == 1 or cost_structure == 2:
             ISfile = open('data/synthetic/in_sample_100.dat', 'rb')
             ISpaths = pickle.load(ISfile)
             ISfile.close()
@@ -163,7 +163,7 @@ if __name__ == "__main__":
 
         osfname = "./data/case-study/SC-network/random/OOS" + str(inputParams.k_init) + ".csv"
 
-        if cost_structure == 1:
+        if cost_structure == 1 or cost_structure == 2:
             ISfile = open('data/case-study/SC-network/random/in_sample_100.dat', 'rb')
             ISpaths = pickle.load(ISfile)
             ISfile.close()
