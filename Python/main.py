@@ -91,7 +91,7 @@ if __name__ == "__main__":
 
         netNodesFile = 'data/synthetic/nodes.csv';
         netParamsFile = 'data/synthetic/netParams.csv';
-        networkInstance.input_from_Syn(cost_structure,safe_time,tau,netNodesFile,netParamsFile,hurricaneInstance,arc_option)
+        networkInstance.input_from_Syn(cost_structure,safe_time,tau,netNodesFile,netParamsFile,hurricaneInstance,arc_option,0)
 
         osfname = "./data/synthetic/OOS" + str(inputParams.k_init) + "-D.csv"
 
@@ -105,7 +105,7 @@ if __name__ == "__main__":
 
         netNodesFile = 'data/synthetic/nodes.csv';
         netParamsFile = 'data/synthetic/netParams.csv';
-        networkInstance.input_from_Syn(cost_structure,safe_time,tau,netNodesFile,netParamsFile,hurricaneInstance,arc_option)
+        networkInstance.input_from_Syn(cost_structure,safe_time,tau,netNodesFile,netParamsFile,hurricaneInstance,arc_option,1)
 
         osfname = "./data/synthetic/OOS" + str(inputParams.k_init) + ".csv"
 
