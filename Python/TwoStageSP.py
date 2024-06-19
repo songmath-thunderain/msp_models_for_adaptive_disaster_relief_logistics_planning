@@ -1057,3 +1057,154 @@ class TwoStageSP:
 
         KPIvec = procurmnt_amount.tolist()+Go_percentage.tolist()+Go_noabsorbing_percentage.tolist();
         return [WS_bar, CI, train_time, test_time], KPIvec
+    
+
+    def naiveWS_eval(self, osfname):
+        T = self.hurricaneData.T;
+        absorbing_option = self.inputParams.absorbing_option;
+        nbOS = self.inputParams.nbOS;
+        absorbing_states = self.hurricaneData.absorbing_states;
+        dissipate_option = self.inputParams.dissipate_option;
+        nodeLists = self.hurricaneData.nodeLists;
+        smallestTransProb = self.hurricaneData.smallestTransProb; 
+        P_joint = self.hurricaneData.P_joint; 
+        S = self.hurricaneData.states;
+        x_0 = self.networkData.x_0;
+        SCEN = self.networkData.SCEN;
+        Ni = self.networkData.Ni;
+        Nj = self.networkData.Nj;
+        N0 = self.networkData.N0;
+        cb = self.networkData.cb;
+        ca = self.networkData.ca;
+        ch = self.networkData.ch;
+        cp = self.networkData.cp;
+        p = self.networkData.p;
+        q = self.networkData.q;
+        
+        start_time = time.time()
+
+        # Initialization
+        decisionNodes = copy.deepcopy(nodeLists);
+        objvalNodes = [[] for _ in range(T)]
+        solutionNodes = {}
+
+        for t in range(T):
+            objvalNodes[t] = [0.0] * len(nodeLists[t])
+
+        for t_roll in range(T):
+            for k in range(len(nodeLists[t_roll])):
+                if nodeLists[t_roll][k] not in absorbing_states:
+                    # transient state: solving a 2SSP
+                    x_init = x_0
+                    self.RH_2SSP_define_models(t_roll, nodeLists[t_roll][k], x_init)
+                    LB_Roll, UB_Roll, xval_Roll, fval_Roll, thetaval_Roll = self.RH_2SSP_solve_roll(nodeLists[t_roll][k], t_roll)
+                    objvalNodes[t_roll][k] = UB_Roll # objGo: expected objval if implementing a two-stage plan now. This is also only temporary, need to do a round of backward cleanup
+                    solutionNodes[(t_roll, k)] = [xval_Roll, fval_Roll]
+                else:
+                    # absorbing state, we can determine pretty easily if it is Go vs. No-Go
+                    if S[nodeLists[t_roll][k]][0] == 1 and dissipate_option == 1:
+                        objvalNodes[t_roll][k] = 0
+                    else:
+                        # Hurricane makes landfall with intensity, need to decide to do nothing or do some last-minute operation (although perhaps costly)
+                        costNoGo = p * np.sum(SCEN[nodeLists[t_roll][k]])
+                        if absorbing_option == 0:
+                            objvalNodes[t_roll][k] = costNoGo
+                        else:
+                            #define terminal stage optimality model
+                            m_term, x_term, f_term, y_term, z_term, v_term, dCons_term = self.terminal_model(t_roll, nodeLists[t_roll][k], x_0)
+                            for j in range(Nj):
+                                dCons_term[j].setAttr(GRB.Attr.RHS, SCEN[nodeLists[t_roll][k]][j])
+
+                            m_term.optimize()
+
+                            if m_term.status != GRB.OPTIMAL:
+                                print("status_subproblem =", m_term.status)
+                                exit(0)
+                            else:
+                                costGo = m_term.ObjVal
+
+                            if costNoGo < costGo:
+                                objvalNodes[t_roll][k] = costNoGo
+                            else:
+                                objvalNodes[t_roll][k] = costGo
+        train_time = time.time() - start_time
+        start_time = time.time()
+
+        # Start evaluating policies on the decision tree
+        print("Construction is done....Now we do evaluation...")
+
+        OS_paths = pd.read_csv(osfname).values 
+        objs_OOS = np.zeros(nbOS)
+
+        for s in range(nbOS):
+            for t in range(T):
+                ind = list(nodeLists[t]).index(next((x for x in nodeLists[t] if x == (OS_paths[s,t]-1)), None))
+                if (OS_paths[s, t]-1) in absorbing_states:
+                    # if absorbing, just take whatever that is the best, which has been computed above
+                    objs_OOS[s] = objvalNodes[t][ind]
+                    #print("absorbed! obj = ", objs_OOS[s], "\n");
+                    break
+                else:
+                    if (t,OS_paths[s, t]-1) not in self.hurricaneData.nodeTime2Go:
+                        print("ERROR! This shouldn't happen!")
+                        exit(0)
+                    else:
+                        if self.hurricaneData.nodeTime2Go[(t,OS_paths[s, t]-1)] > self.inputParams.safe_time + 1e-5:
+                            # naive WS decision rule
+                            continue
+                        else:
+                            # Decision is Go!
+                            absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if (x-1) in self.hurricaneData.absorbing_states), None))
+
+                            #define second stage (subproblem) optimality model
+                            self.subproblem, self.y2, self.xCons, self.dCons, self.rCons = self.RH_2SSP_second_stage()
+
+                            if absorbing_option == 0:
+                                for i in range(Ni):
+                                    self.xCons[i].setAttr(GRB.Attr.RHS, solutionNodes[(t, ind)][0][i][absorbingT - t - 1])
+                            else:
+                                for i in range(Ni):
+                                    self.xCons[i].setAttr(GRB.Attr.RHS, solutionNodes[(t, ind)][0][i][absorbingT - t])
+
+                            for j in range(Nj):
+                                self.dCons[j].setAttr(GRB.Attr.RHS, SCEN[OS_paths[s,absorbingT]-1][j]);
+                            
+                            for i in range(Ni):
+                                for j in range(Nj):
+                                    self.y2[i, j].setAttr(GRB.Attr.Obj, ca[i, j, absorbingT, OS_paths[s,absorbingT]-1])
+
+                            self.subproblem.optimize()
+
+                            if self.subproblem.status != GRB.OPTIMAL:
+                                print("status_subproblem =", self.subproblem.status)
+                                exit(0)
+                            else:
+                                objs_OOS[s] = self.subproblem.ObjVal
+                                #print("first obj = ", objs_OOS[s]);
+                                if absorbing_option == 0:
+                                    for tt in range(absorbingT - t):
+                                        objs_OOS[s] += sum(sum(
+                                            cb[i, ii, t + tt, OS_paths[s,t+tt]-1] * solutionNodes[(t, ind)][1][i][ii][tt] for ii in range(Ni)) for i in range(N0)
+                                        ) + sum(ch[i, t + tt] * solutionNodes[(t, ind)][0][i][tt] for i in range(Ni)) + sum(
+                                            solutionNodes[(t, ind)][1][N0-1][i][tt] for i in range(Ni)
+                                        ) * cp[t + tt, OS_paths[s,t+tt]-1]
+                                else:
+                                    for tt in range(absorbingT + 1 - t):
+                                        objs_OOS[s] += sum(sum(
+                                            cb[i, ii, t + tt, OS_paths[s,t+tt]-1] * solutionNodes[(t, ind)][1][i][ii][tt] for ii in range(Ni)) for i in range(N0)
+                                        ) + sum(ch[i, t + tt] * solutionNodes[(t, ind)][0][i][tt] for i in range(Ni)) + sum(
+                                            solutionNodes[(t, ind)][1][N0-1][i][tt] for i in range(Ni)
+                                        ) * cp[t + tt, OS_paths[s,t+tt]-1]
+                            break
+
+        test_time = time.time() - start_time
+
+        WS_bar = np.mean(objs_OOS)
+        WS_std = np.std(objs_OOS)
+        WS_low = WS_bar - 1.96 * WS_std / np.sqrt(nbOS)
+        WS_high = WS_bar + 1.96 * WS_std / np.sqrt(nbOS)
+        CI = WS_bar-WS_low;
+        print("naiveWS....")
+        print(f"μ ± 1.96*σ/√NS = {WS_bar} ± {CI}")
+
+        return [WS_bar, CI, train_time, test_time]

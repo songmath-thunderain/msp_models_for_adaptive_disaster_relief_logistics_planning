@@ -21,7 +21,7 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--cost_structure", type = int, choices = [0,1,2], help = "cost structure option: 0. time increasing, 1. safe time with logistics cost surge, 2. only price surge by tau in logistics cost")
     parser.add_argument("-t", "--tau", type = float, help = "cost-scaling factor")
     parser.add_argument("-st", "--safe_time", required = False, type = int, help = "safe time parameter to determine cost surge")
-    parser.add_argument("-s", "--solution_option", type = int, choices = [0,1,2,3,4,5], help = "solution options: 0. CV, 1. FA, 2. static2SSP, 3. RH2SSP, 4. WS, 5. All")
+    parser.add_argument("-s", "--solution_option", type = int, choices = [-1,0,1,2,3,4,5], help = "solution options: -1. naiveWS, 0. CV, 1. FA, 2. static2SSP, 3. RH2SSP, 4. WS, 5. All")
     parser.add_argument("-i", "--instance_option", type = int, choices = [-1,0,1,2], help = "instance option: -1. Synthetic D-landfall, 0. Synthetic R-landfall, 1. Case Study D-landfall, 2. Case Study R-landfall")
     parser.add_argument("-w", "--write_option", type = int, choices = [0,1], help = "0. do not write to CSV, 1. write results to CSV")
     args = parser.parse_args()
@@ -56,6 +56,9 @@ if __name__ == "__main__":
     else:
         if cost_structure == 1 or cost_structure == 2:
             print("Error! safe_time parameter is not defined for cost_structure == 1 or 2!")
+            exit(0);
+        if args.solution_option == -1:
+            print("Error! safe_time parameter is not defined for solution_option == -1, i.e., naiveWS!")
             exit(0);
     arc_option = False
     if instance_option == 1 or instance_option == 2:
@@ -189,6 +192,13 @@ if __name__ == "__main__":
     option = args.solution_option
     if safe_time is None:
         safe_time = 0; # just print out something trivial
+    if option == -1 or option == 5:
+        TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance,ISpaths)
+        [obj, CI, train_time, test_time] = TwoStageSP.naiveWS_eval(osfname)
+        if write_option == 1:
+            with open(outputpath+'naiveWSresults.csv', 'a') as myfile:
+                writer = csv.writer(myfile, delimiter =',')
+                writer.writerow([instance_option,cost_structure,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,safe_time,obj,CI,train_time,test_time])
     if option == 0 or option == 5:
         CV = CV(inputParams,hurricaneInstance,networkInstance)
         obj, CI, elapsed_time = CV.clairvoyant_eval(osfname)
@@ -207,7 +217,8 @@ if __name__ == "__main__":
                 writer = csv.writer(myfile, delimiter =',')
                 writer.writerow([instance_option,cost_structure,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,safe_time]+KPIvec)
     if option == 2 or option == 5:
-        TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance,ISpaths)
+        if option == 2:
+            TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance,ISpaths)
         [obj, CI, train_time, test_time], KPIvec = TwoStageSP.static_2SSP_eval(osfname)
         if write_option == 1:
             with open(outputpath+'static2SSPresults.csv', 'a') as myfile:
