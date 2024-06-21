@@ -442,7 +442,7 @@ class TwoStageSP:
             # cost is both time- and state-dependent
             for n in range(nbScens):
                 absorbingT = t_roll + len(sample_path[n]) - 1
-                absorbingState = sample_path[n][-1] # WARNING: This is potentially problematic for OOS test
+                absorbingState = sample_path[n][-1] 
                 self.RH_2SSP_update_RHS_path(absorbingT, absorbingState, sample_path[n], xval, fval, t_roll)
                 Q[n], pi1[n], pi2[n], pi3[n], flag = self.solve_scen_subproblem()
                 
@@ -1149,7 +1149,7 @@ class TwoStageSP:
                         print("ERROR! This shouldn't happen!")
                         exit(0)
                     else:
-                        if self.hurricaneData.nodeTime2Go[(t,OS_paths[s, t]-1)] > self.inputParams.safe_time + 1e-5:
+                        if self.hurricaneData.nodeTime2Go[(t,OS_paths[s, t]-1)] > self.inputParams.safe_time + 1 + 1e-5:
                             # naive WS decision rule
                             continue
                         else:
