@@ -832,7 +832,7 @@ class networkData:
     print("# of SPs = ", self.Ni);
     print("# of DPs = ", self.Nj);
 
-  def input_from_Case_new(self,cost_structure,safe_time,costScalingFactor,netFolderPath,netParamsFile,hurricaneDataSet,arc_option,option):
+  def input_from_Case_new(self,cost_structure,safe_time,costScalingFactor,netFolderPath,hurricaneDataSet,arc_option,option,fc_level):
     # data input interface for case study (new format)
     # If arc_option = true: read from a file that contains arc information (currently only between SPs and DPs)
     # option = 0: deterministic landfall time in case study
@@ -863,7 +863,7 @@ class networkData:
     penCostRatio = netParams['penCostRatio'][0];
     salvageCostRatio = netParams['salvageCostRatio'][0];
     cMax = netParams['cMax'][0];
-    f_cap = netParams['f_cap'][0];
+    f_cap = netParams['f_cap'][0]*fc_level;
 
     d_II = {};
     d_JI = {};
