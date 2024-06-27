@@ -2,10 +2,10 @@ import os
 import time
 
 command = []
-ni_options = [" 3 ", " 6 " , " 9 "]
-nj_options = [" 10 ", " 20 ", " 30 "]
+ni_options = [" 6 "]
+nj_options = [" 20 "]
 instance_option = [" 0 "];
-tau = [" 0 ", " 0.5 ", " 5 "];
+tau = [" 0 "];
 solution_option = [" 0 ", " 1 "];
 
 for k1 in instance_option:
