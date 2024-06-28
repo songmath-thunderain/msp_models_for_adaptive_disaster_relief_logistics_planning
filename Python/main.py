@@ -21,7 +21,7 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--cost_structure", type = int, choices = [0,1,2], help = "cost structure option: 0. time increasing, 1. safe time with logistics cost surge, 2. only price surge by tau in logistics cost")
     parser.add_argument("-t", "--tau", type = float, help = "cost-scaling factor")
     parser.add_argument("-st", "--safe_time", required = False, type = int, help = "safe time parameter to determine cost surge")
-    parser.add_argument("-s", "--solution_option", type = int, choices = [-1,0,1,2,3,4,5], help = "solution options: -1. naiveWS, 0. CV, 1. FA, 2. static2SSP, 3. RH2SSP, 4. WS, 5. All")
+    parser.add_argument("-s", "--solution_option", type = int, choices = [-1,0,1,2,3,4,5,6], help = "solution options: -1. naiveWS, 0. CV, 1. FA, 2. static2SSP, 3. RH2SSP, 4. WS, 5. All")
     parser.add_argument("-i", "--instance_option", type = int, choices = [-1,0,1,2], help = "instance option: -1. Synthetic D-landfall, 0. Synthetic R-landfall, 1. Case Study D-landfall, 2. Case Study R-landfall")
     parser.add_argument("-w", "--write_option", type = int, choices = [0,1], help = "0. do not write to CSV, 1. write results to CSV")
     parser.add_argument("-fc", "--flow_capacity", type = float, choices = [0.125,0.25,0.5,1,2,4], required = False, help = "flow capacity level: needs to be 0.125, 0.25, 0.5, 1, 2, or 4")
@@ -202,21 +202,21 @@ if __name__ == "__main__":
         safe_time = 0; # just print out something trivial
     
     if args.flow_capacity != None:
-        if option == -1 or option == 5:
+        if option == -1 or option == 5 or option == 6:
             TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance,ISpaths)
             [obj, CI, train_time, test_time] = TwoStageSP.naiveWS_eval(osfname)
             if write_option == 1:
                 with open(outputpath+'FC_SA_naiveWSresults.csv', 'a') as myfile:
                     writer = csv.writer(myfile, delimiter =',')
                     writer.writerow([instance_option,args.flow_capacity,safe_time,obj,CI,train_time,test_time])
-        if option == 0 or option == 5:
+        if option == 0 or option == 5 or option == 6:
             CV = CV(inputParams,hurricaneInstance,networkInstance)
             obj, CI, elapsed_time = CV.clairvoyant_eval(osfname)
             if write_option == 1:
                 with open(outputpath+'FC_SA_CVresults.csv', 'a') as myfile:
                     writer = csv.writer(myfile, delimiter =',')
                     writer.writerow([instance_option,args.flow_capacity,safe_time,obj,CI,elapsed_time])
-        if option == 1 or option == 5:
+        if option == 1 or option == 5 or option == 6:
             FA = FA(inputParams,solveParams,hurricaneInstance,networkInstance)
             [obj, CI, train_time, test_time], KPIvec = FA.FOSDDP_eval(osfname)
             if write_option == 1:
@@ -226,7 +226,7 @@ if __name__ == "__main__":
                 with open(outputpath+'FC_SA_FAresults-KPI.csv', 'a') as myfile:
                     writer = csv.writer(myfile, delimiter =',')
                     writer.writerow([instance_option,args.flow_capacity,safe_time]+KPIvec)
-        if option == 2 or option == 5:
+        if option == 2 or option == 6:
             if option == 2:
                 TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance,ISpaths)
             [obj, CI, train_time, test_time], KPIvec = TwoStageSP.static_2SSP_eval(osfname)
@@ -245,7 +245,7 @@ if __name__ == "__main__":
                 with open(outputpath+'FC_SA_rolling2SSPresults.csv', 'a') as myfile:
                     writer = csv.writer(myfile, delimiter =',')
                     writer.writerow([instance_option,args.flow_capacity,safe_time,obj,CI,elapsed_time])
-        if option == 4 or option == 5:
+        if option == 4 or option == 5 or option == 6:
             if option == 4:
                 TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance,ISpaths)
             [obj, CI, train_time, test_time], KPIvec = TwoStageSP.WS_eval(osfname)
