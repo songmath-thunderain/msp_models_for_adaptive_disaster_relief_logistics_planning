@@ -297,7 +297,7 @@ class FA:
             self.FB1Cons[t,k_t][i].setAttr(GRB.Attr.RHS, xval[i,t - 1])
             self.FB2Cons[t,k_t][i].setAttr(GRB.Attr.RHS, xval[i,t - 1])
         for j in range(Nj):
-            if S[k_t][2] in self.hurricaneData.absorbing_states and S[k_t][0] != 1:
+            if k_t in self.hurricaneData.absorbing_states and S[k_t][0] != 1:
                 self.dCons[t,k_t][j].setAttr(GRB.Attr.RHS, SCEN[k_t][j]);
             else:
                 self.dCons[t,k_t][j].setAttr(GRB.Attr.RHS, 0);
