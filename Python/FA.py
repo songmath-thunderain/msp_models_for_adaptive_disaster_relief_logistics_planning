@@ -331,6 +331,8 @@ class FA:
         invAmount = np.zeros(nbOS);
         salvageAmount = np.zeros(nbOS);
         penaltyAmount = np.zeros(nbOS);
+        procurmntCost = np.zeros(nbOS);
+        transCost = np.zeros(nbOS);
 
         start = time.time()
         for s in range(nbOS):
@@ -363,6 +365,8 @@ class FA:
                 salvageAmount[s] += sum(vval_fa[s,t][i] for i in range(Ni));
                 penaltyAmount[s] += sum(zval_fa[s,t][j] for j in range(Nj));
                 procurmnt_amount[t] += sum(fval_fa[s,t][N0-1,i] for i in range(Ni));
+                procurmntCost[s] += sum(fval_fa[s,t][N0-1,i] for i in range(Ni))*self.networkData.cp[t,k_t];
+                transCost[s] += sum(sum(fval_fa[s,t][i,ii]*self.networkData.cb[i,ii,t,k_t] for i in range(N0)) for ii in range(Ni));
                 procurmnt_all[s,t] = sum(fval_fa[s,t][N0-1,i] for i in range(Ni));
                 flow_amount[t] += sum(sum(fval_fa[s,t][i,ii] for i in range(Ni)) for ii in range(Ni));
                 if k_t in absorbing_states:
@@ -375,6 +379,7 @@ class FA:
         fa_high = fa_bar + 1.96 * fa_std / np.sqrt(nbOS)
         CI = fa_bar-fa_low;
         print("FA...")
+        print("LB = ", LB[-1])
         print(f"μ ± 1.96*σ/√NS = {fa_bar} ± {CI}")
         test_time = time.time() - start
 
@@ -393,16 +398,19 @@ class FA:
             if count > 0:
                 procurmnt_posExpect[t] = totalPos*1.0/count;
 
-        print("procurement amount = ", procurmnt_amount);
-        print("flow amount = ", flow_amount);
-
         avgInvAmount = sum(invAmount[s] for s in range(nbOS))*1.0/nbOS;
         avgSalvageAmount = sum(salvageAmount[s] for s in range(nbOS))*1.0/nbOS;
         avgPenaltyAmount = sum(penaltyAmount[s] for s in range(nbOS))*1.0/nbOS;
 
+        print("procurement amount = ", procurmnt_amount);
+        print("flow amount = ", flow_amount);
         print("avgInvAmount = ", avgInvAmount);
         print("avgSalvageAmount = ", avgSalvageAmount);
         print("avgPenaltyAmount = ", avgPenaltyAmount);
+
+        print("procurementCost = ", sum(procurmntCost[s] for s in range(nbOS))*1.0/nbOS)
+        print("transportationCost = ", sum(transCost[s] for s in range(nbOS))*1.0/nbOS)
+        print("penaltyCost = ", avgPenaltyAmount*self.networkData.p)
 
         KPIvec = procurmnt_amount.tolist()+procurmnt_percentage.tolist()+procurmnt_posExpect.tolist()+flow_amount.tolist()+[avgInvAmount,avgSalvageAmount,avgPenaltyAmount]
         return [fa_bar, CI, train_time, test_time], KPIvec
