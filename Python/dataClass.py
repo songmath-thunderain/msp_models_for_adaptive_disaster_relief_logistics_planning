@@ -832,7 +832,7 @@ class networkData:
     print("# of SPs = ", self.Ni);
     print("# of DPs = ", self.Nj);
 
-  def input_from_Case_new(self,cost_structure,safe_time,costScalingFactor,netFolderPath,hurricaneDataSet,arc_option,option,fc_level,penalty_level,inventory_level):
+  def input_from_Case_new(self,cost_structure,safe_time,costScalingFactor,netFolderPath,hurricaneDataSet,arc_option,option,fc_level,penalty_level,inventory_level,transportation_level):
     # data input interface for case study (new format)
     # If arc_option = true: read from a file that contains arc information (currently only between SPs and DPs)
     # option = 0: deterministic landfall time in case study
@@ -857,7 +857,7 @@ class networkData:
 
     netParams = pd.read_excel(netFolderPath+'netParams.xlsx');
     # labels: [fuel, base, invCostRatio, penCostRatio, salvageCostRatio, cmax]
-    fuel = netParams['fuel'][0];
+    fuel = netParams['fuel'][0]*transportation_level;
     base = netParams['base'][0];
     invCostRatio = netParams['invCostRatio'][0]*inventory_level;
     penCostRatio = netParams['penCostRatio'][0]*penalty_level;

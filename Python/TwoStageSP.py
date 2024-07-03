@@ -953,7 +953,7 @@ class TwoStageSP:
                     for kk in range(len(nodeLists[t + 1])):
                         if P_joint[nodeLists[t][k]][nodeLists[t + 1][kk]] > smallestTransProb:
                             costNoGo += P_joint[nodeLists[t][k]][nodeLists[t + 1][kk]] * objvalNodes[t + 1][kk]
-                    if costNoGo < objvalNodes[t][k]:
+                    if costNoGo < objvalNodes[t][k]+1e-5:
                         decisionNodes[t][k] = 0
                         objvalNodes[t][k] = costNoGo
 
