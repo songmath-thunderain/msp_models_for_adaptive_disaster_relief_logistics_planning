@@ -413,4 +413,4 @@ class FA:
         print("penaltyCost = ", avgPenaltyAmount*self.networkData.p)
 
         KPIvec = procurmnt_amount.tolist()+procurmnt_percentage.tolist()+procurmnt_posExpect.tolist()+flow_amount.tolist()+[avgInvAmount,avgSalvageAmount,avgPenaltyAmount]
-        return [fa_bar, CI, train_time, test_time], KPIvec
+        return [LB[-1], fa_bar, CI, train_time, test_time], KPIvec
