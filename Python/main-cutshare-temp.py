@@ -5,6 +5,8 @@ import csv
 import time
 import pickle
 from dataClass import *
+from CV import *
+from TwoStageSP import *
 from FACutshareTemp import *
 
 if __name__ == "__main__":
@@ -16,12 +18,17 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--oos", type = int, help = "number of out-of-sample scenarios")
     parser.add_argument("-ni", "--Ni", type = int, choices = [3,6,9], help = "number of SPs")
     parser.add_argument("-nj", "--Nj", type = int, choices = [10,20,30], help = "number of DPs")
-    parser.add_argument("-c", "--cost_structure", type = int, choices = [0,1,2], help = "cost structure option: 0. time increasing, 1. safe time with logistics cost surge")
+    parser.add_argument("-c", "--cost_structure", type = int, choices = [0,1,2], help = "cost structure option: 0. time increasing, 1. safe time with logistics cost surge, 2. only price surge by tau in logistics cost")
     parser.add_argument("-t", "--tau", type = float, help = "cost-scaling factor")
     parser.add_argument("-st", "--safe_time", required = False, type = int, help = "safe time parameter to determine cost surge")
     parser.add_argument("-s", "--solution_option", type = int, choices = [0,1], help = "solution options: 0. no cut sharing, 1. has cut sharing")
     parser.add_argument("-i", "--instance_option", type = int, choices = [-1,0,1,2], help = "instance option: -1. Synthetic D-landfall, 0. Synthetic R-landfall, 1. Case Study D-landfall, 2. Case Study R-landfall")
     parser.add_argument("-w", "--write_option", type = int, choices = [0,1], help = "0. do not write to CSV, 1. write results to CSV")
+    parser.add_argument("-fc", "--flow_capacity", type = float, choices = [0.125,0.25,0.5,1,2,4], required = False, help = "flow capacity level: needs to be 0.125, 0.25, 0.5, 1, 2, or 4")
+    parser.add_argument("-pen", "--penalty", type = float, choices = [0.25,0.5,1,2,4], required = False, help = "penalty level: needs to be 0.25, 0.5, 1, 2, or 4")
+    parser.add_argument("-inv", "--inventory", type = float, choices = [0,0.5,1,2], required = False, help = "inventory level: needs to be 0, 0.5, 1, or 2")
+    parser.add_argument("-trans", "--transportation", type = float, choices = [1,5,10,20], required = False, help = "transportation level: needs to be 1,5,10,or 20")
+
     args = parser.parse_args()
     solveparam_file = args.solveparam
     dissipate_option = args.dissipate_option
@@ -55,6 +62,9 @@ if __name__ == "__main__":
         if cost_structure == 1 or cost_structure == 2:
             print("Error! safe_time parameter is not defined for cost_structure == 1 or 2!")
             exit(0);
+        if args.solution_option == -1:
+            print("Error! safe_time parameter is not defined for solution_option == -1, i.e., naiveWS!")
+            exit(0);
     arc_option = False
     if instance_option == 1 or instance_option == 2:
         # case study, always assume the existence of arc.xlsx file
@@ -77,6 +87,22 @@ if __name__ == "__main__":
 
     print("Reading data...");
     start_time = time.time()
+
+    fc_level = 1;
+    if args.flow_capacity != None:
+        fc_level = args.flow_capacity;
+    
+    penalty_level = 1;
+    if args.penalty != None:
+        penalty_level = args.penalty;
+    
+    inventory_level = 1;
+    if args.inventory != None:
+        inventory_level = args.inventory;
+    
+    transportation_level = 1;
+    if args.transportation != None:
+        transportation_level = args.transportation;
 
     ISpaths = None
     if instance_option == -1:
@@ -107,7 +133,7 @@ if __name__ == "__main__":
 
         osfname = "./data/synthetic/OOS" + str(inputParams.k_init) + ".csv"
 
-        if cost_structure == 1:
+        if cost_structure == 1 or cost_structure == 2:
             ISfile = open('data/synthetic/in_sample_100.dat', 'rb')
             ISpaths = pickle.load(ISfile)
             ISfile.close()
@@ -141,8 +167,7 @@ if __name__ == "__main__":
         hurricaneInstance.input_from_Case_new(absorbingFile, MCFile);
 
         netFolderPath = 'data/case-study/SC-network/';
-        netParamsFile = 'data/case-study/SC-network/netParams.csv';
-        networkInstance.input_from_Case_new(cost_structure,safe_time,tau,netFolderPath,netParamsFile,hurricaneInstance,arc_option,0);
+        networkInstance.input_from_Case_new(cost_structure,safe_time,tau,netFolderPath,hurricaneInstance,arc_option,0,fc_level,penalty_level,inventory_level,transportation_level);
  
         osfname = "./data/case-study/SC-network/deterministic/OOS" + str(inputParams.k_init) + "-D.csv"
 
@@ -156,12 +181,11 @@ if __name__ == "__main__":
         print("absorbing states = ", hurricaneInstance.absorbing_states);
 
         netFolderPath = 'data/case-study/SC-network/';
-        netParamsFile = 'data/case-study/SC-network/netParams.csv';
-        networkInstance.input_from_Case_new(cost_structure,safe_time,tau,netFolderPath,netParamsFile,hurricaneInstance,arc_option,1);
+        networkInstance.input_from_Case_new(cost_structure,safe_time,tau,netFolderPath,hurricaneInstance,arc_option,1,fc_level,penalty_level,inventory_level,transportation_level);
 
         osfname = "./data/case-study/SC-network/random/OOS" + str(inputParams.k_init) + ".csv"
 
-        if cost_structure == 1:
+        if cost_structure == 1 or cost_structure == 2:
             ISfile = open('data/case-study/SC-network/random/in_sample_100.dat', 'rb')
             ISpaths = pickle.load(ISfile)
             ISfile.close()
@@ -187,10 +211,10 @@ if __name__ == "__main__":
     option = args.solution_option
     if safe_time is None:
         safe_time = 0; # just print out something trivial
+    
     FA = FA(inputParams,solveParams,hurricaneInstance,networkInstance,option)
     [LB, iter, obj, CI, train_time, test_time] = FA.FOSDDP_eval(osfname)
     if write_option == 1:
         with open(outputpath+'FAresults-cutsharing.csv', 'a') as myfile:
             writer = csv.writer(myfile, delimiter =',')
             writer.writerow([instance_option,cost_structure,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,safe_time,option,LB,iter,obj,CI,train_time,test_time])
-    
