@@ -1053,7 +1053,7 @@ class TwoStageSP:
         print(f"μ ± 1.96*σ/√NS = {WS_bar} ± {CI}")
 
         print("Go_percentage = ", Go_percentage);
-        print("Go_noabsorbing_percentage = ", Go_noabsorbing_percentage);
+        print("procurmnt_amount = ", procurmnt_amount);
 
         KPIvec = procurmnt_amount.tolist()+Go_percentage.tolist()+Go_noabsorbing_percentage.tolist();
         return [WS_bar, CI, train_time, test_time], KPIvec
