@@ -27,7 +27,7 @@ if __name__ == "__main__":
     parser.add_argument("-fc", "--flow_capacity", type = float, choices = [0.125,0.25,0.5,1,2,4], required = False, help = "flow capacity level: needs to be 0.125, 0.25, 0.5, 1, 2, or 4")
     parser.add_argument("-pen", "--penalty", type = float, choices = [0.25,0.5,1,2,4], required = False, help = "penalty level: needs to be 0.25, 0.5, 1, 2, or 4")
     parser.add_argument("-inv", "--inventory", type = float, choices = [0,0.5,1,2], required = False, help = "inventory level: needs to be 0, 0.5, 1, or 2")
-    parser.add_argument("-trans", "--transportation", type = float, choices = [1,5,10,20], required = False, help = "transportation level: needs to be 1,5,10,or 20")
+    parser.add_argument("-trans", "--transportation", type = float, required = False, help = "transportation level: needs to be 1,5,10,or 20")
 
     args = parser.parse_args()
     solveparam_file = args.solveparam

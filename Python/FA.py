@@ -109,6 +109,13 @@ class FA:
         for j in range(Nj):
             dCons[j] = m.addConstr(z[j] + gp.quicksum(y[i, j] for i in range(Ni)) >= 0)
 
+        # no salvage and demand satisfaction is allowed at transient states
+        if k not in self.hurricaneData.absorbing_states:
+            for i in range(Ni):
+                m.addConstr(v[i] <= 0)
+                for j in range(Nj):
+                    m.addConstr(y[i, j] <= 0)
+
         # flow capacity constraints: total flow per period cannot exceed an upper limit
         m.addConstr(gp.quicksum(gp.quicksum(f[i,ii] for i in range(N0)) for ii in range(Ni)) <= f_cap);
 
@@ -329,7 +336,7 @@ class FA:
         procurmnt_posExpect = np.zeros(T); 
         flow_amount = np.zeros(T);
         invAmount = np.zeros(nbOS);
-        salvageAmount = np.zeros(nbOS);
+        salvageAmount = np.zeros(T);
         penaltyAmount = np.zeros(nbOS);
         procurmntCost = np.zeros(nbOS);
         transCost = np.zeros(nbOS);
@@ -362,7 +369,7 @@ class FA:
                     vval_fa[s, t] = {}
                     for i in range(Ni):
                         vval_fa[s, t][i] = self.v[t,k_t][i].x
-                salvageAmount[s] += sum(vval_fa[s,t][i] for i in range(Ni));
+                salvageAmount[t] += sum(vval_fa[s,t][i] for i in range(Ni));
                 penaltyAmount[s] += sum(zval_fa[s,t][j] for j in range(Nj));
                 procurmnt_amount[t] += sum(fval_fa[s,t][N0-1,i] for i in range(Ni));
                 procurmntCost[s] += sum(fval_fa[s,t][N0-1,i] for i in range(Ni))*self.networkData.cp[t,k_t];
@@ -387,6 +394,7 @@ class FA:
         for t in range(T):
             procurmnt_amount[t] = procurmnt_amount[t]/nbOS;
             flow_amount[t] = flow_amount[t]/nbOS;      
+            salvageAmount[t] = salvageAmount[t]/nbOS;
         for t in range(T):
             count = 0;
             totalPos = 0;
@@ -399,10 +407,12 @@ class FA:
                 procurmnt_posExpect[t] = totalPos*1.0/count;
 
         avgInvAmount = sum(invAmount[s] for s in range(nbOS))*1.0/nbOS;
-        avgSalvageAmount = sum(salvageAmount[s] for s in range(nbOS))*1.0/nbOS;
+        avgSalvageAmount = sum(salvageAmount);
         avgPenaltyAmount = sum(penaltyAmount[s] for s in range(nbOS))*1.0/nbOS;
 
         print("procurement amount = ", procurmnt_amount);
+        print("total procurement = ", sum(procurmnt_amount));
+        print("salvage amount = ", salvageAmount);
         print("flow amount = ", flow_amount);
         print("avgInvAmount = ", avgInvAmount);
         print("avgSalvageAmount = ", avgSalvageAmount);
