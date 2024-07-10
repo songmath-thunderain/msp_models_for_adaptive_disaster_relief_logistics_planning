@@ -40,7 +40,7 @@ class FA:
         y = {}
         z = {}
         v = {}
-        theta = m.addVar(lb = 0)
+        theta = m.addVar(lb = -1e8)
 
         for i in range(Ni):
             if x_cap[i] == 1e8:
@@ -115,7 +115,15 @@ class FA:
                 m.addConstr(v[i] <= 0)
                 for j in range(Nj):
                     m.addConstr(y[i, j] <= 0)
-
+            for j in range(Nj):
+                m.addConstr(z[j] == 0)
+        else:
+            m.addConstr(theta == 0)
+            if self.inputParams.absorbing_option == 0:
+                for i in range(Ni):
+                    for j in range(N0):
+                        if j != i:
+                            f[j,i].setAttr(GRB.Attr.UB, 0);
         # flow capacity constraints: total flow per period cannot exceed an upper limit
         m.addConstr(gp.quicksum(gp.quicksum(f[i,ii] for i in range(N0)) for ii in range(Ni)) <= f_cap);
 
@@ -127,9 +135,6 @@ class FA:
     # Define the model
     def define_models(self):
         # Data instantiation
-        Ni = self.networkData.Ni;
-        N0 = self.networkData.N0;
-        Nj = self.networkData.Nj;
         T = self.hurricaneData.T;
         self.m = {}
         self.x = {}
@@ -156,13 +161,6 @@ class FA:
                     self.FB1Cons[t, ind],
                     self.FB2Cons[t, ind]
                 ) = self.stage_t_state_k_problem(t,k)
-                if ind in self.hurricaneData.absorbing_states:
-                    self.theta[t, ind].setAttr(GRB.Attr.UB, 0);
-                    if self.inputParams.absorbing_option == 0:
-                        for i in range(Ni):
-                            for j in range(N0):
-                                if j != i:
-                                    self.f[t, ind][j,i].setAttr(GRB.Attr.UB, 0);
 
     # Train model: forward pass
     def FOSDDP_forward_pass_oneSP_iteration(self):
@@ -304,7 +302,7 @@ class FA:
             self.FB1Cons[t,k_t][i].setAttr(GRB.Attr.RHS, xval[i,t - 1])
             self.FB2Cons[t,k_t][i].setAttr(GRB.Attr.RHS, xval[i,t - 1])
         for j in range(Nj):
-            if k_t in self.hurricaneData.absorbing_states and S[k_t][0] != 1:
+            if k_t in self.hurricaneData.absorbing_states:
                 self.dCons[t,k_t][j].setAttr(GRB.Attr.RHS, SCEN[k_t][j]);
             else:
                 self.dCons[t,k_t][j].setAttr(GRB.Attr.RHS, 0);
@@ -346,7 +344,7 @@ class FA:
             xval = np.zeros((Ni, T))
             for t in range(T):
                 k_t = OS_paths[s, t]-1
-                if t > 1:
+                if t > 0:
                     self.MSP_fa_update_RHS(k_t, t, xval)
                 self.m[t,k_t].optimize()
                 if self.m[t,k_t].status != GRB.OPTIMAL:
