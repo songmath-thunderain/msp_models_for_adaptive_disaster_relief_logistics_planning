@@ -63,6 +63,8 @@ class FA:
         for j in range(Nj):
             z[j] = m.addVar(lb=0)
 
+        m.addConstr(theta >= gp.quicksum(x[i] for i in range(Ni)) * q)
+
         # Set objective
         m.setObjective(
             gp.quicksum(cb[i,ii,t,k] * f[i, ii] for i in range(N0) for ii in range(Ni))
