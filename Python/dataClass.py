@@ -1132,7 +1132,7 @@ class networkData:
     self.Ni = Ni;
     self.Nj = Nj;
     self.N0 = self.Ni+1;
-
+    self.Na = Na;
     print("# of SPs = ", self.Ni);
     print("# of DPs = ", self.Nj);  
 

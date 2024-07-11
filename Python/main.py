@@ -23,7 +23,7 @@ if __name__ == "__main__":
     parser.add_argument("-st", "--safe_time", required = False, type = int, help = "safe time parameter to determine cost surge")
     parser.add_argument("-s", "--solution_option", type = int, choices = [-1,0,1,2,3,4,5,6], help = "solution options: -1. naiveWS, 0. CV, 1. FA, 2. static2SSP, 3. RH2SSP, 4. WS, 5. All, 6. All except RH2SSP")
     parser.add_argument("-i", "--instance_option", type = int, choices = [-1,0,1,2], help = "instance option: -1. Synthetic D-landfall, 0. Synthetic R-landfall, 1. Case Study D-landfall, 2. Case Study R-landfall")
-    parser.add_argument("-w", "--write_option", type = int, choices = [0,1], help = "0. do not write to CSV, 1. write results to CSV")
+    parser.add_argument("-w", "--write_option", type = int, choices = [0,1,2], help = "0. do not write to CSV, 1. write results to CSV")
     parser.add_argument("-fc", "--flow_capacity", type = float, choices = [0.125,0.25,0.5,1,2,4], required = False, help = "flow capacity level: needs to be 0.125, 0.25, 0.5, 1, 2, or 4")
     parser.add_argument("-pen", "--penalty", type = float, choices = [0.25,0.5,1,2,4], required = False, help = "penalty level: needs to be 0.25, 0.5, 1, 2, or 4")
     parser.add_argument("-inv", "--inventory", type = float, choices = [0,0.5,1,2], required = False, help = "inventory level: needs to be 0, 0.5, 1, or 2")
@@ -229,14 +229,17 @@ if __name__ == "__main__":
                     writer.writerow([instance_option,args.flow_capacity,safe_time,obj,CI,elapsed_time])
         if option == 1 or option == 5 or option == 6:
             FA = FA(inputParams,solveParams,hurricaneInstance,networkInstance)
-            [LB, obj, CI, train_time, test_time], KPIvec = FA.FOSDDP_eval(osfname)
-            if write_option == 1:
-                with open(outputpath+'FC_SA_FAresults.csv', 'a') as myfile:
-                    writer = csv.writer(myfile, delimiter =',')
-                    writer.writerow([instance_option,args.flow_capacity,safe_time,LB,obj,CI,train_time,test_time])
-                with open(outputpath+'FC_SA_FAresults-KPI.csv', 'a') as myfile:
-                    writer = csv.writer(myfile, delimiter =',')
-                    writer.writerow([instance_option,args.flow_capacity,safe_time]+KPIvec)
+            if write_option == 2:
+                FA.FOSDDP_eval(osfname,1)
+            else:
+                [LB, obj, CI, train_time, test_time], KPIvec = FA.FOSDDP_eval(osfname,0)
+                if write_option == 1:
+                    with open(outputpath+'FC_SA_FAresults.csv', 'a') as myfile:
+                        writer = csv.writer(myfile, delimiter =',')
+                        writer.writerow([instance_option,args.flow_capacity,safe_time,LB,obj,CI,train_time,test_time])
+                    with open(outputpath+'FC_SA_FAresults-KPI.csv', 'a') as myfile:
+                        writer = csv.writer(myfile, delimiter =',')
+                        writer.writerow([instance_option,args.flow_capacity,safe_time]+KPIvec)
         if option == 2 or option == 6:
             if option == 2:
                 TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance,ISpaths)
@@ -284,14 +287,17 @@ if __name__ == "__main__":
                     writer.writerow([instance_option,args.inventory,safe_time,obj,CI,elapsed_time])
         if option == 1 or option == 5 or option == 6:
             FA = FA(inputParams,solveParams,hurricaneInstance,networkInstance)
-            [LB, obj, CI, train_time, test_time], KPIvec = FA.FOSDDP_eval(osfname)
-            if write_option == 1:
-                with open(outputpath+'Inv_SA_FAresults.csv', 'a') as myfile:
-                    writer = csv.writer(myfile, delimiter =',')
-                    writer.writerow([instance_option,args.inventory,safe_time,LB,obj,CI,train_time,test_time])
-                with open(outputpath+'Inv_SA_FAresults-KPI.csv', 'a') as myfile:
-                    writer = csv.writer(myfile, delimiter =',')
-                    writer.writerow([instance_option,args.inventory,safe_time]+KPIvec)
+            if write_option == 2:
+                FA.FOSDDP_eval(osfname,1)
+            else:
+                [LB, obj, CI, train_time, test_time], KPIvec = FA.FOSDDP_eval(osfname,0)
+                if write_option == 1:
+                    with open(outputpath+'Inv_SA_FAresults.csv', 'a') as myfile:
+                        writer = csv.writer(myfile, delimiter =',')
+                        writer.writerow([instance_option,args.inventory,safe_time,LB,obj,CI,train_time,test_time])
+                    with open(outputpath+'Inv_SA_FAresults-KPI.csv', 'a') as myfile:
+                        writer = csv.writer(myfile, delimiter =',')
+                        writer.writerow([instance_option,args.inventory,safe_time]+KPIvec)
         if option == 2 or option == 5 or option == 6:
             if option == 2:
                 TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance,ISpaths)
@@ -339,14 +345,17 @@ if __name__ == "__main__":
                     writer.writerow([instance_option,args.transportation,safe_time,obj,CI,elapsed_time])
         if option == 1 or option == 5 or option == 6:
             FA = FA(inputParams,solveParams,hurricaneInstance,networkInstance)
-            [LB, obj, CI, train_time, test_time], KPIvec = FA.FOSDDP_eval(osfname)
-            if write_option == 1:
-                with open(outputpath+'Trans_SA_FAresults.csv', 'a') as myfile:
-                    writer = csv.writer(myfile, delimiter =',')
-                    writer.writerow([instance_option,args.transportation,safe_time,LB,obj,CI,train_time,test_time])
-                with open(outputpath+'Trans_SA_FAresults-KPI.csv', 'a') as myfile:
-                    writer = csv.writer(myfile, delimiter =',')
-                    writer.writerow([instance_option,args.transportation,safe_time]+KPIvec)
+            if write_option == 2:
+                FA.FOSDDP_eval(osfname,1)
+            else:
+                [LB, obj, CI, train_time, test_time], KPIvec = FA.FOSDDP_eval(osfname,0)
+                if write_option == 1:
+                    with open(outputpath+'Trans_SA_FAresults.csv', 'a') as myfile:
+                        writer = csv.writer(myfile, delimiter =',')
+                        writer.writerow([instance_option,args.transportation,safe_time,LB,obj,CI,train_time,test_time])
+                    with open(outputpath+'Trans_SA_FAresults-KPI.csv', 'a') as myfile:
+                        writer = csv.writer(myfile, delimiter =',')
+                        writer.writerow([instance_option,args.transportation,safe_time]+KPIvec)
         if option == 2 or option == 5 or option == 6:
             if option == 2:
                 TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance,ISpaths)
@@ -394,14 +403,17 @@ if __name__ == "__main__":
                     writer.writerow([instance_option,args.penalty,safe_time,obj,CI,elapsed_time])
         if option == 1 or option == 5:
             FA = FA(inputParams,solveParams,hurricaneInstance,networkInstance)
-            [LB, obj, CI, train_time, test_time], KPIvec = FA.FOSDDP_eval(osfname)
-            if write_option == 1:
-                with open(outputpath+'Penalty_SA_FAresults.csv', 'a') as myfile:
-                    writer = csv.writer(myfile, delimiter =',')
-                    writer.writerow([instance_option,args.penalty,safe_time,LB,obj,CI,train_time,test_time])
-                with open(outputpath+'Penalty_SA_FAresults-KPI.csv', 'a') as myfile:
-                    writer = csv.writer(myfile, delimiter =',')
-                    writer.writerow([instance_option,args.penalty,safe_time]+KPIvec)
+            if write_option == 2:
+                FA.FOSDDP_eval(osfname,1)
+            else:
+                [LB, obj, CI, train_time, test_time], KPIvec = FA.FOSDDP_eval(osfname,0)
+                if write_option == 1:
+                    with open(outputpath+'Penalty_SA_FAresults.csv', 'a') as myfile:
+                        writer = csv.writer(myfile, delimiter =',')
+                        writer.writerow([instance_option,args.penalty,safe_time,LB,obj,CI,train_time,test_time])
+                    with open(outputpath+'Penalty_SA_FAresults-KPI.csv', 'a') as myfile:
+                        writer = csv.writer(myfile, delimiter =',')
+                        writer.writerow([instance_option,args.penalty,safe_time]+KPIvec)
         if option == 2 or option == 5:
             if option == 2:
                 TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance,ISpaths)
@@ -449,14 +461,17 @@ if __name__ == "__main__":
                     writer.writerow([instance_option,cost_structure,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,safe_time,obj,CI,elapsed_time])
         if option == 1 or option == 5:
             FA = FA(inputParams,solveParams,hurricaneInstance,networkInstance)
-            [LB, obj, CI, train_time, test_time], KPIvec = FA.FOSDDP_eval(osfname)
-            if write_option == 1:
-                with open(outputpath+'FAresults.csv', 'a') as myfile:
-                    writer = csv.writer(myfile, delimiter =',')
-                    writer.writerow([instance_option,cost_structure,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,safe_time,LB,obj,CI,train_time,test_time])
-                with open(outputpath+'FAresults-KPI.csv', 'a') as myfile:
-                    writer = csv.writer(myfile, delimiter =',')
-                    writer.writerow([instance_option,cost_structure,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,safe_time]+KPIvec)
+            if write_option == 2:
+                FA.FOSDDP_eval(osfname,1)
+            else:
+                [LB, obj, CI, train_time, test_time], KPIvec = FA.FOSDDP_eval(osfname,0)
+                if write_option == 1:
+                    with open(outputpath+'FAresults.csv', 'a') as myfile:
+                        writer = csv.writer(myfile, delimiter =',')
+                        writer.writerow([instance_option,cost_structure,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,safe_time,LB,obj,CI,train_time,test_time])
+                    with open(outputpath+'FAresults-KPI.csv', 'a') as myfile:
+                        writer = csv.writer(myfile, delimiter =',')
+                        writer.writerow([instance_option,cost_structure,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,safe_time]+KPIvec)
         if option == 2 or option == 5:
             if option == 2:
                 TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance,ISpaths)

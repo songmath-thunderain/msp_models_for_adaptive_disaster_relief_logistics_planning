@@ -310,10 +310,13 @@ class FA:
                 self.dCons[t,k_t][j].setAttr(GRB.Attr.RHS, 0);
 
     # Evaluate model
-    def FOSDDP_eval(self, osfname):
+    def FOSDDP_eval(self, osfname, option):
+        # option = 0: just the basic evaluation
+        # option = 1: evaluation for "fancy" illustrations
         Ni = self.networkData.Ni;
         Nj = self.networkData.Nj;
         N0 = self.networkData.N0;
+        Na = self.networkData.Na;
         T = self.hurricaneData.T;
         nbOS = self.inputParams.nbOS;
         absorbing_states = self.hurricaneData.absorbing_states;
@@ -329,98 +332,135 @@ class FA:
         zval_fa = {}
         vval_fa = {}
 
-        # key KPIs
-        procurmnt_all = np.zeros((nbOS,T));
-        procurmnt_amount = np.zeros(T); 
-        procurmnt_percentage = np.zeros(T); 
-        procurmnt_posExpect = np.zeros(T); 
-        flow_amount = np.zeros(T);
-        invAmount = np.zeros(nbOS);
-        salvageAmount = np.zeros(T);
-        penaltyAmount = np.zeros(nbOS);
-        procurmntCost = np.zeros(nbOS);
-        transCost = np.zeros(nbOS);
+        if option == 0:
+            # key KPIs
+            procurmnt_all = np.zeros((nbOS,T));
+            procurmnt_amount = np.zeros(T); 
+            procurmnt_percentage = np.zeros(T); 
+            procurmnt_posExpect = np.zeros(T); 
+            flow_amount = np.zeros(T);
+            invAmount = np.zeros(nbOS);
+            salvageAmount = np.zeros(T);
+            penaltyAmount = np.zeros(nbOS);
+            procurmntCost = np.zeros(nbOS);
+            transCost = np.zeros(nbOS);
 
-        start = time.time()
-        for s in range(nbOS):
-            xval = np.zeros((Ni, T))
-            for t in range(T):
-                k_t = OS_paths[s, t]-1
-                if t > 0:
-                    self.MSP_fa_update_RHS(k_t, t, xval)
-                self.m[t,k_t].optimize()
-                if self.m[t,k_t].status != GRB.OPTIMAL:
-                    print(" in evaluation")
-                    print(f"Model in stage = {t} and state = {k_t}, in forward pass is {self.m[t,k_t].status}")
-                    exit(0)
-                else:
-                    objs_fa[s, t] = self.m[t,k_t].ObjVal - self.theta[t,k_t].x
-                    xval_fa[s,t] = {}
-                    for i in range(Ni):
-                        xval[i, t] = self.x[t,k_t][i].x
-                        xval_fa[s, t][i] = self.x[t,k_t][i].x
-                    fval_fa[s, t] = {}
-                    for i in range(N0):
-                        for ii in range(Ni):
-                            fval_fa[s, t][i,ii] = self.f[t,k_t][i,ii].x
-                    zval_fa[s, t] = {}
-                    for j in range(Nj):
-                        zval_fa[s, t][j] = self.z[t,k_t][j].x
-                    vval_fa[s, t] = {}
-                    for i in range(Ni):
-                        vval_fa[s, t][i] = self.v[t,k_t][i].x
-                salvageAmount[t] += sum(vval_fa[s,t][i] for i in range(Ni));
-                penaltyAmount[s] += sum(zval_fa[s,t][j] for j in range(Nj));
-                procurmnt_amount[t] += sum(fval_fa[s,t][N0-1,i] for i in range(Ni));
-                procurmntCost[s] += sum(fval_fa[s,t][N0-1,i] for i in range(Ni))*self.networkData.cp[t,k_t];
-                transCost[s] += sum(sum(fval_fa[s,t][i,ii]*self.networkData.cb[i,ii,t,k_t] for i in range(N0)) for ii in range(Ni));
-                procurmnt_all[s,t] = sum(fval_fa[s,t][N0-1,i] for i in range(Ni));
-                flow_amount[t] += sum(sum(fval_fa[s,t][i,ii] for i in range(Ni)) for ii in range(Ni));
-                if k_t in absorbing_states:
-                    invAmount[s] = sum(xval_fa[s,t-1][i] for i in range(Ni));
-                    break
-              
-        fa_bar = np.mean(np.sum(objs_fa, axis=1))
-        fa_std = np.std(np.sum(objs_fa, axis=1))
-        fa_low = fa_bar - 1.96 * fa_std / np.sqrt(nbOS)
-        fa_high = fa_bar + 1.96 * fa_std / np.sqrt(nbOS)
-        CI = fa_bar-fa_low;
-        print("FA...")
-        print("LB = ", LB[-1])
-        print(f"μ ± 1.96*σ/√NS = {fa_bar} ± {CI}")
-        test_time = time.time() - start
-
-        # Now let's compute some KPIs
-        for t in range(T):
-            procurmnt_amount[t] = procurmnt_amount[t]/nbOS;
-            flow_amount[t] = flow_amount[t]/nbOS;      
-            salvageAmount[t] = salvageAmount[t]/nbOS;
-        for t in range(T):
-            count = 0;
-            totalPos = 0;
+            start = time.time()
             for s in range(nbOS):
-                if procurmnt_all[s,t] > 1e-2:
-                    count += 1;
-                    totalPos += procurmnt_all[s,t];
-            procurmnt_percentage[t] = count*1.0/nbOS;
-            if count > 0:
-                procurmnt_posExpect[t] = totalPos*1.0/count;
+                xval = np.zeros((Ni, T))
+                for t in range(T):
+                    k_t = OS_paths[s, t]-1
+                    if t > 0:
+                        self.MSP_fa_update_RHS(k_t, t, xval)
+                    self.m[t,k_t].optimize()
+                    if self.m[t,k_t].status != GRB.OPTIMAL:
+                        print(" in evaluation")
+                        print(f"Model in stage = {t} and state = {k_t}, in forward pass is {self.m[t,k_t].status}")
+                        exit(0)
+                    else:
+                        objs_fa[s, t] = self.m[t,k_t].ObjVal - self.theta[t,k_t].x
+                        xval_fa[s,t] = {}
+                        for i in range(Ni):
+                            xval[i, t] = self.x[t,k_t][i].x
+                            xval_fa[s, t][i] = self.x[t,k_t][i].x
+                        fval_fa[s, t] = {}
+                        for i in range(N0):
+                            for ii in range(Ni):
+                                fval_fa[s, t][i,ii] = self.f[t,k_t][i,ii].x
+                        zval_fa[s, t] = {}
+                        for j in range(Nj):
+                            zval_fa[s, t][j] = self.z[t,k_t][j].x
+                        vval_fa[s, t] = {}
+                        for i in range(Ni):
+                            vval_fa[s, t][i] = self.v[t,k_t][i].x
+                    salvageAmount[t] += sum(vval_fa[s,t][i] for i in range(Ni));
+                    penaltyAmount[s] += sum(zval_fa[s,t][j] for j in range(Nj));
+                    procurmnt_amount[t] += sum(fval_fa[s,t][N0-1,i] for i in range(Ni));
+                    procurmntCost[s] += sum(fval_fa[s,t][N0-1,i] for i in range(Ni))*self.networkData.cp[t,k_t];
+                    transCost[s] += sum(sum(fval_fa[s,t][i,ii]*self.networkData.cb[i,ii,t,k_t] for i in range(N0)) for ii in range(Ni));
+                    procurmnt_all[s,t] = sum(fval_fa[s,t][N0-1,i] for i in range(Ni));
+                    flow_amount[t] += sum(sum(fval_fa[s,t][i,ii] for i in range(Ni)) for ii in range(Ni));
+                    if k_t in absorbing_states:
+                        invAmount[s] = sum(xval_fa[s,t-1][i] for i in range(Ni));
+                        break
+                
+            fa_bar = np.mean(np.sum(objs_fa, axis=1))
+            fa_std = np.std(np.sum(objs_fa, axis=1))
+            fa_low = fa_bar - 1.96 * fa_std / np.sqrt(nbOS)
+            fa_high = fa_bar + 1.96 * fa_std / np.sqrt(nbOS)
+            CI = fa_bar-fa_low;
+            print("FA...")
+            print("LB = ", LB[-1])
+            print(f"μ ± 1.96*σ/√NS = {fa_bar} ± {CI}")
+            test_time = time.time() - start
 
-        avgInvAmount = sum(invAmount[s] for s in range(nbOS))*1.0/nbOS;
-        avgSalvageAmount = sum(salvageAmount);
-        avgPenaltyAmount = sum(penaltyAmount[s] for s in range(nbOS))*1.0/nbOS;
+            # Now let's compute some KPIs
+            for t in range(T):
+                procurmnt_amount[t] = procurmnt_amount[t]/nbOS;
+                flow_amount[t] = flow_amount[t]/nbOS;      
+                salvageAmount[t] = salvageAmount[t]/nbOS;
+            for t in range(T):
+                count = 0;
+                totalPos = 0;
+                for s in range(nbOS):
+                    if procurmnt_all[s,t] > 1e-2:
+                        count += 1;
+                        totalPos += procurmnt_all[s,t];
+                procurmnt_percentage[t] = count*1.0/nbOS;
+                if count > 0:
+                    procurmnt_posExpect[t] = totalPos*1.0/count;
 
-        print("procurement amount = ", procurmnt_amount);
-        print("total procurement = ", sum(procurmnt_amount));
-        print("salvage amount = ", salvageAmount);
-        print("flow amount = ", flow_amount);
-        print("avgInvAmount = ", avgInvAmount);
-        print("avgSalvageAmount = ", avgSalvageAmount);
-        print("avgPenaltyAmount = ", avgPenaltyAmount);
+            avgInvAmount = sum(invAmount[s] for s in range(nbOS))*1.0/nbOS;
+            avgSalvageAmount = sum(salvageAmount);
+            avgPenaltyAmount = sum(penaltyAmount[s] for s in range(nbOS))*1.0/nbOS;
 
-        print("procurementCost = ", sum(procurmntCost[s] for s in range(nbOS))*1.0/nbOS)
-        print("transportationCost = ", sum(transCost[s] for s in range(nbOS))*1.0/nbOS)
-        print("penaltyCost = ", avgPenaltyAmount*self.networkData.p)
+            print("procurement amount = ", procurmnt_amount);
+            print("total procurement = ", sum(procurmnt_amount));
+            print("salvage amount = ", salvageAmount);
+            print("flow amount = ", flow_amount);
+            print("avgInvAmount = ", avgInvAmount);
+            print("avgSalvageAmount = ", avgSalvageAmount);
+            print("avgPenaltyAmount = ", avgPenaltyAmount);
 
-        KPIvec = procurmnt_amount.tolist()+procurmnt_percentage.tolist()+procurmnt_posExpect.tolist()+flow_amount.tolist()+[avgInvAmount,avgSalvageAmount,avgPenaltyAmount]
-        return [LB[-1], fa_bar, CI, train_time, test_time], KPIvec
+            print("procurementCost = ", sum(procurmntCost[s] for s in range(nbOS))*1.0/nbOS)
+            print("transportationCost = ", sum(transCost[s] for s in range(nbOS))*1.0/nbOS)
+            print("penaltyCost = ", avgPenaltyAmount*self.networkData.p)
+
+            KPIvec = procurmnt_amount.tolist()+procurmnt_percentage.tolist()+procurmnt_posExpect.tolist()+flow_amount.tolist()+[avgInvAmount,avgSalvageAmount,avgPenaltyAmount]
+            return [LB[-1], fa_bar, CI, train_time, test_time], KPIvec
+
+        if option == 1:
+            # collect information so that we can generate some illustrations to demonstrate adaptability
+            for s in range(nbOS):
+                xval = np.zeros((Ni, T))
+                for t in range(T):
+                    k_t = OS_paths[s, t]-1
+                    if t > 0:
+                        self.MSP_fa_update_RHS(k_t, t, xval)
+                    self.m[t,k_t].optimize()
+                    if self.m[t,k_t].status != GRB.OPTIMAL:
+                        print(" in evaluation")
+                        print(f"Model in stage = {t} and state = {k_t}, in forward pass is {self.m[t,k_t].status}")
+                        exit(0)
+                    else:
+                        for i in range(Ni):
+                            xval[i, t] = self.x[t,k_t][i].x
+                            xval_fa[s,t] = sum(xval[i,t] for i in range(Ni))
+                    if k_t in absorbing_states:
+                        break
+            inv_heat_map = {};
+            for ins in range(Na):
+                for t in range(T-1):
+                    total_val = 0;
+                    total_count = 0;
+                    for s in range(nbOS):
+                        k_t = OS_paths[s, t]-1
+                        if self.hurricaneData.states[k_t][0] == (ins+1):
+                            total_count += 1
+                            total_val += xval_fa[s,t]
+                    if total_count == 0:
+                        inv_heat_map[t,ins] = -1;
+                    else:
+                        inv_heat_map[t,ins] = total_val*1.0/total_count
+
+            print("inv_heat_map = ", inv_heat_map)
