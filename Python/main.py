@@ -262,14 +262,17 @@ if __name__ == "__main__":
         if option == 4 or option == 5 or option == 6:
             if option == 4:
                 TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance,ISpaths)
-            [obj, CI, train_time, test_time], KPIvec = TwoStageSP.WS_eval(osfname)
-            if write_option == 1:
-                with open(outputpath+'FC_SA_WSresults.csv', 'a') as myfile:
-                    writer = csv.writer(myfile, delimiter =',')
-                    writer.writerow([instance_option,args.flow_capacity,safe_time,obj,CI,train_time,test_time])
-                with open(outputpath+'FC_SA_WSresults-KPI.csv', 'a') as myfile:
-                    writer = csv.writer(myfile, delimiter =',')
-                    writer.writerow([instance_option,args.flow_capacity,safe_time]+KPIvec)
+            if write_option == 2:
+                TwoStageSP.WS_eval(osfname,1)
+            else:
+                [obj, CI, train_time, test_time], KPIvec = TwoStageSP.WS_eval(osfname,0)
+                if write_option == 1:
+                    with open(outputpath+'FC_SA_WSresults.csv', 'a') as myfile:
+                        writer = csv.writer(myfile, delimiter =',')
+                        writer.writerow([instance_option,args.flow_capacity,safe_time,obj,CI,train_time,test_time])
+                    with open(outputpath+'FC_SA_WSresults-KPI.csv', 'a') as myfile:
+                        writer = csv.writer(myfile, delimiter =',')
+                        writer.writerow([instance_option,args.flow_capacity,safe_time]+KPIvec)
     elif args.inventory != None:
         if option == -1 or option == 5 or option == 6:
             TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance,ISpaths)
@@ -320,14 +323,17 @@ if __name__ == "__main__":
         if option == 4 or option == 5 or option == 6:
             if option == 4:
                 TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance,ISpaths)
-            [obj, CI, train_time, test_time], KPIvec = TwoStageSP.WS_eval(osfname)
-            if write_option == 1:
-                with open(outputpath+'Inv_SA_WSresults.csv', 'a') as myfile:
-                    writer = csv.writer(myfile, delimiter =',')
-                    writer.writerow([instance_option,args.inventory,safe_time,obj,CI,train_time,test_time])
-                with open(outputpath+'Inv_SA_WSresults-KPI.csv', 'a') as myfile:
-                    writer = csv.writer(myfile, delimiter =',')
-                    writer.writerow([instance_option,args.inventory,safe_time]+KPIvec)
+            if write_option == 2:
+                TwoStageSP.WS_eval(osfname,1)
+            else:
+                [obj, CI, train_time, test_time], KPIvec = TwoStageSP.WS_eval(osfname,0)
+                if write_option == 1:
+                    with open(outputpath+'Inv_SA_WSresults.csv', 'a') as myfile:
+                        writer = csv.writer(myfile, delimiter =',')
+                        writer.writerow([instance_option,args.inventory,safe_time,obj,CI,train_time,test_time])
+                    with open(outputpath+'Inv_SA_WSresults-KPI.csv', 'a') as myfile:
+                        writer = csv.writer(myfile, delimiter =',')
+                        writer.writerow([instance_option,args.inventory,safe_time]+KPIvec)
     elif args.transportation != None:
         if option == -1 or option == 5 or option == 6:
             TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance,ISpaths)
@@ -378,14 +384,17 @@ if __name__ == "__main__":
         if option == 4 or option == 5 or option == 6:
             if option == 4:
                 TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance,ISpaths)
-            [obj, CI, train_time, test_time], KPIvec = TwoStageSP.WS_eval(osfname)
-            if write_option == 1:
-                with open(outputpath+'Trans_SA_WSresults.csv', 'a') as myfile:
-                    writer = csv.writer(myfile, delimiter =',')
-                    writer.writerow([instance_option,args.transportation,safe_time,obj,CI,train_time,test_time])
-                with open(outputpath+'Trans_SA_WSresults-KPI.csv', 'a') as myfile:
-                    writer = csv.writer(myfile, delimiter =',')
-                    writer.writerow([instance_option,args.transportation,safe_time]+KPIvec)
+            if write_option == 2:
+                TwoStageSP.WS_eval(osfname,1)
+            else:
+                [obj, CI, train_time, test_time], KPIvec = TwoStageSP.WS_eval(osfname,0)
+                if write_option == 1:
+                    with open(outputpath+'Trans_SA_WSresults.csv', 'a') as myfile:
+                        writer = csv.writer(myfile, delimiter =',')
+                        writer.writerow([instance_option,args.transportation,safe_time,obj,CI,train_time,test_time])
+                    with open(outputpath+'Trans_SA_WSresults-KPI.csv', 'a') as myfile:
+                        writer = csv.writer(myfile, delimiter =',')
+                        writer.writerow([instance_option,args.transportation,safe_time]+KPIvec)
     elif args.penalty != None:
         if option == -1 or option == 5:
             TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance,ISpaths)
@@ -436,14 +445,17 @@ if __name__ == "__main__":
         if option == 4 or option == 5:
             if option == 4:
                 TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance,ISpaths)
-            [obj, CI, train_time, test_time], KPIvec = TwoStageSP.WS_eval(osfname)
-            if write_option == 1:
-                with open(outputpath+'Penalty_SA_WSresults.csv', 'a') as myfile:
-                    writer = csv.writer(myfile, delimiter =',')
-                    writer.writerow([instance_option,args.penalty,safe_time,obj,CI,train_time,test_time])
-                with open(outputpath+'Penalty_SA_WSresults-KPI.csv', 'a') as myfile:
-                    writer = csv.writer(myfile, delimiter =',')
-                    writer.writerow([instance_option,args.penalty,safe_time]+KPIvec)
+            if write_option == 2:
+                TwoStageSP.WS_eval(osfname,1)
+            else:
+                [obj, CI, train_time, test_time], KPIvec = TwoStageSP.WS_eval(osfname,0)
+                if write_option == 1:
+                    with open(outputpath+'Penalty_SA_WSresults.csv', 'a') as myfile:
+                        writer = csv.writer(myfile, delimiter =',')
+                        writer.writerow([instance_option,args.penalty,safe_time,obj,CI,train_time,test_time])
+                    with open(outputpath+'Penalty_SA_WSresults-KPI.csv', 'a') as myfile:
+                        writer = csv.writer(myfile, delimiter =',')
+                        writer.writerow([instance_option,args.penalty,safe_time]+KPIvec)
     else:
         if option == -1 or option == 5:
             TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance,ISpaths)
@@ -494,11 +506,14 @@ if __name__ == "__main__":
         if option == 4 or option == 5:
             if option == 4:
                 TwoStageSP = TwoStageSP(inputParams,solveParams,hurricaneInstance,networkInstance,ISpaths)
-            [obj, CI, train_time, test_time], KPIvec = TwoStageSP.WS_eval(osfname)
-            if write_option == 1:
-                with open(outputpath+'WSresults.csv', 'a') as myfile:
-                    writer = csv.writer(myfile, delimiter =',')
-                    writer.writerow([instance_option,cost_structure,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,safe_time,obj,CI,train_time,test_time])
-                with open(outputpath+'WSresults-KPI.csv', 'a') as myfile:
-                    writer = csv.writer(myfile, delimiter =',')
-                    writer.writerow([instance_option,cost_structure,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,safe_time]+KPIvec)
+            if write_option == 2:
+                TwoStageSP.WS_eval(osfname,1)
+            else:
+                [obj, CI, train_time, test_time], KPIvec = TwoStageSP.WS_eval(osfname,0)
+                if write_option == 1:
+                    with open(outputpath+'WSresults.csv', 'a') as myfile:
+                        writer = csv.writer(myfile, delimiter =',')
+                        writer.writerow([instance_option,cost_structure,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,safe_time,obj,CI,train_time,test_time])
+                    with open(outputpath+'WSresults-KPI.csv', 'a') as myfile:
+                        writer = csv.writer(myfile, delimiter =',')
+                        writer.writerow([instance_option,cost_structure,dissipate_option,absorbing_option,k_init,Ni,Nj,tau,safe_time]+KPIvec)

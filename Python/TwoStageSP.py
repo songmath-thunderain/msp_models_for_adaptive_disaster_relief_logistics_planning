@@ -871,7 +871,9 @@ class TwoStageSP:
         print("μ ± 1.96*σ/√NS =", RH2SSP_bar, "±", CI)
         return [RH2SSP_bar, CI, elapsed_RH2SSP]
 
-    def WS_eval(self, osfname):
+    def WS_eval(self, osfname, option):
+        # option = 0: just the basic evaluation
+        # option = 1: evaluation for "fancy" illustrations
         T = self.hurricaneData.T;
         absorbing_option = self.inputParams.absorbing_option;
         nbOS = self.inputParams.nbOS;
@@ -960,103 +962,124 @@ class TwoStageSP:
         train_time = time.time() - start_time
         start_time = time.time()
 
-        # Start evaluating policies on the decision tree
-        print("Construction is done....Now we do evaluation...")
-
-        OS_paths = pd.read_csv(osfname).values 
-        objs_OOS = np.zeros(nbOS)
-
-        # key KPIs
-        procurmnt_amount = np.zeros(T); 
-        count_goTime = np.zeros(T);
-        count_noabsorbing_goTime = np.zeros(T);
-        Go_percentage = np.zeros(T); 
-        Go_noabsorbing_percentage = np.zeros(T);
-
-        for s in range(nbOS):
-            for t in range(T):
-                ind = list(nodeLists[t]).index(next((x for x in nodeLists[t] if x == (OS_paths[s,t]-1)), None))
-                if (OS_paths[s, t]-1) in absorbing_states:
-                    # if absorbing, just take whatever that is the best, which has been computed above
-                    objs_OOS[s] = objvalNodes[t][ind]
-                    #print("absorbed! obj = ", objs_OOS[s], "\n");
-                    if decisionNodes[t][ind] == 1:
-                        count_goTime[t] += 1;
-                    break
-                else:
-                    if decisionNodes[t][ind] == 0:
-                        # Decision is No-go!
-                        continue
+        if option == 1:
+            # Doing the heatmap stuff
+            count_go = np.zeros((self.networkData.Na,T));
+            count_nogo = np.zeros((self.networkData.Na,T));
+            for t in range(T - 2, -1, -1):
+                for k in range(len(nodeLists[t])):
+                    intensity = self.hurricaneData.states[nodeLists[t][k]][0]-1;
+                    if decisionNodes[t][k] == 1:
+                        count_go[intensity,t] += 1;
                     else:
-                        # Decision is Go!
-                        absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if (x-1) in self.hurricaneData.absorbing_states), None))
+                        count_nogo[intensity,t] += 1;
+            go_heat_map = {};
+            for ins in range(self.networkData.Na):
+                for t in range(T-1):
+                    if count_go[ins,t] == 0 and count_nogo[ins,t] == 0:
+                        go_heat_map[t,ins] = -1;
+                    else:
+                        go_heat_map[t,ins] = count_go[ins,t]*1.0/(count_go[ins,t]+count_nogo[ins,t])
 
-                        #define second stage (subproblem) optimality model
-                        self.subproblem, self.y2, self.xCons, self.dCons, self.rCons = self.RH_2SSP_second_stage()
+            print("go_heat_map = ", go_heat_map)
+        else:
+            # Start evaluating policies on the decision tree
+            print("Construction is done....Now we do evaluation...")
 
-                        if absorbing_option == 0:
-                            for i in range(Ni):
-                                self.xCons[i].setAttr(GRB.Attr.RHS, solutionNodes[(t, ind)][0][i][absorbingT - t - 1])
-                        else:
-                            for i in range(Ni):
-                                self.xCons[i].setAttr(GRB.Attr.RHS, solutionNodes[(t, ind)][0][i][absorbingT - t])
+            OS_paths = pd.read_csv(osfname).values 
+            objs_OOS = np.zeros(nbOS)
 
-                        for j in range(Nj):
-                            self.dCons[j].setAttr(GRB.Attr.RHS, SCEN[OS_paths[s,absorbingT]-1][j]);
-                        
-                        for i in range(Ni):
-                            for j in range(Nj):
-                                self.y2[i, j].setAttr(GRB.Attr.Obj, ca[i, j, absorbingT, OS_paths[s,absorbingT]-1])
+            # key KPIs
+            procurmnt_amount = np.zeros(T); 
+            count_goTime = np.zeros(T);
+            count_noabsorbing_goTime = np.zeros(T);
+            Go_percentage = np.zeros(T); 
+            Go_noabsorbing_percentage = np.zeros(T);
 
-                        self.subproblem.optimize()
-
-                        if self.subproblem.status != GRB.OPTIMAL:
-                            print("status_subproblem =", self.subproblem.status)
-                            exit(0)
-                        else:
-                            objs_OOS[s] = self.subproblem.ObjVal
-                            #print("first obj = ", objs_OOS[s]);
-                            if absorbing_option == 0:
-                                for tt in range(absorbingT - t):
-                                    objs_OOS[s] += sum(sum(
-                                        cb[i, ii, t + tt, OS_paths[s,t+tt]-1] * solutionNodes[(t, ind)][1][i][ii][tt] for ii in range(Ni)) for i in range(N0)
-                                    ) + sum(ch[i, t + tt] * solutionNodes[(t, ind)][0][i][tt] for i in range(Ni)) + sum(
-                                        solutionNodes[(t, ind)][1][N0-1][i][tt] for i in range(Ni)
-                                    ) * cp[t + tt, OS_paths[s,t+tt]-1]
-                                    procurmnt_amount[t+tt] += sum(solutionNodes[(t, ind)][1][N0-1][ii][tt] for ii in range(Ni)) 
-                            else:
-                                for tt in range(absorbingT + 1 - t):
-                                    objs_OOS[s] += sum(sum(
-                                        cb[i, ii, t + tt, OS_paths[s,t+tt]-1] * solutionNodes[(t, ind)][1][i][ii][tt] for ii in range(Ni)) for i in range(N0)
-                                    ) + sum(ch[i, t + tt] * solutionNodes[(t, ind)][0][i][tt] for i in range(Ni)) + sum(
-                                        solutionNodes[(t, ind)][1][N0-1][i][tt] for i in range(Ni)
-                                    ) * cp[t + tt, OS_paths[s,t+tt]-1]
-                                    procurmnt_amount[t+tt] += sum(solutionNodes[(t, ind)][1][N0-1][ii][tt] for ii in range(Ni)) 
-                        #print("Go! obj = ", objs_OOS[s], "\n");
-                        count_goTime[t] += 1;
-                        count_noabsorbing_goTime[t] += 1;
+            for s in range(nbOS):
+                for t in range(T):
+                    ind = list(nodeLists[t]).index(next((x for x in nodeLists[t] if x == (OS_paths[s,t]-1)), None))
+                    if (OS_paths[s, t]-1) in absorbing_states:
+                        # if absorbing, just take whatever that is the best, which has been computed above
+                        objs_OOS[s] = objvalNodes[t][ind]
+                        #print("absorbed! obj = ", objs_OOS[s], "\n");
+                        if decisionNodes[t][ind] == 1:
+                            count_goTime[t] += 1;
                         break
+                    else:
+                        if decisionNodes[t][ind] == 0:
+                            # Decision is No-go!
+                            continue
+                        else:
+                            # Decision is Go!
+                            absorbingT = list(OS_paths[s, 0:T]).index(next((x for x in OS_paths[s, 0:T] if (x-1) in self.hurricaneData.absorbing_states), None))
 
-        for t in range(T):
-            procurmnt_amount[t] = procurmnt_amount[t]/nbOS;
-            Go_percentage[t] = count_goTime[t]*1.0/nbOS; 
-            Go_noabsorbing_percentage[t] = count_noabsorbing_goTime[t]*1.0/nbOS;
+                            #define second stage (subproblem) optimality model
+                            self.subproblem, self.y2, self.xCons, self.dCons, self.rCons = self.RH_2SSP_second_stage()
 
-        test_time = time.time() - start_time
+                            if absorbing_option == 0:
+                                for i in range(Ni):
+                                    self.xCons[i].setAttr(GRB.Attr.RHS, solutionNodes[(t, ind)][0][i][absorbingT - t - 1])
+                            else:
+                                for i in range(Ni):
+                                    self.xCons[i].setAttr(GRB.Attr.RHS, solutionNodes[(t, ind)][0][i][absorbingT - t])
 
-        WS_bar = np.mean(objs_OOS)
-        WS_std = np.std(objs_OOS)
-        WS_low = WS_bar - 1.96 * WS_std / np.sqrt(nbOS)
-        WS_high = WS_bar + 1.96 * WS_std / np.sqrt(nbOS)
-        CI = WS_bar-WS_low;
-        print("WS....")
-        print(f"μ ± 1.96*σ/√NS = {WS_bar} ± {CI}")
+                            for j in range(Nj):
+                                self.dCons[j].setAttr(GRB.Attr.RHS, SCEN[OS_paths[s,absorbingT]-1][j]);
+                            
+                            for i in range(Ni):
+                                for j in range(Nj):
+                                    self.y2[i, j].setAttr(GRB.Attr.Obj, ca[i, j, absorbingT, OS_paths[s,absorbingT]-1])
 
-        print("Go_percentage = ", Go_percentage);
-        print("procurmnt_amount = ", procurmnt_amount);
+                            self.subproblem.optimize()
 
-        KPIvec = procurmnt_amount.tolist()+Go_percentage.tolist()+Go_noabsorbing_percentage.tolist();
-        return [WS_bar, CI, train_time, test_time], KPIvec
+                            if self.subproblem.status != GRB.OPTIMAL:
+                                print("status_subproblem =", self.subproblem.status)
+                                exit(0)
+                            else:
+                                objs_OOS[s] = self.subproblem.ObjVal
+                                #print("first obj = ", objs_OOS[s]);
+                                if absorbing_option == 0:
+                                    for tt in range(absorbingT - t):
+                                        objs_OOS[s] += sum(sum(
+                                            cb[i, ii, t + tt, OS_paths[s,t+tt]-1] * solutionNodes[(t, ind)][1][i][ii][tt] for ii in range(Ni)) for i in range(N0)
+                                        ) + sum(ch[i, t + tt] * solutionNodes[(t, ind)][0][i][tt] for i in range(Ni)) + sum(
+                                            solutionNodes[(t, ind)][1][N0-1][i][tt] for i in range(Ni)
+                                        ) * cp[t + tt, OS_paths[s,t+tt]-1]
+                                        procurmnt_amount[t+tt] += sum(solutionNodes[(t, ind)][1][N0-1][ii][tt] for ii in range(Ni)) 
+                                else:
+                                    for tt in range(absorbingT + 1 - t):
+                                        objs_OOS[s] += sum(sum(
+                                            cb[i, ii, t + tt, OS_paths[s,t+tt]-1] * solutionNodes[(t, ind)][1][i][ii][tt] for ii in range(Ni)) for i in range(N0)
+                                        ) + sum(ch[i, t + tt] * solutionNodes[(t, ind)][0][i][tt] for i in range(Ni)) + sum(
+                                            solutionNodes[(t, ind)][1][N0-1][i][tt] for i in range(Ni)
+                                        ) * cp[t + tt, OS_paths[s,t+tt]-1]
+                                        procurmnt_amount[t+tt] += sum(solutionNodes[(t, ind)][1][N0-1][ii][tt] for ii in range(Ni)) 
+                            #print("Go! obj = ", objs_OOS[s], "\n");
+                            count_goTime[t] += 1;
+                            count_noabsorbing_goTime[t] += 1;
+                            break
+
+            for t in range(T):
+                procurmnt_amount[t] = procurmnt_amount[t]/nbOS;
+                Go_percentage[t] = count_goTime[t]*1.0/nbOS; 
+                Go_noabsorbing_percentage[t] = count_noabsorbing_goTime[t]*1.0/nbOS;
+
+            test_time = time.time() - start_time
+
+            WS_bar = np.mean(objs_OOS)
+            WS_std = np.std(objs_OOS)
+            WS_low = WS_bar - 1.96 * WS_std / np.sqrt(nbOS)
+            WS_high = WS_bar + 1.96 * WS_std / np.sqrt(nbOS)
+            CI = WS_bar-WS_low;
+            print("WS....")
+            print(f"μ ± 1.96*σ/√NS = {WS_bar} ± {CI}")
+
+            print("Go_percentage = ", Go_percentage);
+            print("procurmnt_amount = ", procurmnt_amount);
+
+            KPIvec = procurmnt_amount.tolist()+Go_percentage.tolist()+Go_noabsorbing_percentage.tolist();
+            return [WS_bar, CI, train_time, test_time], KPIvec
     
 
     def naiveWS_eval(self, osfname):
