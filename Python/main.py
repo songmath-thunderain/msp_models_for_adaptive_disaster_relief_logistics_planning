@@ -24,7 +24,7 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--solution_option", type = int, choices = [-1,0,1,2,3,4,5,6], help = "solution options: -1. naiveWS, 0. CV, 1. FA, 2. static2SSP, 3. RH2SSP, 4. WS, 5. All, 6. All except RH2SSP")
     parser.add_argument("-i", "--instance_option", type = int, choices = [-1,0,1,2], help = "instance option: -1. Synthetic D-landfall, 0. Synthetic R-landfall, 1. Case Study D-landfall, 2. Case Study R-landfall")
     parser.add_argument("-w", "--write_option", type = int, choices = [0,1,2], help = "0. do not write to CSV, 1. write results to CSV")
-    parser.add_argument("-fc", "--flow_capacity", type = float, choices = [0.125,0.25,0.5,1,2,4], required = False, help = "flow capacity level: needs to be 0.125, 0.25, 0.5, 1, 2, or 4")
+    parser.add_argument("-fc", "--flow_capacity", type = float, required = False, help = "flow capacity level")
     parser.add_argument("-pen", "--penalty", type = float, choices = [0.25,0.5,1,2,4], required = False, help = "penalty level: needs to be 0.25, 0.5, 1, 2, or 4")
     parser.add_argument("-inv", "--inventory", type = float, choices = [0,0.5,1,2], required = False, help = "inventory level: needs to be 0, 0.5, 1, or 2")
     parser.add_argument("-trans", "--transportation", type = float, required = False, help = "transportation level: needs to be 1,5,10,or 20")
@@ -134,7 +134,7 @@ if __name__ == "__main__":
         osfname = "./data/synthetic/OOS" + str(inputParams.k_init) + ".csv"
 
         if cost_structure == 1 or cost_structure == 2:
-            ISfile = open('data/synthetic/in_sample_100.dat', 'rb')
+            ISfile = open('data/synthetic/in_sample_500.dat', 'rb')
             ISpaths = pickle.load(ISfile)
             ISfile.close()
 
@@ -186,7 +186,7 @@ if __name__ == "__main__":
         osfname = "./data/case-study/SC-network/random/OOS" + str(inputParams.k_init) + ".csv"
 
         if cost_structure == 1 or cost_structure == 2:
-            ISfile = open('data/case-study/SC-network/random/in_sample_100.dat', 'rb')
+            ISfile = open('data/case-study/SC-network/random/in_sample_500.dat', 'rb')
             ISpaths = pickle.load(ISfile)
             ISfile.close()
 

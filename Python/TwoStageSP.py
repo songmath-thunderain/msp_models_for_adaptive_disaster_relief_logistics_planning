@@ -170,6 +170,7 @@ class TwoStageSP:
                 theta[n] = m.addVar(lb=0)
             
             # Define the objective: there is no first-stage cost, since the cost of the first-stage decisions is scenario-dependent (and it will be calculated in the second stage)
+            # This is also why it is safe to set the lb for theta to be 0 here
             m.setObjective(
                 #gp.quicksum(
                 #    gp.quicksum(ch[i,t_roll+t] * x[i, t] for i in range(Ni))
